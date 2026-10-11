@@ -1,5 +1,27 @@
-"""Runtime: instance composition, package loading and (later) narrative, tracking and assimilation."""
+"""Runtime: instance composition, package loading, dossier loading and (later) narrative,
+tracking and assimilation."""
 
+from core.runtime.assimilation import (
+    DOSSIER_NAME,
+    DOSSIER_SCHEMA_VERSION,
+    OPTIONAL_SECTIONS,
+    REQUIRED_SECTIONS,
+    DossierAssessment,
+    DossierError,
+    DossierSection,
+    DossierSectionSpec,
+    DossierSectionStatus,
+    DossierSourceSpec,
+    ForumDossier,
+    LoadedDossierSection,
+    LoadedDossierSource,
+    LoadedForumDossier,
+    LoadedLooseMaterial,
+    LooseMaterialSpec,
+    assess_dossier,
+    load_dossier,
+    parse_dossier,
+)
 from core.runtime.packages import (
     LoadedPackageManifest,
     PackageDependency,
@@ -12,12 +34,31 @@ from core.runtime.packages import (
 )
 
 __all__ = [
+    "DOSSIER_NAME",
+    "DOSSIER_SCHEMA_VERSION",
+    "OPTIONAL_SECTIONS",
+    "REQUIRED_SECTIONS",
+    "DossierAssessment",
+    "DossierError",
+    "DossierSection",
+    "DossierSectionSpec",
+    "DossierSectionStatus",
+    "DossierSourceSpec",
+    "ForumDossier",
+    "LoadedDossierSection",
+    "LoadedDossierSource",
+    "LoadedForumDossier",
+    "LoadedLooseMaterial",
     "LoadedPackageManifest",
+    "LooseMaterialSpec",
     "PackageDependency",
     "PackageManifest",
     "PackageManifestError",
     "PackageType",
+    "assess_dossier",
+    "load_dossier",
     "load_manifest",
     "load_package_set",
+    "parse_dossier",
     "parse_manifest",
 ]

@@ -6,11 +6,12 @@ Generalizar Nozomu Agent como `roleplay-agent-core`: un núcleo reutilizable par
 foro de rol, configurable por personaje, mundo, sistema, plataforma e instancia. Este documento
 define la extracción y un plan para Claude; no implementa código ni altera el legado.
 
-Versión base de esta continuación: commit `17d83e1` a 2026-10-11, rama
-`feature/incremento-2-paquetes-puertos`, creada desde el incremento 1 aprobado y sin cambios al
-iniciar este análisis. El commit inicial fue `96eca81`. `reference/migration-source/` es la copia
-inmutable inspeccionada. La auditoría anterior se trata como hipótesis histórica porque declara que
-su fuente estaba vacía; no se usa como prueba de la implementación actual.
+Versión base de este rediseño: commit `e4da791` a 2026-10-11, rama
+`feature/plan-expediente-foro`, creada desde el incremento 2 aprobado y sin cambios al iniciar el
+análisis. `main` permanece en `96eca81`; los incrementos 1–2 siguen en ramas apiladas sin fusionar.
+`reference/migration-source/` es la copia inmutable inspeccionada. La auditoría anterior se trata
+como hipótesis histórica porque declara que su fuente estaba vacía; no se usa como prueba de la
+implementación actual.
 
 ### Decisiones del usuario (11-10-2026)
 
@@ -39,6 +40,39 @@ su fuente estaba vacía; no se usa como prueba de la implementación actual.
   configuración efectiva es externa.
 - El segundo caso de generalidad sigue sin decidir y se probará únicamente en el incremento final,
   cuando las bases estén afinadas.
+- El producto se organiza por foro: **un agente por foro y uno o varios personajes dentro**. Su
+  forma es una carpeta de trabajo externa al repo, abierta por el usuario con Codex o Claude, con
+  instrucciones generadas, configuración/datos de instancia y solo los especialistas que exijan
+  las normas aprobadas del foro. El core, no solo la prosa, hace cumplir procedencia, estados
+  ortogonales, memoria con fuente y ausencia de publicación.
+- El flujo de producto es: expediente del usuario → asimilación citada con
+  `REQUIERE CONFIRMACIÓN` y aprobación humana → instancia externa → creación de personaje guiada
+  por normas aprobadas → agente listo para rolear. La instancia nunca convierte una propuesta,
+  un borrador ni una publicación en canon por implicación.
+- El expediente es un único documento humano `expediente.md`, no un índice JSON. Usa encabezados
+  fijos en español para normas, combate, fichas/técnicas, ambientación, plataforma/formato,
+  revisión de staff y material suelto; puede referenciar varios archivos. Su parser lo convierte
+  al mismo modelo inmutable, y cada fuente conserva versión, literal y procedencia.
+- El concepto de cada personaje siempre lo aporta el usuario. El agente lo contrasta con normas
+  aprobadas y puede ofrecer mejoras solo como `PROPUESTA`; nada propuesto se incorpora sin
+  aceptación expresa. La ficha nace en `BORRADOR` pendiente del staff; aprobación, aprendizaje,
+  utilizabilidad, publicación y canon siguen siendo ejes separados.
+- Antes de completar todas las capas se hará una rebanada vertical con expediente y personaje
+  temáticamente neutros, adaptador manual, almacenamiento local externo y sin modelo, red ni
+  instalación. Nozomu/Naruto Rol será el primer caso real posterior y recorrerá el mismo camino,
+  sin código específico.
+- Cada instancia genera **ambos** `AGENTS.md` y `CLAUDE.md` desde una política común; una prueba
+  impide que diverjan sus invariantes compartidas.
+- No existe ubicación predeterminada de instancias: `--output` es siempre obligatorio. El core
+  rechaza destinos dentro del checkout o carpetas no vacías.
+- La ficha mecánica de Nozomu vive versionada dentro de la instancia externa del foro. El paquete
+  `characters/nozomu` solo puede conservar identidad e interpretación independientes del sistema;
+  no contiene atributos, inventario, técnicas, estados aprendido/utilizable ni derivados.
+- La línea `Metadatos:` prioriza la escritura manual: solo `id`, `versión`, `autoridad` y `alcance`
+  son obligatorias; las demás claves tienen valores por omisión, pueden aparecer en cualquier
+  orden y no se repiten. El origen se infiere de `archivo`: string significa fichero; omisión o
+  `null`, literal cercado en la línea siguiente. Los ejemplos copiables viven fuera del documento
+  válido, en `core/runtime/templates/LEEME-expediente.md`.
 
 ## Contexto del código
 
@@ -57,7 +91,8 @@ su fuente estaba vacía; no se usa como prueba de la implementación actual.
   observación y fecha IC independiente; no incluye todavía autoridad, versión o vigencia de corpus.
 - `core/review/models.py` — incremento 1 aprobado: borrador, revisión, vigencia y publicación como
   ejes ortogonales; sus transiciones exigen versión/evidencia y no crean canon.
-- `tests/test_{provenance,review_models}.py` — 37 pruebas aprobadas que el incremento 2 debe conservar.
+- `tests/test_{provenance,review_models}.py` y `tests/test_package_{manifest,loader}.py` — 89
+  pruebas aprobadas en total que los incrementos siguientes deben conservar.
 
 ### Hallazgos de contraste
 
@@ -91,16 +126,16 @@ no se copia al núcleo.
 | `AUDIT-GENERALIZATION.md` | Catálogo de hipótesis elaborado sin legado: el propio documento declara 0 archivos y `GENERALIZATION AUDIT PARTIAL` (`Executive summary`, `Blockers`). | **Solo referencia histórica**; no importar contratos ni conclusiones sin otra evidencia. |
 | `instructions/interprete.md` | Límites de personaje, IC/OOC, entrega OOC+IC+propuestas y preferencias de voz/POV/BBCode (`Intérprete`, `Preferencias`). | **G:** `core/runtime/narrative.py`. **E:** `packages/characters/nozomu` y presentación Jcink para BBCode. |
 | `instructions/memoria.md` | Evento con fuente, deduplicación, correcciones sin borrado, hechos/creencias/secretos/propuestas/resultados y estado de combate por tema. | **G:** contrato de `core/memory`. **E:** nombres/campos mecánicos son estado de instancia externo; no se trasladan al paquete de sistema. |
-| `instructions/combate.md` | Especialista técnico, cálculo solo con entradas explícitas, cita de reglas, snapshots de escena y salida condicionada (`Instructions`, `Profile`, `Knowledge`, `Respuesta`). | **G:** política de asimilación/consulta en `core/rules` y orquestación en `core/runtime`. **E:** perfil Nozomu es candidato a paquete de personaje o estado externo, pendiente de decisión; reglas Naruto no se empaquetan. |
+| `instructions/combate.md` | Especialista técnico, cálculo solo con entradas explícitas, cita de reglas, snapshots de escena y salida condicionada (`Instructions`, `Profile`, `Knowledge`, `Respuesta`). | **G:** política de asimilación/consulta en `core/rules` y orquestación en `core/runtime`. **E:** perfil mecánico Nozomu queda en la instancia externa; reglas Naruto no se empaquetan. |
 | `forum_watch/README.md` | Identidad de tema, baseline, captura completa, revisiones A→B→A, rechazo de desapariciones/reordenación, transacciones y concurrencia (`Registro`, `Contrato`, `Normalización`, `Persistencia`). | **G:** `core/runtime/tracking.py` y puertos internos. **E:** URL/host/cuenta a `adapters/jcink` y configuración de instancia. |
 | `forum_watch/READER.md` | Lector autenticado con verificación por ejecución, completitud, doble barrido, límites y fallos conservadores (`Identidad`, `Navegación`). Selectores, Edge y tema 275 son Jcink/instancia. | **G:** contrato `ForumAdapter.read`. **E:** `adapters/jcink`; perfil de navegador fuera del repo. |
 | `forum_watch/NARRATIVE.md` | Evaluación aislada, entrada no confiable, contexto mínimo, contrato de decisión, propuestas de memoria, draft versionado y STALE (`Evaluación`, `Contexto`, `Persistencia`). La invocación Codex/Nozomu es local. | **G:** `core/runtime/narrative.py`, `core/review` y orquestación en `core/runtime`. **E:** proveedor de modelo interno de runtime y paquete Nozomu. |
 | `forum_watch/DISCORD.md` | Proyección de eventos a avisos, deduplicación, entrega incierta, reintentos y secreto fuera del repo (`Fuentes`, `Entrega`). Webhook/DPAPI/payload son Discord/Windows. | **G:** puerto de notificación en runtime. **E:** `integrations/discord` y almacén de secretos de instancia. |
 | `forum_watch/WORKFLOW.md` | Fases recuperables, locks, silencio sin trabajo, barreras de acceso, auditoría de runs y ausencia de transacción global (`Un ciclo`, `Datos operativos`). Tarea Windows y valores concretos son locales. | **G:** `core/runtime`. **E:** `integrations/scheduler/windows.py`, configuración y datos operativos externos. |
 | `memory/index.md` | Índice vigente, enlaces, pendientes, diferencia entre ficha total y recursos de escena, aprobación sin publicación. | **G:** vistas/índices de `core/memory`. **E:** semilla de migración de la instancia Nozomu; no dato estático del paquete. |
-| `memory/entities/nozomu-yamamoto.md` | Entidad revisada por anotaciones, procedencia y separación entre estado narrativo/mecánico/editorial. | **G:** patrón de entidad en `core/memory`. **E:** identidad/interpretación estable puede ir a `packages/characters/nozomu`; historia dinámica queda en instancia y la ficha mecánica está pendiente de decisión. |
+| `memory/entities/nozomu-yamamoto.md` | Entidad revisada por anotaciones, procedencia y separación entre estado narrativo/mecánico/editorial. | **G:** patrón de entidad en `core/memory`. **E:** identidad/interpretación independiente del sistema puede ir a `packages/characters/nozomu`; historia y ficha mecánica quedan en la instancia. |
 | `memory/entities/arashi-hozuki.md` | Lo dicho/observado frente a lo OOC, relación no recíproca y propuestas aún no oídas (`Conocimiento`, `Límites`). | **G:** modelo de conocimiento/relación en `core/memory`. **E:** memoria de instancia Nozomu; no perfil universal de Arashi. |
-| `memory/topics/ficha-mecanica/summary.md` | Estado declarado, procedencia, alias/IDs, aprendido≠utilizable, valores máximos≠recursos actuales y pendientes. | **G:** procedencia y separación de estado en `core/character`, `core/rules` y `core/memory`. **E:** ficha Nozomu pendiente de decidir entre paquete de personaje y perfil operativo externo; ninguna fórmula/regla va al paquete de sistema. |
+| `memory/topics/ficha-mecanica/summary.md` | Estado declarado, procedencia, alias/IDs, aprendido≠utilizable, valores máximos≠recursos actuales y pendientes. | **G:** procedencia y separación de estado en `core/character`, `core/rules` y `core/memory`. **E:** ficha Nozomu como perfil operativo versionado de la instancia; ninguna fórmula/regla va a paquetes. |
 | `memory/topics/mision-d-pedidos-del-puerto/summary.md` | Una confirmación parcial consolida solo el núcleo sustentado, no todos los detalles/recompensas. | **G:** consolidación mínima en `core/memory`. **E:** memoria histórica de instancia; contenido no va al core. |
 | `memory/topics/muelle-nozomu-arashi/summary.md` | Cronología por revisiones, IC/OOC, turno local frente a post remoto y consecuencias pendientes. | **G:** `core/memory`/`core/review`. **E:** memoria histórica de instancia. |
 | `memory/topics/tecnicas-unicas/summary.md` | Historial de decisiones y ejes separados DRAFT, aprobación staff, aprendizaje y uso; propuestas sustituidas sin borrarlas. | **G:** procedencia/revisiones. **E:** estado histórico externo de la instancia Nozomu; no contenido del sistema ni enum global del core. |
@@ -149,12 +184,12 @@ Las propuestas no demostradas se marcan **[P]**.
 
 | Módulo | Responsabilidad | Entradas → salidas | Dependencias permitidas / prohibidas |
 | --- | --- | --- | --- |
-| `character` | Cargar identidad, interpretación y límites de conocimiento estables; componerlos con un perfil operativo sin convertir reglas en datos del paquete. | Manifest/paquete + `SourceRef` + perfil externo opcional + referencias a mundo/sistema → `CharacterContext` validado y pendientes. | Puede depender de procedencia y contratos de paquete. No de Jcink, Discord, proveedor de modelo ni SQLite. El destino de la ficha mecánica estable de Nozomu queda abierto. |
+| `character` | Cargar identidad, interpretación y límites de conocimiento estables; componerlos con un perfil operativo sin convertir reglas en datos del paquete. | Manifest/paquete + `SourceRef` + perfil externo opcional + referencias a mundo/sistema → `CharacterContext` validado y pendientes. | Puede depender de procedencia y contratos de paquete. No de Jcink, Discord, proveedor de modelo ni SQLite. Toda ficha mecánica dependiente del foro, incluida Nozomu, queda en la instancia. |
 | `world` | Consultar ambientación aportada y aprobada con cita, versión, vigencia, autoridad y alcance; nunca inferir huecos ni afirmar que el personaje la conoce. | Consulta dirigida + versión aprobada del corpus externo → pasajes literales, afirmaciones/interpretaciones aprobadas, conflictos, lagunas y citas. | No almacena lore en el paquete ni depende de personaje. El filtro IC se hace al componer con memoria/personaje. Si no hay corpus aprobado, devuelve desconocido, no canon externo. |
 | `rules` | Representar `ABSENT` de forma explícita o consultar/evaluar normas aportadas y aprobadas; separar literal, interpretación, propuesta e incertidumbre. | Selección de sistema (`ABSENT` o corpus+versión) + consulta/snapshot/acción → secciones relevantes, evaluación condicionada, fórmula/unidades solo si están respaldadas, riesgos y `REQUIERE CONFIRMACIÓN`. | No contiene reglas Naruto ni depende de paquetes con reglas. Solo consume entradas aprobadas con `SourceRef`; una extracción pendiente/rechazada no es utilizable. `ABSENT` no simula ceros ni resolución mecánica. |
 | `memory` | Ingerir eventos fuente, deduplicar, preservar revisiones y proyectar conocimiento IC/OOC, relaciones, pendientes y estado por escena. | Evento + fuentes + revisión opcional → registro inmutable/revisión; consulta contextual → hechos, creencias, lagunas y referencias. | Depende de un puerto de repositorio, no de SQLite. No recibe borradores como hechos ni escribe paquetes. |
 | `review` | Versionar borradores y registrar decisiones humanas por versión exacta; aportar el vocabulario de revisión también a candidatos de asimilación sin tratarlos como publicaciones. | Borrador/candidato + versión + decisión/evidencia → estado explícito e historial. | No publica, canoniza ni activa una fuente por sí mismo. `DraftVersion` conserva sus tres ejes actuales; la asimilación tendrá su propio registro y reutilizará `ReviewStatus`, no `PublicationStatus`. |
-| `runtime` | Alojar narrativa, seguimiento y `assimilation.py`; componer una instancia y ejecutar fases recuperables. La asimilación registra documentos/secciones literales, crea candidatos manuales o mediante puerto de modelo, solicita revisión y construye un índice dirigido solo con entradas aprobadas. | Fuentes aportadas + metadatos/versiones → candidatos citados; decisión humana → corpus consultable; consulta → secciones relevantes. Además conserva los flujos de escena, tracking y `RunReport`. | `assimilation.py`, `narrative.py` y `tracking.py` son submódulos internos. Depende de puertos y de modelos de `rules`/`world`; el camino manual funciona sin `ModelProvider`. No contiene reglas/lore concretos ni selectores Jcink. |
+| `runtime` | Alojar expediente/asimilación, materialización de instancia, CLI, narrativa y seguimiento; ejecutar fases recuperables. La asimilación registra literales, crea candidatos manuales o mediante puerto de modelo, solicita revisión y construye un índice dirigido solo con entradas aprobadas. | Expediente + ruta/paquetes elegidos → instancia externa; fuentes/metadatos → candidatos citados; decisión humana → corpus consultable; consulta → secciones relevantes. Además conserva los flujos de escena, tracking y `RunReport`. | `assimilation.py`, `cli.py`, `narrative.py` y `tracking.py` son submódulos internos. Depende de puertos y de modelos de `rules`/`world`; el camino manual funciona sin `ModelProvider`. No contiene reglas/lore concretos ni selectores Jcink. |
 
 Los puertos no requieren una carpeta de primer nivel: los repositorios propios quedan junto al
 módulo dueño (`core/memory/ports.py`, y el repositorio de corpus en `core/runtime/ports.py`) y los
@@ -194,6 +229,200 @@ consulta ni las pruebas requieren embeddings/modelo. La salida del modelo nunca 
 `ReviewStatus` ni vigencia. Si faltan pasajes, hay versiones concurrentes o una interpretación no
 está acreditada, la salida conserva las alternativas y `REQUIERE CONFIRMACIÓN`.
 
+#### Plantilla de expediente del foro
+
+El expediente es un directorio aportado por el usuario cuyo documento principal es
+`expediente.md`; puede referenciar ficheros de texto relativos dentro del mismo directorio. La
+plantilla versionada vive en `core/runtime/templates/expediente.template.md` y su guía copiable en
+`core/runtime/templates/LEEME-expediente.md`; no se crea una carpeta de primer nivel ni un hijo
+nuevo directo de `core/`. La instancia recibe una copia literal y con hash de las fuentes, nunca
+modifica el expediente original. La gramática corresponde implícitamente al schema 1 y se
+convierte a `ForumDossier`; Markdown no es la representación de estado interno.
+
+Cabecera exacta, en las cuatro primeras líneas, sin líneas vacías intermedias:
+
+```text
+# Expediente del foro
+forum_id: <id ASCII [a-z0-9]+(?:-[a-z0-9]+)*>
+nombre: <texto no vacío sin espacios exteriores>
+versión_expediente: <texto opaco no vacío sin espacios exteriores>
+```
+
+Después aparecen una vez, en este orden y con grafía exacta, estos encabezados. Cualquier
+encabezado ATX (`#` a `######`) desconocido, duplicado o fuera de orden, fuera de un literal
+cercado, es error; `### Fuente` es la única excepción repetible.
+
+| Encabezado Markdown | Clave/modelo interno | Obligación |
+| --- | --- | --- |
+| `## Normas generales` | `forum_rules` | Obligatoria |
+| `## Ambientación` | `setting` | Obligatoria |
+| `## Creación de fichas` | `character_creation` | Obligatoria |
+| `## Revisión del staff` | `staff_review` | Obligatoria |
+| `## Plataforma y formato` | `platform_format` | Obligatoria |
+| `## Sistema de combate` | `combat_system` | Opcional |
+| `## Creación de técnicas o habilidades` | `ability_technique_creation` | Opcional |
+| `## Material suelto` | `loose_material` | Cero o más fuentes, no es una octava sección de dominio |
+
+En las siete secciones de dominio, la primera línea no vacía puede ser `Estado: FALTA` o
+`Estado: NO APLICA`; si no existe, el estado es aportado (`PROVIDED`). `FALTA` mapea a `MISSING`;
+`NO APLICA`, a `NOT_APPLICABLE`, y solo se admite en las dos opcionales. Tras el estado puede haber
+como máximo una línea `Nota: <texto no vacío sin espacios exteriores>`; si se omite el marcador,
+la nota sigue pudiendo aparecer antes de la primera fuente. Una sección aportada
+exige una o más fuentes; `FALTA`/`NO APLICA` prohíben fuentes. Las obligatorias faltantes bloquean
+`ready_for_assimilation`; una opcional `FALTA` se diagnostica sin bloquear todo el expediente.
+`Material suelto` no acepta `Estado` ni `Nota`: puede estar vacío y mapea directamente a la tupla
+`loose_material`.
+
+Cada fuente comienza con `### Fuente` y, en la línea no vacía siguiente, una única línea con esta
+gramática:
+
+```text
+Metadatos: <clave>=<json> | <clave>=<json> [ | <clave>=<json> ...]
+```
+
+Las claves admitidas son exactamente `id`, `versión`, `autoridad`, `alcance`, `desde`, `hasta`,
+`pasaje`, `archivo` y `sugerencias`. Su orden es libre; una clave desconocida o repetida es error.
+Cada campo es el nombre exacto, `=` y un literal JSON consumido desde ese punto con
+`json.JSONDecoder.raw_decode`; después del literal solo se acepta el separador exacto ` | ` o fin
+de línea. No se divide la línea por el separador. El resultado sigue siendo determinista porque
+las claves son únicas y se proyectan a campos internos de orden fijo.
+
+`id`, `versión`, `autoridad` y `alcance` son obligatorias y sus valores son strings no vacíos sin
+espacios exteriores ni caracteres de control C0. Las demás son opcionales: omitir `desde`, `hasta`,
+`pasaje` o `archivo` equivale a `null`, y omitir `sugerencias` equivale a `[]`. `desde` y `hasta`
+son fechas reales `"YYYY-MM-DD"` o `null`; si ambas existen, desde ≤ hasta. `pasaje` es string no
+vacío o `null`. `archivo` es una ruta string válida o `null`. `sugerencias` solo se permite en
+`Material suelto`, como lista sin duplicados de los nombres españoles exactos de las siete
+secciones de dominio; incluir la clave en una sección de dominio es error, incluso con `[]`.
+
+El origen se deduce de `archivo`. Si tiene un string, la fuente es de archivo y no lleva cuerpo:
+una apertura de valla en la línea física siguiente es error. Si `archivo` se omite o es `null`, la
+fuente es en línea y la línea física inmediatamente posterior a `Metadatos:` debe ser la apertura
+de su valla, sin línea vacía ni indentación. No existe la clave `texto_en_línea`.
+
+Patrones mínimos copiables —el segundo demuestra que el orden no es semántico—:
+
+```text
+Metadatos: id="reglas-generales" | versión="2026-10-11" | autoridad="Staff" | alcance="foro" | archivo="materiales/reglas.md"
+Metadatos: autoridad="Staff" | id="ambientacion" | alcance="foro" | versión="1" | pasaje="Introducción"
+```
+
+La primera es una fuente de archivo. La segunda es inline por omisión de `archivo`, de modo que su
+línea física siguiente debe ser la apertura de la valla.
+
+Una fuente de archivo no lleva cuerpo tras los metadatos. La ruta usa `/`, es relativa al
+directorio del expediente, no contiene segmentos vacíos, `.` o `..`, y no puede ser absoluta,
+UNC, con unidad Windows, symlink ni atravesar symlinks; el archivo regular resuelto debe permanecer
+dentro del expediente. Se lee como UTF-8 estricto y se hashean sus bytes exactos, sin normalizar
+finales de línea; debe contener al menos un carácter no blanco, aunque no se recorta.
+
+Una fuente en línea lleva este cerco variable:
+
+```text
+~~~~~ texto
+<literal arbitrario>
+~~~~~
+```
+
+La valla es `N` virgulillas (`~`) con `N >= 4`; la apertura es exactamente `~` repetida `N` veces,
+un espacio y `texto`, y el cierre es una línea con exactamente las mismas `N` virgulillas. `N`
+debe ser estrictamente mayor que cualquier racha de virgulillas contenida en el literal. Así el
+usuario aumenta `N` si el reglamento contiene `~~~~`, el propio delimitador corto o fences de
+código. Dentro del cerco, encabezados, listas, tablas y bloques Markdown son bytes de la fuente y
+no estructura del expediente. Un cierre ausente/ambiguo o texto estructural inesperado falla con
+la línea del problema; no se intenta adivinar la intención.
+
+`expediente.md` se lee como UTF-8 estricto sin BOM. Antes de reconocer líneas se convierte cada
+CRLF a LF y se rechaza cualquier CR solitario. Esta canonización hace que guardar el mismo documento
+en Windows o con checkout LF produzca el mismo literal/hash. El texto en línea es **exactamente**
+la secuencia canónica entre el LF posterior a la apertura y el primer byte de la línea de cierre:
+no se recorta, por lo que incluye el LF final anterior al cierre. Esos bytes UTF-8 canónicos son los
+que se guardan y hashean; deben contener al menos un carácter no blanco. Su locator estable es
+`<expediente.md>#inline:id=<id-citado>&version=<version-citada>`, usando
+`urllib.parse.quote(value, safe="")`; editar otra zona no cambia locator ni hash.
+
+Fuera de cercos solo se ignoran líneas totalmente vacías; espacios de sangría, trailing spaces o
+prosa que no pertenezca a cabecera, estado, nota, fuente o metadatos son error. Repetir
+`(id, version)` exige autoridad, alcance, vigencia, origen y hash idénticos; solo pueden diferir
+`pasaje` y, en material suelto, `sugerencias`. Un mismo id con versiones distintas permanece como
+fuentes distintas: este incremento no elige vigencia ni infiere supersesión.
+
+Los comentarios HTML siguen siendo texto desconocido y, fuera de una valla, son error: no se abre
+una excepción que vuelva ambigua la gramática cerrada. `LEEME-expediente.md` contiene ejemplos
+completos y copiables de fuente de archivo y fuente en línea, explica las omisiones y recuerda que
+la valla debe crecer si el literal contiene el delimitador. La plantilla válida remite a esa guía
+desde una línea `Nota:` y no contiene comentarios ni ejemplos fingidos.
+
+#### Carpeta de instancia externa
+
+`instance init` exige siempre `--output <ruta>`: no consulta ni deriva ubicaciones por defecto.
+Rechaza una ruta dentro del checkout o una carpeta no vacía. El usuario elige ruta, `forum_id`,
+paquetes y confirma la creación; el runtime materializa de forma transaccional y deja auditable el
+origen de cada archivo. Layout objetivo:
+
+```text
+<instancia-foro>/
+  AGENTS.md                        # generado, no estado
+  CLAUDE.md                        # generado, no estado
+  instance.json                    # schema, forum_id, core_root y paquetes/versiones
+  dossier/                         # copia literal del expediente y sus fuentes
+  corpus/                          # candidatos, decisiones, versiones e índice aprobado
+  characters/<character_id>/
+    concept.md                     # entrada del usuario
+    profile.json                   # ficha versionada y ejes separados
+    proposals/                     # propuestas pendientes/aceptadas/rechazadas
+    drafts/                        # borradores, nunca publicaciones implícitas
+  memory/                          # eventos y vistas con SourceRef
+  work/                            # colas, locks y auditoría de ejecución
+  specialists/                    # solo capacidades exigidas por el foro aprobado
+```
+
+Solo las plantillas están en el repo, bajo `core/runtime/templates/`: expediente, configuración y
+ambos archivos de instrucciones; más adelante, plantillas de especialistas genéricos. Una política
+común renderiza los bloques invariantes de `AGENTS.md` y `CLAUDE.md`; un contract test compara esos
+bloques para impedir divergencias, dejando aparte solo indicaciones propias de cada herramienta.
+`instance.json` se renderiza desde plantilla y los demás datos proceden del expediente, decisiones
+humanas y comandos del core. Un especialista de combate se genera solo si `combat_system` tiene
+entradas aprobadas;
+`NOT_APPLICABLE`, `MISSING` o candidatos pendientes no bastan. Nozomu, Naruto, reglas, memoria ni
+configuración efectiva se añaden a ninguna plantilla.
+
+#### Uso del core desde el agente generado
+
+La instancia no instala ni copia el core. `instance.json` conserva la ruta absoluta del checkout
+confirmada al crearla. Las instrucciones generan comandos PowerShell con rutas entre comillas:
+
+```powershell
+Push-Location '<core_root>'
+py -3.11 -B -m core.runtime.cli --instance '<instance_root>' <comando>
+Pop-Location
+```
+
+Así `core` se importa desde la raíz del checkout, sin dependencia global ni `PYTHONPATH`. Si el
+checkout se mueve, una operación explícita de relink actualizará solo `core_root` con confirmación.
+El CLI valida rutas y versiones, recupera solo corpus aprobado, crea `DraftVersion`, exige
+`SourceRef` para decisiones/memoria y carece de comando de publicación. Los documentos del usuario
+se pueden editar, pero ningún cambio de corpus, estado o memoria se considera válido por editar
+JSON/Markdown directamente: debe pasar por las operaciones del core. Las instrucciones explican el
+flujo; estas barreras ejecutables sostienen las invariantes.
+
+#### Creación de personaje y reparto de decisiones
+
+| Paso | Decide/aporta el usuario | Hace el agente, siempre mediante el core |
+| --- | --- | --- |
+| Expediente | Fuentes, versión/autoridad/vigencia y marcadores `FALTA` o `NO APLICA`; aprueba/rechaza cada candidato exacto. | Valida literales y citas, clasifica solo como candidato, enumera faltantes/contradicciones y marca `REQUIERE CONFIRMACIÓN`; nunca aprueba. |
+| Instancia | Ruta, foro y paquetes/versiones; confirma materialización. | Genera desde plantillas y habilita especialistas solo por capacidades aprobadas. |
+| Concepto | Escribe el concepto, fija lo irrenunciable y responde dudas. | Lo conserva como fuente, recupera normas aprobadas pertinentes y no usa reglas pendientes. |
+| Ajuste | Acepta/rechaza cada mejora y elige entre alternativas. | Presenta diferencias con citas como `PROPUESTA`; una aceptación crea una versión nueva, no reescribe el concepto original ni acredita staff. |
+| Ficha | Decide cuándo presentar y aporta la respuesta/evidencia del staff. | Valida cada campo contra normas aprobadas; ante hueco/ambigüedad bloquea la afirmación de conformidad. Crea `DraftVersion` en borrador y pendiente de revisión. |
+| Juego | Decide intención, acepta borrador y publica externamente si quiere; aporta evidencia de publicación/resolución. | Redacta intentos con contexto mínimo y citas; no publica ni canoniza, y solo propone memoria respaldada. |
+
+La aceptación del usuario de una propuesta de diseño, la aprobación del staff, el aprendizaje y
+la utilizabilidad son acreditaciones distintas. La primera autoriza una nueva versión de ficha;
+la segunda usa revisión humana con evidencia; aprendizaje y utilizabilidad se registran por
+separado en el perfil operativo externo; publicación y canon continúan independientes. Una ficha
+aprobada no queda aprendida ni utilizable, y una ficha publicada no queda aprobada ni canónica.
+
 #### Estados que no deben representarse con un único enum
 
 - **Versión de contenido:** identificador y número/hash exactos.
@@ -222,14 +451,16 @@ nombres. El incremento 2 implementa solo ese manifiesto y su loader; no define p
 
 | Paquete | Campos respaldados por el legado | Lo que no debe contener |
 | --- | --- | --- |
-| Personaje | Identidad; rasgos y límites de interpretación; objetivos; trasfondo; POV/voz/formato; conocimientos iniciales y exclusiones meta; referencias a mundo/sistema; procedencia por afirmación o bloque. Evidencia: maestro §§1–5, 7–8, 11 e `instructions/interprete.md`. La ficha mecánica estable queda pendiente de decisión. | Reglas o fórmulas, memoria de escenas mutable, borradores, recursos actuales, secretos/configuración, cuenta/tema, selectores y cualquier dato derivado de lore/reglamento no aportado para ese personaje. |
+| Personaje | Identidad; rasgos y límites de interpretación; objetivos; trasfondo; POV/voz/formato; conocimientos iniciales y exclusiones meta; referencias a mundo/sistema; procedencia por afirmación o bloque. Evidencia: maestro §§1–5, 7–8, 11 e `instructions/interprete.md`. | Reglas/fórmulas, ficha mecánica dependiente del sistema, memoria mutable, borradores, recursos actuales, secretos/configuración, cuenta/tema, selectores y cualquier derivado de lore/reglamento. |
 | Mundo | En esta fase, solo el manifiesto común identifica y versiona el namespace del mundo y sus dependencias. Las entradas de ambientación se registran después como corpus externo versionado y revisado, no como payload del paquete. | Texto, extractos o datos estructurados derivados de lore; presunción de conocimiento IC; reglas, voz de personaje o estado operativo. |
 | Sistema | En esta fase, solo el manifiesto común identifica y versiona el namespace del sistema y sus dependencias. Las normas, schemas de ficha/técnica aportados por el foro, tablas, fórmulas y valores viven en el corpus externo versionado y revisado. `ABSENT` es una selección explícita de instancia, no un paquete con valores cero. | Texto/extractos reglamentarios y todo dato estructurado derivado; valores de Nozomu, defaults mecánicos, decisiones narrativas, selectores o estado operativo. |
 
-La identidad e interpretación estables y aprobadas del personaje entran en
+La identidad e interpretación estables y aprobadas de un personaje reutilizable pueden entrar en
+un paquete de personaje; la creación guiada no genera paquetes en el repo, sino perfiles externos
+dentro de la instancia. Para el caso legado, esos datos autorizados podrían entrar en
 `packages/characters/nozomu`; su historia ya jugada y la memoria dinámica viven fuera del repo,
-sujeto a la duda específica sobre ficha mecánica. Los
-diseños no aprobados se conservan como referencia histórica, nunca como repertorio adquirido.
+y toda su ficha mecánica vive en la instancia del foro. Los diseños no aprobados se conservan como
+referencia histórica, nunca como repertorio adquirido.
 `packages/worlds/naruto-rol` y `packages/systems/naruto-rol` serán manifiestos/identidades sin texto
 ni datos derivados de reglas o lore. El material que aporte el usuario se conserva literalmente en
 el almacenamiento externo de la instancia, con versiones, vigencia, citas y revisión. El core no
@@ -288,10 +519,11 @@ necesidad real de construir o distribuir el proyecto.
 - Python `>=3.11`, que es el mínimo documentado por el legado; en este equipo se usa siempre
   `py -3.11` (el comando `python` apunta a 3.10.6). Tipado, `dataclasses`, `enum`, `Protocol`,
   `pathlib`, `json`, `hashlib`, `sqlite3` y `unittest` de la biblioteca estándar.
-- JSON estricto para manifests/estado, JSONL para eventos append-only y texto literal externo para
-  fuentes aportadas; Markdown solo para voz/documentación humana expresamente autorizada. Esto no
-  autoriza incorporar lore, reglas ni derivados en paquetes. Validadores propios pequeños al
-  inicio, como el legado, sin afirmar soporte de JSON Schema completo.
+- JSON estricto para manifests/estado, JSONL para eventos append-only y `expediente.md` con la
+  gramática cerrada descrita arriba para entrada humana y fuentes; Markdown también puede usarse
+  para voz/documentación autorizada. Esto no autoriza lore, reglas ni derivados en paquetes.
+  Validadores propios de biblioteca estándar, sin afirmar soporte Markdown general ni JSON Schema
+  completo.
 - SQLite como primer repositorio operativo, detrás de puertos; transacciones y claves únicas ya
   demostraron rollback, idempotencia y concurrencia. No exponer SQL en contratos de dominio.
 - `unittest` para conservar el stack demostrado. No introducir `pytest`, ORM, Pydantic o framework
@@ -308,6 +540,17 @@ necesidad real de construir o distribuir el proyecto.
 
 ## Requisitos
 
+- [ ] El producto materializa una carpeta externa por foro, con uno o varios personajes, desde
+  plantillas genéricas; el repo no contiene instancias reales ni estado operativo.
+- [ ] `expediente.md` tiene siete secciones fijas en español, fuentes/versiones explícitas y
+  material suelto; informa por separado lo aportado, `FALTA` y `NO APLICA`, y los literales
+  cercados no se confunden con estructura Markdown.
+- [ ] La rebanada vertical neutra recorre expediente → revisión humana → instancia → concepto del
+  usuario → ficha borrador, mediante adaptador manual y sin red/modelo.
+- [ ] El agente generado invoca el core con `py -3.11 -B -m core.runtime.cli` desde el checkout, sin
+  instalarlo, y las invariantes se validan en código antes de escribir estado.
+- [ ] Las propuestas de ajuste de personaje están etiquetadas y requieren aceptación expresa;
+  concepto, propuesta, ficha, aprobación de staff, aprendizaje y utilizabilidad no se colapsan.
 - [ ] Ningún módulo genérico contiene `Nozomu`, `Naruto`, `Jcink`, host, cuenta o tema concretos.
 - [ ] Cada dato de personaje y cada entrada asimilada de mundo/regla conserva fuente literal,
   versión, vigencia, autoridad, alcance, cita por regla y pendientes.
@@ -523,52 +766,217 @@ git status --short
 El tercer comando debe terminar sin coincidencias y el quinto sin salida. La aparición de los
 nombres específicos bajo `packages/` es intencional; nunca bajo `core/` ni fixtures genéricas.
 
+### Incremento 3 — contrato y carga del expediente (siguiente; detallado)
+
+Objetivo: fijar la entrada humana del nuevo flujo y detectar faltantes sin crear todavía corpus,
+instancia, CLI, personaje ni estados de asimilación. Es un incremento de lectura/validación, sin
+modelo, red, SQLite ni escritura fuera de temporales de tests.
+
+1. [x] Crear `core/runtime/assimilation.py`. Actualizar `core/runtime/__init__.py` para reexportar
+   solo la API pública nueva, conservando todos los exports del incremento 2. No modificar
+   `core/memory/provenance.py`, `core/review/models.py` ni `core/runtime/packages.py`.
+2. [x] Definir `DossierSection(str, Enum)` con valores exactos `forum_rules`, `setting`,
+   `character_creation`, `staff_review`, `platform_format`, `combat_system` y
+   `ability_technique_creation`; y `DossierSectionStatus(str, Enum)` con valores internos
+   `PROVIDED`, `MISSING` y `NOT_APPLICABLE`. Las cinco primeras forman la constante pública
+   `REQUIRED_SECTIONS`; las dos últimas, `OPTIONAL_SECTIONS`; ambas son tuplas en el orden anterior.
+   Los marcadores Markdown mapean exactamente ausencia→`PROVIDED`, `FALTA`→`MISSING` y
+   `NO APLICA`→`NOT_APPLICABLE`.
+3. [x] Implementar dataclasses inmutables con `slots=True`:
+   - `DossierSourceSpec(source_id: str, version: str, authority: str, scope: str,
+     effective_from: date | None, effective_until: date | None,
+     section_or_passage: str | None, path: str | None, inline_text: str | None)`.
+   - `DossierSectionSpec(section: DossierSection, status: DossierSectionStatus,
+     notes: str | None, sources: tuple[DossierSourceSpec, ...])`.
+   - `LooseMaterialSpec(source: DossierSourceSpec,
+     suggested_sections: tuple[DossierSection, ...])`.
+   - `ForumDossier(schema_version: int, forum_id: str, display_name: str,
+     dossier_version: str, sections: tuple[DossierSectionSpec, ...],
+     loose_material: tuple[LooseMaterialSpec, ...])`.
+   - `LoadedDossierSource(spec: DossierSourceSpec, literal_text: str,
+     source_ref: SourceRef)`, `LoadedDossierSection(spec: DossierSectionSpec,
+     sources: tuple[LoadedDossierSource, ...])`, `LoadedLooseMaterial(spec: LooseMaterialSpec,
+     source: LoadedDossierSource)` y `LoadedForumDossier(dossier: ForumDossier,
+     dossier_path: Path, sections: tuple[LoadedDossierSection, ...],
+     loose_material: tuple[LoadedLooseMaterial, ...])`.
+   - `DossierAssessment(missing_required: tuple[DossierSection, ...],
+     missing_optional: tuple[DossierSection, ...], ready_for_assimilation: bool)`.
+     `ready_for_assimilation` es verdadero solo si no falta ninguna obligatoria; una opcional
+     `MISSING` se informa pero no bloquea por sí sola. Los constructores validan las mismas
+     invariantes que el parser para que la API Python no pueda crear un expediente incoherente;
+     en particular, `inline_text` ya es canónico y rechaza cualquier `\r`.
+4. [x] Añadir `DOSSIER_NAME = "expediente.md"`, `DOSSIER_SCHEMA_VERSION = 1` y
+   `DossierError(ValueError)`. Su constructor exacto es
+   `DossierError(locator: str, line: int | None, reason: str)`; expone esos tres atributos y el
+   número de línea es base 1. El mensaje es `<locator>:<line>: <reason>` o
+   `<locator>: <reason>` si no hay línea. Toda forma,
+   tipo, estructura, ruta o lectura inválida usa esta excepción y conserva `__cause__` cuando
+   envuelve un error. Exponer firmas exactas
+   `parse_dossier(text: str, *, locator: str = "expediente.md") -> ForumDossier`,
+   `load_dossier(dossier_dir: Path) -> LoadedForumDossier` y
+   `assess_dossier(dossier: ForumDossier) -> DossierAssessment`. Reexportar constantes, enums,
+   dataclasses, error y funciones anteriores desde `core/runtime/__init__.py`. Ninguna función
+   aprueba, interpreta, indexa ni persiste fuentes.
+5. [x] Implementar `parse_dossier` como máquina de estados determinista de biblioteca estándar,
+   no como parser Markdown general. Aplicar literalmente la gramática de «Plantilla de expediente
+   del foro»: cabecera contigua de cuatro líneas; ocho encabezados fijos españoles, únicos y en
+   orden; `### Fuente` solo dentro de una sección; estado antes de nota/fuentes; y solo líneas
+   vacías fuera de esa estructura. Todo encabezado o texto desconocido falla. Guardar internamente
+   la línea de cada ocurrencia para que validaciones posteriores informen la declaración culpable,
+   sin añadir ese detalle de parser a las dataclasses públicas.
+6. [x] Antes del parseo, exigir `str`, rechazar BOM, convertir CRLF a LF y rechazar CR solitario.
+   Validar `forum_id` con `[a-z0-9]+(?:-[a-z0-9]+)*`; nombre y versión son no vacíos sin espacios
+   exteriores. Las siete secciones se convierten en `DossierSectionSpec` en orden fijo; material
+   suelto solo alimenta `LooseMaterialSpec`. Una obligatoria no admite `NO APLICA`; una aportada
+   exige fuentes y `FALTA`/`NO APLICA` las prohíben; material suelto acepta cero o más fuentes, sin
+   estado ni nota.
+7. [x] Parsear `Metadatos:` como pares `clave=<json>` en cualquier orden usando
+   `json.JSONDecoder.raw_decode` para cada valor y exigiendo después ` | ` o fin de línea. No usar
+   `split`; rechazar caracteres de control decodificados y envolver `JSONDecodeError` o
+   `RecursionError`. Admitir solo las nueve claves documentadas, cada una una vez; exigir `id`,
+   `versión`, `autoridad` y `alcance`. Proyectar el mapa validado al orden fijo del modelo. Omitir
+   `desde`, `hasta`, `pasaje` o `archivo` produce `None`; omitir `sugerencias` produce `()`. Validar
+   strings obligatorios, fechas ISO y su orden, pasaje y ruta por tipo. `sugerencias` solo puede
+   aparecer en material suelto y allí admite nombres españoles exactos de las siete secciones, sin
+   repetición; su mera aparición en una sección de dominio es error, aunque sea `[]`. `version`
+   sigue siendo opaca. Clave desconocida/repetida/ausente, tipo, separador o texto restante
+   inválidos indican línea y causa.
+8. [x] Inferir el origen sin flag: `archivo` string significa fuente de archivo; `archivo` omitido
+   o `null`, fuente en línea. En el segundo caso exigir en la línea física inmediatamente siguiente
+   un cerco de `N >= 4` virgulillas con apertura `~{N} texto` y cierre `~{N}` exacto, ambos sin
+   espacios adicionales. En el primero, una apertura de valla inmediatamente posterior es error y
+   no se consume cuerpo. Capturar sin interpretar todo el literal; validar que `N` es mayor que
+   cualquier racha de `~` contenida en él. El literal canónico incluye todos los bytes UTF-8 entre
+   el LF tras la apertura y el inicio del cierre, incluido el LF final, sin trim. Fuentes vacías,
+   cierre ausente o contenido que colisiona con la valla fallan cerrado; el literal debe contener
+   al menos un carácter no blanco. `#`, listas, tablas y fences internos no alteran el parser.
+9. [x] `load_dossier` lee solo `<dossier_dir>/expediente.md` como bytes y decodifica UTF-8 estricto
+   antes de normalizar; directorio y documento deben ser regulares y no symlinks, y se rechaza BOM.
+   Para cada `archivo`, rechazar
+   `\`, ruta vacía/absoluta/UNC/con unidad, segmentos vacíos, `.`/`..` y cualquier componente
+   symlink; el archivo regular resuelto debe permanecer bajo `dossier_dir`. Leerlo como UTF-8
+   estricto, conservar y hashear sus bytes exactos sin normalizar EOL. Las rutas de fuente se
+   expresan con `/` en Markdown.
+10. [x] Crear cada `SourceRef` con id/pasaje declarados, sin `observed_at` ni `ic_date`. Para archivo,
+    usar SHA-256 de bytes exactos y locator de la ruta resuelta en POSIX. Para inline, usar SHA-256
+    de los bytes UTF-8 canónicos y locator
+    `<expediente.md>#inline:id=<quote(id)>&version=<quote(version)>`, donde ambos valores usan
+    `urllib.parse.quote(value, safe="")` y la ruta del expediente conserva el mismo criterio
+    relativo/absoluto recibido por el loader. Editar cabecera, nota u otra fuente no cambia hash ni
+    locator de esa fuente inline.
+11. [x] Al cargar, repetir `(source_id, version)` exige autoridad, alcance, vigencia, tipo/origen y
+    hash idénticos; `section_or_passage` y las sugerencias de la ocurrencia pueden variar. El mismo
+    id con versiones distintas permanece separado. La versión, autoridad, alcance y vigencia viven
+    en `DossierSourceSpec`; no ampliar `SourceRef`, escoger vigencia ni inferir supersesión.
+12. [x] Crear `core/runtime/templates/expediente.template.md`, válida y copiable: cabecera neutra,
+    las cinco obligatorias y dos opcionales con `Estado: FALTA`, notas breves de qué aportar, y
+    `## Material suelto` vacío. Una `Nota:` remite a la guía adyacente. Crear también
+    `core/runtime/templates/LEEME-expediente.md`, que no se parsea como expediente y muestra
+    ejemplos completos copiables de archivo e inline, claves opcionales/omisiones, `sugerencias`
+    solo para material suelto y selección de una valla mayor que cualquier racha de `~` del
+    literal. La plantilla no contiene comentarios HTML, reglas/lore, rutas reales ni fuentes
+    ficticias. No crear todavía plantillas de instancia o instrucciones.
+13. [x] Crear exactamente la fixture neutra
+    `tests/fixtures/dossiers/minimal-neutral/expediente.md` y sus fuentes
+    `materials/manual-foro.md` y `materials/material-suelto.md`. Las cinco obligatorias están
+    aportadas, combate y técnicas usan
+    `NO APLICA`, se repite coherentemente una fuente/versión con pasajes distintos y material suelto
+    incluye archivo e inline, con el origen inferido; omite al menos una clave opcional y usa orden
+    no canónico en otra fuente. Al menos un inline contiene `#`/`##`, lista, tabla, fence de
+    backticks y una línea `~~~~`; su valla externa usa cinco o más `~`, demostrando cómo escapar el
+    propio delimitador por longitud. No usar nombres ni conceptos del legado.
+14. [x] Crear `tests/test_forum_dossier.py`. Cubrir: dataclasses/tuplas inmutables; template válida
+    pero no lista; fixture lista; cabecera, orden/unicidad/grafía y encabezados desconocidos;
+    estados/notas/fuentes; metadata en órdenes distintos con igual resultado; claves obligatorias,
+    omisiones y valores por defecto; claves desconocidas/repetidas; separadores, JSON, tipos, null
+    y fechas; `sugerencias` omitida/permitida en material suelto y rechazada en dominio incluso
+    como `[]`; `archivo` string sin valla y omitido/`null` con valla inmediata; errores de valla tras
+    archivo o valla ausente tras inline; fences variables/colisionados; literal con Markdown
+    preservado y LF final; igualdad de literal/hash entre documento LF y CRLF; rechazo de CR
+    solitario/BOM; hash/locator inline invariables al editar otra parte; bytes/EOL exactos de
+    archivo; ruta
+    absoluta, unidad/UNC, backslash, traversal y symlink; repetición coherente/incoherente y
+    versiones distintas; diagnóstico separado de secciones; y `DossierError` con locator, línea y
+    causa útil. Los casos inválidos usan `TemporaryDirectory()`; un test de symlink solo se omite si
+    el SO niega crearlo y documenta el motivo.
+15. [x] No crear `adapters/`, CLI, configuración de instancia, candidatos, aprobaciones, índice,
+    payloads de paquete, personaje ni repositorio. No tocar `reference/` ni las notas cerradas de
+    los incrementos 1–2.
+
+Criterios de aceptación del incremento 3:
+
+- La plantilla Markdown muestra todos los faltantes sin fingir contenido; el LEEME enseña ambos
+  orígenes sin formar parte del documento válido, y la fixture neutra carga y queda lista aunque
+  declare que no usa combate/técnicas.
+- La línea de metadatos acepta cualquier orden con claves únicas, materializa los valores por
+  defecto documentados e infiere el origen sin un flag redundante.
+- La estructura dentro de un literal inline nunca se interpreta como estructura del expediente;
+  la valla variable admite el delimitador corto en el propio reglamento.
+- LF y CRLF del mismo `expediente.md` producen el mismo texto/hash inline; no se recorta ningún
+  byte canónico y editar otra zona no cambia su locator. Los archivos externos se hashean tal cual.
+- Ninguna ruta puede escapar del expediente ni atravesar symlinks; toda fuente cargada produce un
+  `SourceRef` sin fechas inventadas, y cada error manual identifica locator, línea y causa.
+- Material suelto y varias fuentes se aceptan, pero no se clasifican, aprueban ni vuelven
+  consultables; este incremento no escribe una instancia.
+- La suite completa sigue pasando con Python 3.11, sin instalación, red, modelo ni dependencias.
+
+Verificación exacta desde PowerShell:
+
+```powershell
+py -3.11 -B -m unittest tests.test_forum_dossier -v
+py -3.11 -B -m unittest discover -s tests -v
+rg -n "Nozomu|Naruto|Jcink|narutorol|account 59|275" core/runtime/assimilation.py core/runtime/templates tests/fixtures/dossiers
+git diff --check
+git diff --name-only e4da791 -- reference
+git status --short
+```
+
+El tercer comando termina sin coincidencias y el quinto sin salida. El estado solo debe incluir
+`ANALISIS.md` y los archivos enumerados para el incremento 3.
+
 ### Incrementos posteriores
 
-3. [ ] **Catálogo literal, versiones y revisión de asimilación (sin modelo).** Añadir modelos de
-   documento/sección/versiones, vigencia y candidatos en `core/runtime/assimilation.py`, repositorio
-   en memoria detrás de puerto y decisiones humanas con `SourceRef`/`ReviewStatus`. El material de
-   prueba se aporta por API/fixtures y el almacenamiento efectivo se configura fuera del repo.
-   Criterio: pendiente/rechazado no es consultable; aprobar una cita no aprueba otra; una versión
-   nueva conserva la anterior y una vigencia ambigua falla con `REQUIERE CONFIRMACIÓN`.
-4. [ ] **Recuperación dirigida y contratos `rules`/`world` (sin modelo).** Crear índices de secciones
-   deterministas y consultas separadas para reglas/ambientación; implementar selección de sistema
-   `ABSENT`. Criterio: una consulta devuelve solo pasajes relevantes con cita, distingue literal,
-   interpretación, propuesta e incertidumbre y nunca rellena un hueco.
-5. [ ] **Puerto de modelo y extracción asistida opcional.** Definir `ModelProvider` en
-   `core/runtime/ports.py`; la extracción devuelve candidatos aún pendientes y no activa nada.
-   Criterio: todos los tests/core funcionan sin proveedor; un doble demuestra que la salida del
-   modelo necesita citas válidas y revisión humana.
-6. [ ] **Puertos de repositorio y memoria.** Implementar eventos con procedencia, deduplicación,
-   revisión por anotación y consultas IC/OOC; repositorio en memoria primero. Criterio: una
-   corrección conserva el evento previo y un resultado no confirmado nunca sale como hecho.
-7. [ ] **Narrativa interna sin modelo y puertos mínimos de ejecución.** Añadir
-   `core/runtime/narrative.py`, constructor de contexto, `PublicationPort` y dobles; ningún adaptador
-   implementa publicación. Criterio: pensamiento privado/OOC no puede ser `FACT` e incertidumbre
-   material no produce borrador automático.
-8. [ ] **Seguimiento interno y adaptador manual.** Añadir `core/runtime/tracking.py`, `ForumReader`
-   y `adapters/manual.py` con fixtures locales. Criterio: A→B→A conserva tres revisiones y una
-   captura incompleta no avanza estado.
-9. [ ] **Primer repositorio SQLite y runtime de un ciclo.** Persistir corpus/memoria/operación fuera
-   del repo, añadir `core/runtime/config.schema.json` y `config.example.json` sin autorizaciones
-   reales, y conectar fases sin red/modelo mediante puertos de reloj/lock. Criterio:
-   reinicio/concurrencia no duplican trabajos y fallo tardío no revierte una fase confirmada.
-10. [ ] **Payload de personaje Nozomu.** Tras resolver la duda de la ficha mecánica, migrar solo los
-    datos autorizados; mundo/sistema permanecen manifest-only y las normas/lore se aportan al corpus
-    externo. Criterio: no aparece texto ni derivado reglamentario/lore y ninguna propuesta figura
-    como aprendida, utilizable o canon.
-11. [ ] **Evaluador técnico genérico.** Consumir exclusivamente corpus aprobado y snapshots por
-    escena; no implementar reglas Naruto. Criterio: ausencias permanecen desconocidas, cálculos citan
-    cada fórmula/unidad y ambigüedades conservan `REQUIERE CONFIRMACIÓN`.
-12. [ ] **Adaptador Jcink offline.** Extraer selectores/paginación/autenticación detrás de
-    `ForumReader` con contract tests saneados. Criterio: core pasa sin Playwright y el adaptador
-    rechaza identidad/completitud no verificables; no implementa `PublicationPort`.
-13. [ ] **Proveedor e integraciones opcionales.** Migrar, uno por vez, proveedor Codex CLI,
-    Discord y scheduler Windows. Criterio: deshabilitarlos no afecta core; secretos/configuración
-    efectiva quedan externos y no hay publicación real.
-14. [ ] **Paridad y segundo caso de generalidad (incremento final).** Elegir el caso solo cuando las
-    bases estén afinadas y ejecutar paridad con fixtures legacy saneadas. Criterio: incorporar el
-    caso elegido sin modificar el core para acomodar nombres, voz, temática o mecánicas específicas.
+4. [ ] **Rebanada vertical neutra, manual y sin modelo.** Añadir modelos mínimos de candidato citado
+   y decisión humana en `assimilation.py`, `core/runtime/cli.py`, `adapters/manual.py` y plantillas
+   de instancia. `instance init` exige `--output`; genera ambos `AGENTS.md`/`CLAUDE.md` desde una
+   política común y un test compara sus bloques invariantes. Recorrer en un temporal:
+   `expediente.md` neutro → literales/candidatos manuales → aprobación exacta → carpeta externa →
+   concepto del usuario → propuesta aceptada/rechazada → ficha `DraftVersion` pendiente de staff.
+   Criterio: sin `--output` o con destino dentro del repo/no vacío falla sin escribir; reiniciar es
+   idempotente, solo se usa lo aprobado, no hay publicación y las barreras dependen del core.
+5. [ ] **Asimilación completa y recuperación dirigida.** Añadir versiones/supersesión, vigencia,
+   índice determinista y contratos `core/rules`/`core/world`, incluido `ABSENT`. Criterio:
+   pendiente/rechazado no es consultable, conflictos devuelven `REQUIERE CONFIRMACIÓN` y la consulta
+   entrega solo pasajes pertinentes con cita.
+6. [ ] **Creación de personajes completa.** Implementar `core/character`, varias fichas por
+   instancia, propuestas versionadas y ejes separados de staff/aprendizaje/utilizabilidad.
+   Criterio: el agente nunca origina el concepto ni incorpora una propuesta sin aceptación, y una
+   aprobación no implica aprendizaje, uso, publicación o canon.
+7. [ ] **Memoria y narrativa.** Añadir puertos/repositorio en memoria, eventos con procedencia,
+   correcciones por anotación y `core/runtime/narrative.py` con `PublicationPort` solo como contrato.
+   Criterio: OOC/pensamiento/resultado pendiente no sale como hecho; ningún adaptador publica.
+8. [ ] **Seguimiento y adaptador manual completo.** Añadir `core/runtime/tracking.py`, `ForumReader`
+   y capturas locales al adaptador manual. Criterio: baseline, A→B→A y lecturas incompletas se
+   comportan de forma conservadora; los borradores solo se exportan a un outbox local.
+9. [ ] **Persistencia SQLite y runtime de un ciclo.** Persistir corpus, memoria y operación solo en
+   la instancia; añadir schema/ejemplo de configuración en `core/runtime` y puertos de reloj/lock.
+   Criterio: reinicio/concurrencia no duplican trabajo y un fallo tardío no revierte fases previas.
+10. [ ] **Primer caso real: Nozomu / Naruto Rol.** Migrar por el mismo expediente/CLI, sin ramas
+    específicas; mundo/sistema siguen manifest-only y toda ficha mecánica queda versionada en la
+    instancia, no en `packages/characters/nozomu`. Criterio: no entra regla/lore/derivado o dato
+    mecánico en paquetes y una propuesta no figura como aprendida/utilizable/canon.
+11. [ ] **Evaluador técnico genérico.** Consumir solo corpus aprobado y snapshots por escena; crear
+    especialista de combate solo si la instancia lo requiere. Criterio: ausencias siguen
+    desconocidas y cada fórmula/unidad calculada tiene cita.
+12. [ ] **Adaptador Jcink offline.** Extraer selectores, paginación y autenticación detrás de
+    `ForumReader` con fixtures saneadas. Criterio: core no requiere Playwright, identidad/completitud
+    dudosa falla cerrada y Jcink no implementa `PublicationPort`.
+13. [ ] **Modelo e integraciones opcionales.** Añadir `ModelProvider` y, uno por vez, Codex CLI,
+    Discord y scheduler Windows. Criterio: los candidatos del modelo siguen pendientes; deshabilitar
+    integraciones no afecta el core y secretos/configuración efectiva permanecen externos.
+14. [ ] **Segundo caso y paridad final.** Elegirlo entonces y ejecutar paridad con fixtures legacy
+    saneadas. Criterio: otro foro/tema entra por expediente e instancia sin modificar el core para
+    nombres, voz, temática o mecánicas concretas.
 
 ## Cómo verificarlo
 
@@ -585,22 +993,17 @@ nombres específicos bajo `packages/` es intencional; nunca bajo `core/` ni fixt
 
 ## Riesgos y dudas abiertas
 
-Claude debe detenerse antes del incremento afectado y pedir decisión; no elegir por suposición. No
-hay una duda que bloquee el incremento 2.
+Las decisiones de formato, instrucciones, ruta de instancia y ficha mecánica están cerradas y no
+bloquean los incrementos 3–13. Solo sigue abierta una decisión futura:
 
-1. **Antes del incremento 10: ¿dónde vive la ficha mecánica de Nozomu —atributos invertidos,
-   inventario, IDs/técnicas y estados aprendido/utilizable— si depende de un sistema cuyas reglas y
-   derivados no se empaquetan?**
-   - A: toda la ficha dependiente del sistema vive como perfil operativo versionado fuera del repo;
-     el paquete de personaje solo conserva identidad/interpretación independiente del sistema.
-   - B: el paquete de personaje puede conservar hechos mecánicos estables aportados y su
-     procedencia (atributos declarados, inventario, IDs, aprendido/utilizable), pero no fórmulas,
-     totales derivados ni reglas; recursos de escena siguen fuera.
-   - C: no crear payload del personaje más allá del manifest hasta que el usuario aporte una fuente
-     nueva y delimite campo por campo qué se puede versionar.
-2. **Para el incremento final, ¿qué segundo caso de generalidad se usará?** Decisión
-   intencionadamente aplazada hasta que las bases estén afinadas; no condiciona los incrementos
-   2–13 y no se detallan opciones todavía.
+1. **Antes del incremento 14: ¿cuándo y cómo elegir el segundo caso de generalidad?**
+   - A: mantener la elección aplazada y, al llegar al incremento 14, escoger un foro real no Naruto
+     que contraste mecánicas/plataforma con el primero. **Recomendación:** A; evita diseñar ahora
+     contra un caso hipotético y conserva la decisión previa.
+   - B: fijar ya otro foro real; da un objetivo temprano, pero puede sesgar el core antes de validar
+     la rebanada vertical y exige que el usuario aporte su expediente.
+   - C: usar solo un segundo expediente sintético; es reproducible, pero demuestra menos
+     generalidad de producto que un caso real aportado por el usuario.
 
 ---
 ## Notas de implementación (las rellena Claude)
@@ -695,3 +1098,61 @@ hay una duda que bloquee el incremento 2.
     Coste NO DISPONIBLE.
   - Retrabajo: una ronda de correcciones (5 hallazgos); reubicación de dos tests mal colocados y
     normalización de CRLF introducidos por Claude al editar con Python.
+
+### Incremento 3 — contrato y carga del expediente
+- Rama: `feature/plan-expediente-foro` (base `e4da791`); incluye el rediseño del plan de Codex.
+- Cambios hechos: `core/runtime/assimilation.py`; exports en `core/runtime/__init__.py`;
+  `core/runtime/templates/{expediente.template.md,LEEME-expediente.md}`;
+  `tests/fixtures/dossiers/minimal-neutral/{expediente.md,materials/manual-foro.md,
+  materials/material-suelto.md}`; `tests/test_forum_dossier.py`.
+- Resultado de los tests: `tests.test_forum_dossier` → 53 OK; suite completa → 142 OK en
+  `py -3.11` y `py -3.14`, sin tests omitidos (los symlinks se crean en este equipo). `rg` de
+  términos del legado en el módulo, plantillas y fixtures sin coincidencias; `reference/` sin
+  cambios desde `e4da791`; `git diff --check` limpio.
+- Revisión de Codex: «requiere cambios» (REV3-01..02 media, REV3-03 baja); corregidos juntos:
+  - REV3-01: sugerencias no textuales, errores de conversión de `raw_decode` (p. ej. enteros
+    de más de 4.300 dígitos) y textos con sustitutos Unicode aislados dan `DossierError` en la
+    línea de `Metadatos:`; los textos y rutas deben poder codificarse en UTF-8.
+  - REV3-02: los fallos de E/S al leer o resolver el expediente (locator del documento, sin
+    línea) o un material (línea de sus metadatos) y un `dossier_dir` no convertible a ruta se
+    envuelven en `DossierError` con `__cause__`.
+  - REV3-03: `Estado: NO APLICA` en una obligatoria se señala en la línea `Estado:`; una fuente
+    tras `Estado:` se señala en su `### Fuente`.
+  - Resultado tras las correcciones: 56 tests del expediente y 145 en total, OK en `py -3.11` y
+    `py -3.14`, sin omitidos.
+- Desviaciones del plan: ninguna. Decisiones de detalle que el plan no fijaba:
+  - Los motivos de error están en español (el expediente se escribe a mano). Los constructores
+    lanzan `DossierError` con el nombre de la clase como locator y sin línea; el parser los
+    reenvuelve con su locator y la línea de la declaración culpable.
+  - `pasaje`, `Nota`, `nombre` y `versión_expediente` siguen la misma regla de texto que los
+    metadatos obligatorios: no vacío, sin espacios exteriores ni caracteres de control C0.
+  - `archivo` rechaza además `:` en cualquier posición (unidades y flujos alternativos de NTFS)
+    y segmentos que terminen en punto o espacio (Windows los recorta al abrir).
+  - Locator de una fuente de archivo: `<dossier_dir>/<archivo>` en POSIX con el mismo criterio
+    relativo/absoluto que recibe el loader (como en el incremento 2), no la ruta absoluta
+    resuelta; la resolución solo se usa para comprobar que no sale del expediente.
+  - Riesgo para revisar: en Python 3.11 `is_symlink()` no detecta *junctions* de Windows. Una que
+    apunte fuera del expediente se rechaza por la comprobación de ruta resuelta; una que apunte
+    dentro no se detecta.
+  - Sin límite de tamaño para `expediente.md` ni para los archivos de material (el plan no lo
+    fija; los manifests sí lo tienen).
+  - Los archivos de material conservan sus bytes tal cual, incluido un BOM si lo tuvieran; solo
+    `expediente.md` rechaza BOM.
+  - Añadidos `DossierSourceSpec.key` y `ForumDossier.all_sources()`; el ejemplo completo de
+    `LEEME-expediente.md` se valida con un test para que la guía no quede desfasada.
+  - Mensaje de valla colisionada: indica también la línea de la valla abierta, porque una valla
+    sin cerrar en mitad del documento se manifiesta como colisión con la valla siguiente.
+- Revisión archivada en `docs/analisis/incremento-3-revision.md` (veredicto final: aprobado).
+- Métricas por agente (solo telemetría verificable; ausente = NO DISPONIBLE):
+  - Codex (`gpt-5.6-sol`, high), contadores de `~/.codex/sessions`:
+    - Rediseño del plan `01a12b46-c70e-7a31-b453-3294a459082e` (3 encargos: flujo de expediente,
+      decisiones del usuario y enmienda de metadatos): entrada 6.226.818 (caché leída 6.011.264),
+      salida 64.192 (razonamiento 26.494).
+    - Revisión `01a12c9a-5399-7ba0-ad21-9444a928ae13` (2 encargos: revisión + verificación):
+      entrada 3.085.008 (caché leída 2.947.072), salida 28.013 (razonamiento 15.760).
+    - Escritura de caché 0; errores/cancelaciones 0; coste o cuota NO DISPONIBLE.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde la propuesta del flujo por foro; 36
+    respuestas de API, incluye el diseño con el usuario): entrada 72, salida 85.372, caché leída
+    11.064.747, caché escrita 424.377. Coste NO DISPONIBLE.
+  - Retrabajo: una ronda de correcciones (3 hallazgos); cálculos de línea erróneos en tests
+    corregidos por Claude antes de la revisión; un script de reemplazo fallido sin efectos.
