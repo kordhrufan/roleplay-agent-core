@@ -1,0 +1,9 @@
+{
+  "core_root": $core_root_json,
+  "display_name": $display_name_json,
+  "dossier": {"files": $dossier_files_json, "path": "dossier/expediente.md"},
+  "dossier_version": $dossier_version_json,
+  "forum_id": $forum_id_json,
+  "kind": "forum-assimilation-workspace",
+  "schema_version": 1
+}

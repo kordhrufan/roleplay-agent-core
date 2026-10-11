@@ -6,9 +6,10 @@ Generalizar Nozomu Agent como `roleplay-agent-core`: un núcleo reutilizable par
 foro de rol, configurable por personaje, mundo, sistema, plataforma e instancia. Este documento
 define la extracción y un plan para Claude; no implementa código ni altera el legado.
 
-Versión base de este rediseño: commit `e4da791` a 2026-10-11, rama
-`feature/plan-expediente-foro`, creada desde el incremento 2 aprobado y sin cambios al iniciar el
-análisis. `main` permanece en `96eca81`; los incrementos 1–2 siguen en ramas apiladas sin fusionar.
+Versión base del detalle del incremento 4: commit `42e724a` a 2026-10-11, rama
+`feature/incremento-4-rebanada-vertical`, creada desde el incremento 3 aprobado y sin cambios al
+iniciar este análisis. `main` permanece en `96eca81`; los incrementos 1–3 siguen en ramas apiladas
+sin fusionar.
 `reference/migration-source/` es la copia inmutable inspeccionada. La auditoría anterior se trata
 como hipótesis histórica porque declara que su fuente estaba vacía; no se usa como prueba de la
 implementación actual.
@@ -91,8 +92,11 @@ implementación actual.
   observación y fecha IC independiente; no incluye todavía autoridad, versión o vigencia de corpus.
 - `core/review/models.py` — incremento 1 aprobado: borrador, revisión, vigencia y publicación como
   ejes ortogonales; sus transiciones exigen versión/evidencia y no crean canon.
-- `tests/test_{provenance,review_models}.py` y `tests/test_package_{manifest,loader}.py` — 89
-  pruebas aprobadas en total que los incrementos siguientes deben conservar.
+- `core/runtime/assimilation.py` y `core/runtime/templates/` — incremento 3 aprobado: expediente
+  Markdown cerrado, modelos inmutables, fuentes literales/hash y diagnósticos; aún no persiste,
+  crea candidatos ni decide revisiones.
+- Las cinco suites actuales suman 145 pruebas aprobadas que los incrementos siguientes deben
+  conservar.
 
 ### Hallazgos de contraste
 
@@ -189,7 +193,7 @@ Las propuestas no demostradas se marcan **[P]**.
 | `rules` | Representar `ABSENT` de forma explícita o consultar/evaluar normas aportadas y aprobadas; separar literal, interpretación, propuesta e incertidumbre. | Selección de sistema (`ABSENT` o corpus+versión) + consulta/snapshot/acción → secciones relevantes, evaluación condicionada, fórmula/unidades solo si están respaldadas, riesgos y `REQUIERE CONFIRMACIÓN`. | No contiene reglas Naruto ni depende de paquetes con reglas. Solo consume entradas aprobadas con `SourceRef`; una extracción pendiente/rechazada no es utilizable. `ABSENT` no simula ceros ni resolución mecánica. |
 | `memory` | Ingerir eventos fuente, deduplicar, preservar revisiones y proyectar conocimiento IC/OOC, relaciones, pendientes y estado por escena. | Evento + fuentes + revisión opcional → registro inmutable/revisión; consulta contextual → hechos, creencias, lagunas y referencias. | Depende de un puerto de repositorio, no de SQLite. No recibe borradores como hechos ni escribe paquetes. |
 | `review` | Versionar borradores y registrar decisiones humanas por versión exacta; aportar el vocabulario de revisión también a candidatos de asimilación sin tratarlos como publicaciones. | Borrador/candidato + versión + decisión/evidencia → estado explícito e historial. | No publica, canoniza ni activa una fuente por sí mismo. `DraftVersion` conserva sus tres ejes actuales; la asimilación tendrá su propio registro y reutilizará `ReviewStatus`, no `PublicationStatus`. |
-| `runtime` | Alojar expediente/asimilación, materialización de instancia, CLI, narrativa y seguimiento; ejecutar fases recuperables. La asimilación registra literales, crea candidatos manuales o mediante puerto de modelo, solicita revisión y construye un índice dirigido solo con entradas aprobadas. | Expediente + ruta/paquetes elegidos → instancia externa; fuentes/metadatos → candidatos citados; decisión humana → corpus consultable; consulta → secciones relevantes. Además conserva los flujos de escena, tracking y `RunReport`. | `assimilation.py`, `cli.py`, `narrative.py` y `tracking.py` son submódulos internos. Depende de puertos y de modelos de `rules`/`world`; el camino manual funciona sin `ModelProvider`. No contiene reglas/lore concretos ni selectores Jcink. |
+| `runtime` | Alojar expediente/asimilación, materialización de instancia, CLI, narrativa y seguimiento; ejecutar fases recuperables. La asimilación registra literales, crea candidatos manuales o mediante puerto de modelo, solicita revisión y construye un índice dirigido solo con entradas aprobadas. | Expediente → workspace externo; fuentes/metadatos → candidatos citados; decisiones/cierre humanos → instancia y corpus consultable; consulta → secciones relevantes. Además conserva los flujos de escena, tracking y `RunReport`. | `assimilation.py`, `cli.py`, `narrative.py` y `tracking.py` son submódulos internos. Depende de puertos y de modelos de `rules`/`world`; el camino manual funciona sin `ModelProvider`. No contiene reglas/lore concretos ni selectores Jcink. |
 
 Los puertos no requieren una carpeta de primer nivel: los repositorios propios quedan junto al
 módulo dueño (`core/memory/ports.py`, y el repositorio de corpus en `core/runtime/ports.py`) y los
@@ -356,9 +360,26 @@ desde una línea `Nota:` y no contiene comentarios ni ejemplos fingidos.
 #### Carpeta de instancia externa
 
 `instance init` exige siempre `--output <ruta>`: no consulta ni deriva ubicaciones por defecto.
-Rechaza una ruta dentro del checkout o una carpeta no vacía. El usuario elige ruta, `forum_id`,
-paquetes y confirma la creación; el runtime materializa de forma transaccional y deja auditable el
-origen de cada archivo. Layout objetivo:
+Rechaza una ruta dentro del checkout o una carpeta no vacía que no sea un retry idéntico. El
+usuario elige ruta, `forum_id`, paquetes —cuando se habiliten— y confirma la creación; el runtime
+materializa de forma transaccional y deja auditable el origen de cada archivo. Layout objetivo:
+
+Antes de esa instancia existe un **workspace de asimilación**, también externo y elegido mediante
+`--workspace` explícito. No es un agente ni una instancia: carece de `AGENTS.md`, `CLAUDE.md`,
+personajes, memoria y especialistas. Aloja únicamente la copia del expediente, candidatos y
+decisiones necesarias para que el core pueda impedir materializar antes de la aprobación:
+
+```text
+<workspace-asimilacion>/
+  workspace.json
+  dossier/
+  corpus/state.json
+  work/integrity.json
+```
+
+Tras el cierre humano del snapshot exacto, `instance init --workspace ... --output ...` copia ese
+expediente/corpus aprobado a la carpeta final; el workspace permanece como historial y no se
+reutiliza para otro foro o versión.
 
 ```text
 <instancia-foro>/
@@ -366,24 +387,28 @@ origen de cada archivo. Layout objetivo:
   CLAUDE.md                        # generado, no estado
   instance.json                    # schema, forum_id, core_root y paquetes/versiones
   dossier/                         # copia literal del expediente y sus fuentes
-  corpus/                          # candidatos, decisiones, versiones e índice aprobado
+  corpus/state.json                # desde 4b: candidatos y decisiones, con historial
   characters/<character_id>/
-    concept.md                     # entrada del usuario
-    profile.json                   # ficha versionada y ejes separados
-    proposals/                     # propuestas pendientes/aceptadas/rechazadas
-    drafts/                        # borradores, nunca publicaciones implícitas
+    concept.md                     # entrada editable del usuario; no es estado hasta importarla
+    state.json                     # desde 4d: versiones del concepto y propuestas/decisiones
+    profile.json                   # desde 4e: DraftVersion y respuesta de staff separada
   memory/                          # eventos y vistas con SourceRef
-  work/                            # colas, locks y auditoría de ejecución
+  work/integrity.json              # hashes de archivos gestionados estáticos
   specialists/                    # solo capacidades exigidas por el foro aprobado
 ```
 
 Solo las plantillas están en el repo, bajo `core/runtime/templates/`: expediente, configuración y
 ambos archivos de instrucciones; más adelante, plantillas de especialistas genéricos. Una política
-común renderiza los bloques invariantes de `AGENTS.md` y `CLAUDE.md`; un contract test compara esos
-bloques para impedir divergencias, dejando aparte solo indicaciones propias de cada herramienta.
-`instance.json` se renderiza desde plantilla y los demás datos proceden del expediente, decisiones
-humanas y comandos del core. Un especialista de combate se genera solo si `combat_system` tiene
-entradas aprobadas;
+común `instance-policy.template.md` se inserta entre los marcadores exactos
+`<!-- BEGIN ROLEPLAY-AGENT-CORE:COMMON -->` y
+`<!-- END ROLEPLAY-AGENT-CORE:COMMON -->` de `AGENTS.template.md` y `CLAUDE.template.md`; un test
+compara byte a byte esos bloques generados. Fuera del bloque común solo se permiten instrucciones
+propias, también en español: `AGENTS.md` declara su alcance para Codex y la jerarquía de
+`AGENTS.md`; `CLAUDE.md` declara el alcance equivalente para Claude. Ambos muestran el mismo patrón
+PowerShell renderizado. Ninguno redefine estados, autoridad, decisiones o publicación.
+`instance.json` se renderiza desde `instance.template.json` y los demás datos proceden del
+expediente, decisiones humanas y comandos del core. Un especialista de combate se genera solo si
+`combat_system` tiene entradas aprobadas;
 `NOT_APPLICABLE`, `MISSING` o candidatos pendientes no bastan. Nozomu, Naruto, reglas, memoria ni
 configuración efectiva se añaden a ninguna plantilla.
 
@@ -394,7 +419,7 @@ confirmada al crearla. Las instrucciones generan comandos PowerShell con rutas e
 
 ```powershell
 Push-Location '<core_root>'
-py -3.11 -B -m core.runtime.cli --instance '<instance_root>' <comando>
+py -3.11 -B -m core.runtime.cli <grupo> <comando> --instance '<instance_root>'
 Pop-Location
 ```
 
@@ -406,11 +431,143 @@ se pueden editar, pero ningún cambio de corpus, estado o memoria se considera v
 JSON/Markdown directamente: debe pasar por las operaciones del core. Las instrucciones explican el
 flujo; estas barreras ejecutables sostienen las invariantes.
 
+#### Persistencia provisional e integridad (incrementos 4a–4f)
+
+Hasta la migración a SQLite del incremento 9 se usa **JSON, no JSONL**. El volumen de esta rebanada
+es pequeño y reescribir un documento JSON permite una sustitución atómica portable; un append de
+JSONL puede quedar truncado y no se puede confirmar junto con su índice mediante un solo
+`os.replace`. Los historiales se conservan como arrays dentro del estado, no se sobrescriben
+decisiones previas.
+
+`workspace.json`, `instance.json` y `work/integrity.json` son JSON estricto UTF-8 sin BOM, con LF
+final, claves ordenadas, sangría de dos espacios y rechazo de claves duplicadas, constantes no
+estándar y claves desconocidas. La forma exacta de la configuración final `instance.json` es:
+
+```json
+{
+  "core_root": "<ruta absoluta nativa del checkout>",
+  "display_name": "<nombre del expediente>",
+  "dossier": {
+    "files": [
+      {"path": "dossier/expediente.md", "sha256": "<64 hex>", "size": 123}
+    ],
+    "path": "dossier/expediente.md"
+  },
+  "dossier_version": "<versión_expediente>",
+  "forum_id": "<forum_id>",
+  "packages": [],
+  "schema_version": 1
+}
+```
+
+Tanto el workspace como la instancia usan `dossier.files`, que enumera, en orden lexicográfico
+POSIX, el documento y cada `archivo` referenciado una sola vez; `size` y SHA-256 corresponden a
+sus bytes copiados exactos. `packages` queda vacío en
+la rebanada vertical: la selección/payload de paquetes pertenece al incremento 6 y no se inventa
+un paquete neutro. `work/integrity.json` tiene exactamente `schema_version`, `algorithm="sha256"`
+y `files`, otra lista ordenada de `{path, sha256, size}`. En el workspace cubre
+`workspace.json` y `dossier/`; en la instancia cubre `AGENTS.md`, `CLAUDE.md`, `instance.json`,
+`dossier/` y el snapshot cerrado de `corpus/`; nunca se incluye a sí misma ni duplica el hash
+autocontenido del estado mutable abierto.
+
+Los estados mutables posteriores (`corpus/state.json`, `characters/<id>/state.json` y
+`profile.json`) usan un sobre común con claves exactas `schema_version`, `revision`, `content` y
+`content_sha256`. El hash se calcula sobre los bytes JSON canónicos compactos
+(`ensure_ascii=False`, `sort_keys=True`, `separators=(",", ":")`) del objeto formado por las tres
+primeras claves; el archivo legible se serializa con el formato anterior. Cada operación cambia un
+solo estado autoritativo, conserva su historial dentro de `content` y lo sustituye atómicamente.
+
+Toda escritura de archivo se hace en un temporal nuevo del mismo directorio, escribe bytes,
+`flush` + `os.fsync` y termina con `os.replace`; el temporal se elimina ante error. La creación de
+la carpeta usa un staging hermano y solo lo renombra al final. Esto da atomicidad frente a fallos
+del proceso, no promete durabilidad ante pérdida eléctrica ni una transacción entre varios
+archivos. Los blobs inmutables se escriben antes que el estado que los referencia; un blob huérfano
+tras un fallo se ignora.
+
+La idempotencia se basa en claves de negocio y hashes, no en la hora: repetir exactamente `init`,
+un candidato, una decisión, una importación de concepto, una propuesta o un borrador devuelve el
+resultado existente sin escribir; reutilizar la misma ID/versión con otro contenido falla cerrado.
+`assimilation init` o `instance init` sobre un destino no vacío solo son excepción si ya contienen
+respectivamente un workspace o instancia íntegros e idénticos; cualquier otro no vacío se rechaza.
+Los comandos validan integridad antes de operar y una edición directa causa fallo hasta restaurar
+el archivo o importar el cambio mediante una operación.
+
+Estos hashes detectan ediciones accidentales, **no autentican al actor**: quien tenga los mismos
+permisos de escritura puede recalcularlos o modificar el core. No deben presentarse como barrera de
+seguridad ni como prueba de intervención humana. `concept.md` es deliberadamente entrada del
+usuario y puede editarse; solo una importación por CLI crea una versión gestionada con su hash.
+
+#### Candidatos manuales y citas exactas (incrementos 4b–4c)
+
+En este flujo el agente, trabajando sobre el workspace previo, prepara un JSON de candidato y
+ejecuta `assimilation candidate add --workspace <ruta> --input <archivo>`; el usuario también puede
+crear candidatos, pero no necesita editar el estado. Crear un candidato no lo aprueba. Las clases son exactamente
+`LITERAL`, `INTERPRETATION`, `PROPOSAL` y `UNCERTAINTY`, con dominio `RULES` o `WORLD`; toda
+incertidumbre se muestra como `REQUIERE CONFIRMACIÓN` aunque después exista una decisión sobre el
+registro.
+
+Cada cita guarda `dossier_section` (valor interno de `DossierSection`), `source_id`,
+`source_version`, `source_sha256`, `declared_passage` (string o `null`), `start`, `end` y `quote`.
+Sección y pasaje desambiguan ocurrencias repetidas de una misma fuente. `start` y `end` son offsets
+de caracteres Python, base 0 y rango semiabierto, sobre `literal_text` tal como lo entregó
+`load_dossier` —incluidos CRLF de un archivo externo y LF canónicos de un inline—. La CLI exige que
+la ocurrencia exista, `0 <= start < end <= len(literal_text)`, hash/versión exactos y
+`literal_text[start:end] == quote`; calcula línea/columna base 1 solo para mostrar diagnósticos.
+Así una repetición textual queda desambiguada y una edición de otra parte del expediente no mueve
+la identidad de la fuente, que sigue fijada por versión/hash. Un `LITERAL` exige una sola cita y
+`text == quote`; las otras clases pueden redactar una conclusión distinta, pero todas sus citas
+deben resolver. En 4b `WORLD` solo admite fuentes de `setting`, `RULES` las otras seis secciones de
+dominio y `Material suelto` no genera candidatos hasta su clasificación en el incremento 5.
+
+Una decisión conserva `candidate_id`, versión y SHA-256 del candidato exacto, `ReviewStatus`
+(`APPROVED` o `REJECTED`) y un recibo del mecanismo humano. El recibo se serializa canónicamente,
+se guarda en el historial y origina un `SourceRef` con locator
+`assimilation://<forum_id>/human-decisions/<decision_id>` y su SHA-256; no se inventan
+`observed_at` ni fecha IC. Su `source_id` es `human-decision:<decision_id>` y
+`section_or_passage` identifica `candidate:<candidate_id>:v<version>` o `assimilation-closure`.
+Repetir la misma decisión devuelve el registro existente; una decisión opuesta o sobre otro hash
+requiere una versión nueva, no reescribe la anterior.
+
+El cierre de asimilación es otra decisión humana, no una inferencia de la CLI. Solo se ofrece cuando
+no queda candidato pendiente y cada sección de dominio `PROVIDED` tiene al menos un `LITERAL`
+aprobado con cita en esa sección; `Material suelto` no bloquea. La CLI muestra por separado
+rechazos e `UNCERTAINTY` y el humano confirma el snapshot. El recibo guarda el SHA-256 canónico del
+objeto `{candidates, decisions}` —excluye `closure` para evitar circularidad—. Añadir/cambiar una
+versión o decisión altera ese digest e invalida el cierre; `instance init` exige que el recibo siga
+coincidiendo. Cerrar no convierte una incertidumbre, interpretación o propuesta en literal ni
+aprueba entradas pendientes.
+
+#### CLI mínimo de la rebanada
+
+`core/runtime/cli.py` usa `argparse`, expone `main(argv: Sequence[str] | None = None) -> int` y se
+ejecuta desde el checkout con `py -3.11 -B -m core.runtime.cli`. Texto español legible es la salida
+predeterminada; el flag global `--json` anterior al grupo de comandos emite un único objeto JSON a
+stdout. Los errores de aplicación van a stderr; en JSON usan
+`{"ok":false,"code":"<código>","message":"<texto>"}`. Códigos de salida estables: `0` éxito o
+repetición idempotente, `2` uso de `argparse`, `3` entrada/estado/integridad inválidos, `4` destino
+inseguro o conflicto de versión/identidad y `5` error de E/S. No se captura `KeyboardInterrupt`.
+
+Subcomandos acumulados: 4a añade `assimilation init --dossier RUTA --workspace RUTA` y
+`assimilation status --workspace RUTA`; 4b añade `assimilation source list` y `assimilation
+candidate add/list/show`; 4c añade las decisiones/cierre humanos e
+`instance init --workspace RUTA --output RUTA`/`instance status`; 4d añade `character concept
+import`, `character proposal add/list/show` y su decisión humana; 4e añade `character draft create`
+y `character staff record`. `--workspace` y `--output` son siempre explícitos, sin defaults ni
+variables de entorno. No existe ni se reserva `publish`, `send`, `post` o equivalente.
+
+#### Reparto del adaptador manual
+
+En 4a `adapters/manual.py` es exclusivamente la entrada local del expediente: recibe una carpeta,
+llama a `load_dossier`, exige `ready_for_assimilation` y devuelve el `LoadedForumDossier` al
+creador del workspace. No interpreta, crea candidatos, decide, lee turnos ni publica. En el
+incremento 8 se ampliará —detrás de `ForumReader`— para importar capturas locales de turnos y
+acreditar identidad y completitud; esa responsabilidad no se anticipa en la rebanada.
+
 #### Creación de personaje y reparto de decisiones
 
 | Paso | Decide/aporta el usuario | Hace el agente, siempre mediante el core |
 | --- | --- | --- |
-| Expediente | Fuentes, versión/autoridad/vigencia y marcadores `FALTA` o `NO APLICA`; aprueba/rechaza cada candidato exacto. | Valida literales y citas, clasifica solo como candidato, enumera faltantes/contradicciones y marca `REQUIERE CONFIRMACIÓN`; nunca aprueba. |
+| Expediente | Fuentes, versión/autoridad/vigencia y marcadores `FALTA` o `NO APLICA`; aprueba/rechaza cada candidato exacto y cierra el snapshot revisado. | Valida literales y citas, clasifica solo como candidato, enumera faltantes/contradicciones y marca `REQUIERE CONFIRMACIÓN`; nunca aprueba ni cierra. |
 | Instancia | Ruta, foro y paquetes/versiones; confirma materialización. | Genera desde plantillas y habilita especialistas solo por capacidades aprobadas. |
 | Concepto | Escribe el concepto, fija lo irrenunciable y responde dudas. | Lo conserva como fuente, recupera normas aprobadas pertinentes y no usa reglas pendientes. |
 | Ajuste | Acepta/rechaza cada mejora y elige entre alternativas. | Presenta diferencias con citas como `PROPUESTA`; una aceptación crea una versión nueva, no reescribe el concepto original ni acredita staff. |
@@ -519,13 +676,15 @@ necesidad real de construir o distribuir el proyecto.
 - Python `>=3.11`, que es el mínimo documentado por el legado; en este equipo se usa siempre
   `py -3.11` (el comando `python` apunta a 3.10.6). Tipado, `dataclasses`, `enum`, `Protocol`,
   `pathlib`, `json`, `hashlib`, `sqlite3` y `unittest` de la biblioteca estándar.
-- JSON estricto para manifests/estado, JSONL para eventos append-only y `expediente.md` con la
-  gramática cerrada descrita arriba para entrada humana y fuentes; Markdown también puede usarse
-  para voz/documentación autorizada. Esto no autoriza lore, reglas ni derivados en paquetes.
+- JSON estricto para manifests y el estado provisional hasta SQLite; no JSONL antes del incremento
+  9 porque esta fase prioriza sustitución atómica sobre append. `expediente.md` usa la gramática
+  cerrada descrita arriba para entrada humana y fuentes; Markdown también puede usarse para
+  voz/documentación autorizada. Esto no autoriza lore, reglas ni derivados en paquetes.
   Validadores propios de biblioteca estándar, sin afirmar soporte Markdown general ni JSON Schema
   completo.
-- SQLite como primer repositorio operativo, detrás de puertos; transacciones y claves únicas ya
-  demostraron rollback, idempotencia y concurrencia. No exponer SQL en contratos de dominio.
+- SQLite será el primer repositorio operativo concurrente y sustituirá el JSON provisional en el
+  incremento 9, detrás de puertos; transacciones y claves únicas ya demostraron rollback,
+  idempotencia y concurrencia. No exponer SQL en contratos de dominio.
 - `unittest` para conservar el stack demostrado. No introducir `pytest`, ORM, Pydantic o framework
   de agentes hasta que una necesidad concreta lo justifique.
 - Playwright como extra opcional exclusivo de `adapters/jcink`; fijar versión y usar fixtures DOM
@@ -766,7 +925,7 @@ git status --short
 El tercer comando debe terminar sin coincidencias y el quinto sin salida. La aparición de los
 nombres específicos bajo `packages/` es intencional; nunca bajo `core/` ni fixtures genéricas.
 
-### Incremento 3 — contrato y carga del expediente (siguiente; detallado)
+### Incremento 3 — contrato y carga del expediente (detallado; aprobado)
 
 Objetivo: fijar la entrada humana del nuevo flujo y detectar faltantes sin crear todavía corpus,
 instancia, CLI, personaje ni estados de asimilación. Es un incremento de lectura/validación, sin
@@ -936,14 +1095,196 @@ El tercer comando termina sin coincidencias y el quinto sin salida. El estado so
 
 ### Incrementos posteriores
 
-4. [ ] **Rebanada vertical neutra, manual y sin modelo.** Añadir modelos mínimos de candidato citado
-   y decisión humana en `assimilation.py`, `core/runtime/cli.py`, `adapters/manual.py` y plantillas
-   de instancia. `instance init` exige `--output`; genera ambos `AGENTS.md`/`CLAUDE.md` desde una
-   política común y un test compara sus bloques invariantes. Recorrer en un temporal:
-   `expediente.md` neutro → literales/candidatos manuales → aprobación exacta → carpeta externa →
-   concepto del usuario → propuesta aceptada/rechazada → ficha `DraftVersion` pendiente de staff.
-   Criterio: sin `--output` o con destino dentro del repo/no vacío falla sin escribir; reiniciar es
-   idempotente, solo se usa lo aprobado, no hay publicación y las barreras dependen del core.
+#### Incremento 4a — workspace externo e importación manual (siguiente; detallado)
+
+Objetivo: copiar un expediente listo a un workspace externo íntegro donde 4b pueda preparar
+candidatos, sin crear todavía la instancia/agente ni permitir saltarse la aprobación humana.
+
+1. [x] Crear `core/runtime/persistence.py`, `core/runtime/workspace.py`, `core/runtime/cli.py`,
+   `adapters/__init__.py` y `adapters/manual.py`; actualizar solo los exports públicos necesarios de
+   `core/runtime/__init__.py`. No modificar `core/memory/provenance.py`,
+   `core/review/models.py`, `core/runtime/{packages,assimilation}.py` ni sus tests aprobados.
+2. [x] En `persistence.py`, implementar solo con biblioteca estándar:
+   `PersistenceError(ValueError)` con `code` (`INVALID_STATE` o `IO`) y `reason`,
+   `canonical_json_bytes(value: object, *, pretty: bool) -> bytes`,
+   `load_strict_json(path: Path) -> object`, `atomic_write_bytes(path: Path, data: bytes) -> None`,
+   `encode_state(content: object, *, revision: int) -> bytes` y
+   `load_state(path: Path) -> tuple[int, object]`. La forma pretty usa UTF-8, LF final, sangría de
+   dos espacios, claves ordenadas y `ensure_ascii=False`; la compacta usa exactamente
+   `separators=(",", ":")`. El estado usa el sobre/hash definido en «Persistencia provisional».
+   Rechazar BOM, UTF-8/JSON inválido, duplicados, `NaN`/`Infinity`, recursión, schema/hash/tipo
+   incoherente y errores de E/S conservando `__cause__`.
+3. [x] `atomic_write_bytes` crea un temporal exclusivo en el mismo directorio, escribe bytes,
+   `flush` + `os.fsync`, ejecuta `os.replace` y limpia el temporal ante cualquier fallo; nunca abre
+   el destino para truncarlo. Un test que sustituye `os.replace` por un fallo debe conservar los
+   bytes anteriores. Esta garantía es por archivo y proceso, no una transacción multiarchivo ni una
+   promesa frente a pérdida eléctrica.
+4. [x] En `workspace.py`, definir `WORKSPACE_SCHEMA_VERSION = 1`,
+   `INTEGRITY_SCHEMA_VERSION = 1`, `WorkspaceError(ValueError)` con atributos `code` y `reason`, y
+   dataclasses inmutables `ManagedFile(path: str, sha256: str, size: int)`,
+   `WorkspaceConfig(schema_version: int, forum_id: str, display_name: str,
+   dossier_version: str, core_root: Path, dossier_path: str,
+   dossier_files: tuple[ManagedFile, ...])`, `LoadedWorkspace(config: WorkspaceConfig,
+   workspace_root: Path, dossier: LoadedForumDossier, corpus_revision: int)` y
+   `WorkspaceInitResult(workspace: LoadedWorkspace, created: bool)`. Validar IDs/textos,
+   hash/tamaño, rutas POSIX relativas, tipos, orden y unicidad. `code` solo puede ser
+   `INVALID_STATE`, `CONFLICT`, `UNSAFE_DESTINATION` o `IO`; la CLI los mapea respectivamente a
+   3, 4, 4 y 5.
+5. [x] Exponer firmas exactas
+   `create_workspace(dossier: LoadedForumDossier, *, dossier_dir: Path, workspace: Path,
+   core_root: Path) -> WorkspaceInitResult` y
+   `load_workspace(workspace_root: Path, *, expected_core_root: Path | None = None)
+   -> LoadedWorkspace`. Reexportar desde `core/runtime/__init__.py` solo constantes, dataclasses,
+   error y estas funciones; los helpers de persistencia siguen internos.
+6. [x] En `adapters/manual.py`, definir `ManualAdapterError(ValueError)` y
+   `load_manual_dossier(dossier_dir: Path) -> LoadedForumDossier`. Llamar al loader aprobado,
+   exigir `assess_dossier(...).ready_for_assimilation` y conservar la causa del diagnóstico; una
+   opcional `MISSING` no bloquea. No contener `ForumReader`, turnos, candidatos, decisiones,
+   modelo ni publicación.
+7. [x] `create_workspace` comprueba que dossier cargado y `dossier_dir` corresponden, que
+   `core_root` es el checkout absoluto con `core/runtime/cli.py`, y resuelve el workspace explícito.
+   Rechazar workspace igual/dentro del checkout; igual, ancestro o descendiente del expediente;
+   symlink; padre inexistente/no directorio; controles C0 en rutas; y destino no vacío salvo retry
+   idéntico. No crear padres. Todo rechazo previo deja el destino como estaba.
+8. [x] Construir en un staging hermano exactamente `workspace.json`, `dossier/`,
+   `corpus/state.json` y `work/integrity.json`. Copiar bytes originales de `expediente.md` y cada
+   `DossierSourceSpec.path` único, conservando ruta; no copiar no referenciados. Recargar la copia y
+   exigir igualdad de `ForumDossier`, literales y hashes. `dossier.files` ordena documento/archivos
+   por ruta POSIX y no lista inline por separado.
+9. [x] Crear solo `core/runtime/templates/workspace.template.json`; 4a no crea aún plantillas de
+   instancia, `AGENTS.md` ni `CLAUDE.md`. Su forma exacta, renderizada con `string.Template` y cada
+   valor previamente codificado con `json.dumps`, es:
+
+   ```json
+   {
+     "core_root": $core_root_json,
+     "display_name": $display_name_json,
+     "dossier": {"files": $dossier_files_json, "path": "dossier/expediente.md"},
+     "dossier_version": $dossier_version_json,
+     "forum_id": $forum_id_json,
+     "kind": "forum-assimilation-workspace",
+     "schema_version": 1
+   }
+   ```
+
+   Volver a parsear/validar y escribir JSON canónico; no concatenar valores. No hay timestamps,
+   credenciales, permisos ni datos temáticos en la plantilla.
+10. [x] Inicializar `corpus/state.json` con `revision=0` y contenido exacto
+    `{"candidates":[],"closure":null,"decisions":[]}` dentro del sobre común. En 4a es el único
+    estado mutable y no se añade a `integrity.json`; su hash autocontenido se valida por separado.
+    `work/integrity.json` tiene claves exactas `schema_version`, `algorithm="sha256"` y `files`, y
+    cubre `workspace.json` más todo `dossier/`, no a sí mismo.
+11. [x] Renombrar el staging al workspace solo tras validar todo; ante error, eliminar únicamente
+    ese staging conocido. Si el destino existía vacío, verificar otra vez que sigue vacío antes de
+    retirarlo con `rmdir`; hacer inmediatamente `os.replace(staging, workspace)` y, si ese replace
+    falla durante el proceso vivo, recrear el directorio vacío. Un corte del proceso entre ambos
+    puede dejar la ruta ausente, nunca parcialmente poblada; documentar este límite de Windows.
+    Un retry con mismo core, expediente, bytes, template y estado inicial devuelve
+    `created=False` sin escribir/cambiar mtimes; cualquier diferencia da
+    `WorkspaceError(code="CONFLICT")`.
+12. [x] `load_workspace` rechaza root o hijos gestionados symlink, escapes, JSON no canónico/claves
+    extra, hashes/tamaños distintos, corpus con sobre inválido, expediente que ya no carga,
+    forum/version discordantes y `expected_core_root` distinto. Una edición manual simple de
+    expediente/configuración/estado falla; no ofrece reparación ni un flag para recalcular hashes.
+13. [x] En `cli.py`, crear `argparse` sin I/O al importar,
+    `main(argv: Sequence[str] | None = None) -> int`, flag global `--json` y comandos exactos
+    `assimilation init --dossier DOSSIER_DIR --workspace WORKSPACE_DIR` y
+    `assimilation status --workspace WORKSPACE_DIR`. Ambos flags de ruta son obligatorios, sin
+    entorno/default. `init` compone adaptador + workspace; `status` exige el checkout actual.
+    Aplicar códigos 0/2/3/4/5 documentados. Éxitos JSON:
+    `{"ok":true,"action":"assimilation.init","created":<bool>,"forum_id":<id>,
+    "workspace":<ruta>}` y `{"ok":true,"action":"assimilation.status","forum_id":<id>,
+    "integrity":"OK","workspace":<ruta>}`; texto equivalente en español. Terminar con
+    `raise SystemExit(main())`; ayuda/parser no contienen publicación.
+14. [x] Crear `tests/test_workspace_persistence.py`: JSON pretty/compacto y sobre exactos; loader
+    estricto; atomicidad/limpieza; modelos inmutables; rutas/hash/schema; staging e idempotencia.
+    Crear `tests/test_manual_adapter.py`: fixture neutra lista, obligatoria faltante, opcional
+    faltante permitida, propagación y ausencia de turnos/publicación. Todo inválido en temporal.
+15. [x] Crear `tests/test_assimilation_workspace_cli.py`: import sin efectos; flags ausentes; ruta
+    relativa; workspace dentro del repo, solapado, symlink, padre ausente, vacío/no vacío; copia
+    exacta solo de referenciados; JSON/schema/integridad; texto/JSON/códigos; manipulación de cada
+    gestionado/estado; retry sin bytes/mtimes y conflicto. Probar `main` y un happy path con
+    `subprocess.run([sys.executable, "-B", "-m", "core.runtime.cli", ...], cwd=<checkout>)`.
+    Afirmar que `instance`, `publish`, `send` y `post` aún se rechazan.
+16. [x] No crear instancia, instrucciones de agente, candidatos/decisiones reales, personajes,
+    especialistas, configuración efectiva, secretos, puertos, SQLite ni JSONL. No tocar paquetes,
+    `reference/` ni las notas cerradas de los incrementos 1–3.
+
+Criterios de aceptación de 4a:
+
+- El expediente neutro se importa a un workspace externo con bytes/hashes reproducibles; inline
+  sigue embebido y un archivo no referenciado no cruza.
+- No existe todavía una carpeta de instancia ni `AGENTS.md`/`CLAUDE.md`: 4a no permite eludir la
+  aprobación que habilitará 4c.
+- Falta de `--workspace`, destino inseguro/conflictivo o fallo previo al rename no deja workspace
+  parcial; retry idéntico no escribe y cambiar una entrada falla cerrado.
+- `assimilation status` detecta ediciones simples de gestionados/estado, sin afirmar autenticidad
+  frente a quien puede recalcular hashes.
+- Solo biblioteca estándar; sin red, modelo, SQLite, publicación ni lectura de turnos.
+
+Verificación exacta de 4a desde PowerShell:
+
+```powershell
+py -3.11 -B -m unittest tests.test_workspace_persistence tests.test_manual_adapter tests.test_assimilation_workspace_cli -v
+py -3.11 -B -m unittest discover -s tests -v
+py -3.11 -B -m core.runtime.cli --json assimilation init --dossier tests/fixtures/dossiers/minimal-neutral --workspace <RUTA_TEMP_EXTERNA>
+py -3.11 -B -m core.runtime.cli --json assimilation status --workspace <RUTA_TEMP_EXTERNA>
+rg -n "Nozomu|Naruto|Jcink|narutorol|account 59|275" core/runtime adapters/manual.py core/runtime/templates tests/test_workspace_persistence.py tests/test_assimilation_workspace_cli.py tests/test_manual_adapter.py
+git diff --check
+git diff --name-only 42e724a -- reference
+git status --short
+```
+
+El quinto comando termina sin coincidencias y el séptimo sin salida. La comprobación manual usa
+una ruta temporal explícita fuera del checkout y se elimina después; no usar un workspace real.
+El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
+
+#### Sub-incrementos restantes de la rebanada
+
+4b. [ ] **Candidatos manuales citados, aún pendientes.** Alcance:
+    `core/runtime/{assimilation,persistence,cli,__init__}.py` y
+    `tests/test_{assimilation_candidates,assimilation_cli}.py`. Añadir modelos inmutables
+    `AssimilationDomain`, `CandidateClass`, `CandidateCitation` y `AssimilationCandidate`, entrada
+    JSON estricta y comandos source/candidate sobre el workspace. Criterio: ningún candidato sin
+    citas exactas entra, las cuatro clases permanecen `PENDING_HUMAN_REVIEW`, material suelto no se
+    autoclasifica y un retry no duplica ni cambia historial.
+4c. [ ] **Decisiones, cierre de asimilación e instancia generada.** Alcance:
+    `core/runtime/{assimilation,persistence,instance,cli,__init__}.py`,
+    `core/runtime/templates/{instance.template.json,instance-policy.template.md,
+    AGENTS.template.md, CLAUDE.template.md}` y
+    `tests/test_{assimilation_decisions,instance,instance_cli,instance_templates}.py`. Aplicar la
+    barrera humana elegida a decisiones exactas y a `assimilation close`, cuyo recibo fija el digest
+    canónico de `{candidates, decisions}`; añadir `instance init --workspace --output`, que solo
+    acepta un cierre vigente y copia el snapshot cerrado. Criterio: pendiente/rechazado no es
+    corpus usable, cambiar un candidato invalida el cierre, no se materializa antes de cerrarlo, `--output` es
+    obligatorio/idempotente/externo y los bloques invariantes de `AGENTS.md`/`CLAUDE.md` son
+    idénticos byte a byte.
+4d. [ ] **Concepto aportado y propuestas de ajuste.** Alcance:
+    `core/character/{__init__,models}.py`, `core/runtime/{persistence,cli}.py`,
+    `core/runtime/templates/instance-policy.template.md` y
+    `tests/test_{character_models,character_cli}.py`. Importar/hash/versionar `concept.md`; permitir
+    al agente crear propuestas citadas solo contra candidatos aprobados y al humano aceptar o
+    rechazar cada versión mediante la misma barrera, sin reescribir el concepto original.
+    Criterio: sin concepto del usuario no hay personaje; una propuesta pendiente/rechazada no
+    cambia la versión efectiva y aceptar una crea una nueva composición auditable, no aprobación de
+    staff.
+4e. [ ] **Ficha mínima y respuesta del staff.** Alcance: `core/character/models.py`,
+    `core/runtime/{persistence,cli}.py`, `core/runtime/templates/instance-policy.template.md` y
+    `tests/test_{character_draft,staff_review_cli}.py`.
+    Crear desde contenido manual del agente un `DraftVersion` cuyos `SourceRef` enlacen concepto y
+    fuentes tras candidatos aprobados; persistirlo en `profile.json` y permitir registrar una
+    respuesta de staff con evidencia y versión exacta, bajo la barrera humana. Criterio: la ficha
+    inicial queda `ACTIVE` + `PENDING_HUMAN_REVIEW` + `NOT_CONFIRMED`; decidir staff no publica,
+    canoniza, enseña ni vuelve utilizable nada, y no existe comando de publicación.
+4f. [ ] **Recorrido vertical y contrato integrado.** Alcance:
+    `tests/fixtures/vertical-neutral/` solo para JSON/Markdown de entrada neutros,
+    `tests/test_vertical_slice.py` y correcciones estrictamente necesarias en archivos 4a–4e.
+    Recorrer en temporales externos: expediente → workspace → cuatro clases de candidato →
+    decisiones y cierre exactos → instancia → concepto del usuario → dos propuestas (una aceptada
+    y otra rechazada) → `DraftVersion` pendiente de staff. Criterio: el recorrido sobrevive reinicio
+    entre fases, las repeticiones no cambian historial, solo lo aprobado alimenta la ficha, los
+    bloques comunes no divergen y ninguna ruta invoca modelo, red, publicación o contenido
+    temático.
 5. [ ] **Asimilación completa y recuperación dirigida.** Añadir versiones/supersesión, vigencia,
    índice determinista y contratos `core/rules`/`core/world`, incluido `ABSENT`. Criterio:
    pendiente/rechazado no es consultable, conflictos devuelven `REQUIERE CONFIRMACIÓN` y la consulta
@@ -993,10 +1334,29 @@ El tercer comando termina sin coincidencias y el quinto sin salida. El estado so
 
 ## Riesgos y dudas abiertas
 
-Las decisiones de formato, instrucciones, ruta de instancia y ficha mecánica están cerradas y no
-bloquean los incrementos 3–13. Solo sigue abierta una decisión futura:
+Las decisiones de formato, instrucciones, ruta de instancia y ficha mecánica están cerradas. 4a y
+4b no están bloqueados; antes de implementar 4c el usuario debe elegir el límite práctico de la
+barrera humana. Ninguna opción puede demostrar humanidad frente a un agente hostil con el mismo usuario de
+SO, escritura sobre instancia/checkout y capacidad de crear una pseudo-TTY; para una garantía
+fuerte hace falta separar credencial o proceso fuera de su alcance. El límite afecta tanto al agente que
+prepara el workspace como a Codex/Claude dentro de la instancia generada.
 
-1. **Antes del incremento 14: ¿cuándo y cómo elegir el segundo caso de generalidad?**
+1. **¿Qué barrera debe proteger aprobar/rechazar candidatos, cerrar la asimilación,
+   aceptar/rechazar propuestas y registrar respuestas del staff?**
+   - A: comandos separados de decisión que solo funcionan con stdin y stdout TTY; muestran
+     ID+versión+hash+decisión, generan un nonce con `secrets`, y exigen que el usuario teclee en su
+     terminal la frase completa (`APROBAR … <nonce>`, etc.). El nonce no se acepta por argumento,
+     archivo ni variable de entorno. `AGENTS.md`/`CLAUDE.md` ordenan al agente limitarse a mostrar
+     el comando y pedir al usuario que lo ejecute. **Recomendación: A**; bloquea el camino autónomo
+     normal de Codex/Claude y deja una interacción explícita, sin fingir una frontera criptográfica.
+   - B: archivo JSON de decisión que escribe el usuario y la CLI importa/verifica. Es fácil de
+     auditar y automatizar, pero el agente puede escribir el mismo archivo con sus permisos; ofrece
+     menos barrera que A y convierte una acción sencilla en edición manual.
+   - C: recibo firmado por una clave/servicio o helper ejecutado con credenciales que el agente no
+     pueda leer. Es la única vía hacia una garantía fuerte, pero introduce gestión de secretos,
+     plataforma o proceso externo y excede la rebanada sin una autoridad adicional del usuario.
+
+2. **Antes del incremento 14: ¿cuándo y cómo elegir el segundo caso de generalidad?**
    - A: mantener la elección aplazada y, al llegar al incremento 14, escoger un foro real no Naruto
      que contraste mecánicas/plataforma con el primero. **Recomendación:** A; evita diseñar ahora
      contra un caso hipotético y conserva la decisión previa.
@@ -1156,3 +1516,75 @@ bloquean los incrementos 3–13. Solo sigue abierta una decisión futura:
     11.064.747, caché escrita 424.377. Coste NO DISPONIBLE.
   - Retrabajo: una ronda de correcciones (3 hallazgos); cálculos de línea erróneos en tests
     corregidos por Claude antes de la revisión; un script de reemplazo fallido sin efectos.
+
+### Incremento 4a — workspace externo e importación manual
+- Rama: `feature/incremento-4-rebanada-vertical` (base `42e724a`); incluye el detalle del
+  incremento 4 escrito por Codex.
+- Cambios hechos: `core/runtime/{persistence,workspace,cli}.py`, exports en
+  `core/runtime/__init__.py`, `adapters/{__init__,manual}.py`,
+  `core/runtime/templates/workspace.template.json`,
+  `tests/test_{workspace_persistence,manual_adapter,assimilation_workspace_cli}.py`.
+- Resultado de los tests: las tres suites de 4a → 47 OK; suite completa → 192 OK en `py -3.11`
+  y `py -3.14`, sin omitidos. Prueba manual de la CLI en un temporal externo: `init` crea,
+  repetir `init` no escribe, `status` OK, una edición a mano da código 3, `init` sobre un
+  workspace cambiado da 4 y un destino dentro del repo da 4 sin crear nada. `rg` sin
+  coincidencias; `reference/` sin cambios desde `42e724a`; `git diff --check` limpio.
+- Revisión de Codex: «requiere cambios» (REV4A-01 alta, REV4A-02..03 media, REV4A-04 baja);
+  corregidos juntos:
+  - REV4A-01: las rutas se comparan por una identidad canónica (`_identity`: sin prefijo de
+    dispositivo `\\?\`/`\\.\`, `realpath` con nombres largos y enlaces resueltos, `normcase`) y
+    `_is_link` rechaza symlinks y junctions (reparse points con el bit *name surrogate*) en
+    destino, raíz y cada componente gestionado. Otros reparse points, como los marcadores de
+    OneDrive, se tratan como contenido normal para no impedir workspaces en carpetas
+    sincronizadas.
+  - REV4A-02: si otro actor crea el destino durante la creación, nunca se sobrescribe: un árbol
+    idéntico da resultado idempotente (`created=False`) y cualquier otro, `CONFLICT`.
+  - REV4A-03: errores JSON con exactamente `{"ok":false,"code","message"}`.
+  - REV4A-04: un temporal o staging que no se puede borrar se informa con su ruta en el error.
+  - Resultado tras las correcciones: 57 tests de 4a y 202 en total, OK en `py -3.11` y
+    `py -3.14`, sin omitidos (junctions creadas con `_winapi.CreateJunction`).
+  - Riesgo conocido fuera de 4a: el loader de paquetes (incremento 2) y el de expediente
+    (incremento 3) siguen usando `is_symlink()`, que no detecta junctions; el de expediente
+    rechaza las que salen de la carpeta por la comprobación de ruta resuelta.
+- Desviaciones del plan y decisiones de detalle que el plan no fijaba:
+  - `adapters/manual.py` importa el mapa privado `_HEADINGS` de `assimilation.py` para nombrar
+    en español las secciones que faltan, porque el plan prohíbe modificar ese módulo. Alternativa
+    para revisar: exponerlo como constante pública en un incremento posterior.
+  - `core/runtime/cli.py` importa `adapters.manual` (el runtime compone adaptadores; los
+    adaptadores no importan el runtime).
+  - Mensajes de persistencia y workspace en español, como los del expediente. Se añadió
+    `parse_strict_json(raw, locator)` en `persistence.py` (no reexportado) para validar bytes ya
+    leídos.
+  - `load_state` exige que el archivo sea byte a byte su codificación canónica, no solo que el
+    hash coincida; así una edición de espacios también falla.
+  - Ruta del workspace: se admite relativa y se resuelve contra el directorio actual con
+    `Path.absolute()` (no `resolve()`, para no seguir un symlink en el último componente).
+    `core_root` se guarda resuelto y `expected_core_root` se compara resuelto.
+  - Los archivos de material se copian desde los bytes del literal ya cargado y hasheado (no se
+    releen); `expediente.md` sí se relee y la recarga de la copia debe coincidir con lo cargado.
+  - Reintento de `init`: se compara el árbol completo (incluidas carpetas vacías) con lo que se
+    generaría; si el corpus ya avanzó (`revision > 0`) el reintento es `CONFLICT`, no éxito.
+  - `load_workspace` rechaza también archivos de `dossier/` que no figuren en `dossier.files` y
+    un `corpus/state.json` ausente como `INVALID_STATE` (no `IO`).
+  - Se rechaza además un workspace que sea ancestro del checkout o del expediente.
+  - CLI: JSON con `ensure_ascii=True` para que no dependa de la codificación de la consola;
+    errores de texto a stderr y, con `--json`, un único objeto de error en stdout. Los errores de
+    expediente y de expediente no listo salen con código 3. (La forma de error JSON que anoté
+    inicialmente se desviaba del contrato «CLI mínimo de la rebanada»; corregido en REV4A-03.)
+- Revisión archivada en `docs/analisis/incremento-4a-revision.md` (veredicto final: aprobado
+  tras dos verificaciones; REV4A-04 necesitó una segunda ronda por la rama de carrera idéntica).
+- Métricas por agente (solo telemetría verificable; ausente = NO DISPONIBLE):
+  - Codex (`gpt-5.6-sol`, high), contadores de `~/.codex/sessions`:
+    - Plan `01a12b46-…` (1 encargo: detalle y división del incremento 4); incremento respecto a
+      la medición del incremento 3: entrada 8.281.699 (caché leída 8.100.096), salida 59.620
+      (razonamiento 30.836). El hilo acumula 14,5 M de entrada: conviene abrir uno nuevo con
+      resumen para el análisis de 4b–4f.
+    - Revisión `01a12ccc-2724-74b0-91a5-f1d563f7be3f` (3 encargos: revisión + 2 verificaciones):
+      entrada 3.809.127 (caché leída 3.684.224), salida 29.402 (razonamiento 15.746).
+    - Escritura de caché 0; errores/cancelaciones 0; coste o cuota NO DISPONIBLE.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde «Sigue con él»; 39 respuestas de API):
+    entrada 78, salida 75.000, caché leída 17.015.633, caché escrita 105.737. Coste NO
+    DISPONIBLE.
+  - Retrabajo: dos rondas de corrección (4 hallazgos + 1 pendiente); una prueba manual con ruta
+    mal compuesta creó un workspace fuera del temporal, eliminado de inmediato; un literal de
+    test mal escapado corregido antes de la verificación.

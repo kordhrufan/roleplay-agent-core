@@ -1,5 +1,5 @@
-"""Runtime: instance composition, package loading, dossier loading and (later) narrative,
-tracking and assimilation."""
+"""Runtime: instance composition, package loading, dossier loading, assimilation workspaces
+and (later) narrative and tracking."""
 
 from core.runtime.assimilation import (
     DOSSIER_NAME,
@@ -32,12 +32,25 @@ from core.runtime.packages import (
     load_package_set,
     parse_manifest,
 )
+from core.runtime.workspace import (
+    INTEGRITY_SCHEMA_VERSION,
+    WORKSPACE_SCHEMA_VERSION,
+    LoadedWorkspace,
+    ManagedFile,
+    WorkspaceConfig,
+    WorkspaceError,
+    WorkspaceInitResult,
+    create_workspace,
+    load_workspace,
+)
 
 __all__ = [
     "DOSSIER_NAME",
     "DOSSIER_SCHEMA_VERSION",
+    "INTEGRITY_SCHEMA_VERSION",
     "OPTIONAL_SECTIONS",
     "REQUIRED_SECTIONS",
+    "WORKSPACE_SCHEMA_VERSION",
     "DossierAssessment",
     "DossierError",
     "DossierSection",
@@ -50,15 +63,22 @@ __all__ = [
     "LoadedForumDossier",
     "LoadedLooseMaterial",
     "LoadedPackageManifest",
+    "LoadedWorkspace",
     "LooseMaterialSpec",
+    "ManagedFile",
     "PackageDependency",
     "PackageManifest",
     "PackageManifestError",
     "PackageType",
+    "WorkspaceConfig",
+    "WorkspaceError",
+    "WorkspaceInitResult",
     "assess_dossier",
+    "create_workspace",
     "load_dossier",
     "load_manifest",
     "load_package_set",
+    "load_workspace",
     "parse_dossier",
     "parse_manifest",
 ]
