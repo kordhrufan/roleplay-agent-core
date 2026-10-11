@@ -1,0 +1,309 @@
+ACTUALIZACIÓN OBLIGATORIA — DISEÑAR LÍNEA EVOLUTIVA COMPLETA
+
+La normativa exige presentar desde el inicio toda la línea evolutiva de
+la primera creación gratuita Sin Clan.
+
+Por tanto, debemos diseñar y presentar:
+
+TECHNIQUE 1A — GENIN
+TECHNIQUE 1B — CHUNIN
+TECHNIQUE 1C — JOUNIN
+
+Las tres forman una única línea técnica.
+
+Todas permanecen:
+
+DRAFT
+PENDING_STAFF_APPROVAL
+NOT_LEARNED
+
+Nozomu únicamente podrá aprender/utilizar la versión correspondiente a
+su rango una vez aprobada conforme a las reglas del foro.
+
+==================================================
+PRECEDENTE DE EVOLUCIÓN
+==================================================
+
+Existe esta línea aceptada:
+
+Low Back
+Genin
+35 chakra
+60 PV
+
+→
+
+Low Back/Chest
+Chunin
+50 chakra
+90 PV
+"Evolución de Low Back"
+
+→
+
+Vortex
+Jounin
+75 chakra
+135 PV
+"Evolución de Low Back/Chest"
+
+Esto demuestra que una evolución puede:
+
+- conservar la misma identidad;
+- modificar/desarrollar la ejecución narrativa;
+- aumentar su potencia según el rango;
+- sin necesidad de añadir un efecto mecánico nuevo en cada etapa.
+
+No copies estas técnicas.
+Úsalas únicamente como precedente estructural.
+
+==================================================
+IDENTIDAD DE LA LÍNEA
+==================================================
+
+La línea completa debe representar:
+
+PRECISIÓN
+→ COMPROMETER LA GUARDIA
+→ CREAR UNA APERTURA
+→ EXPLOTAR ESA APERTURA POSTERIORMENTE
+
+Nozomu no gana el intercambio automáticamente.
+
+La primera técnica debe conectar físicamente y superar el umbral
+Bukijutsu antes de generar Desproteger.
+
+La evolución representa que Nozomu se vuelve progresivamente más hábil
+realizando el mismo principio técnico.
+
+NO convertir la evolución en:
+
+- Iaido;
+- ondas/cortes de chakra;
+- extensión de espada;
+- hemorragia;
+- daño residual por bloqueo;
+- ejecución;
+- ataque inevitable;
+- movimiento gratuito;
+- ataques extra;
+- reacción fuera de turno.
+
+==================================================
+TÉCNICA BASE YA SELECCIONADA
+==================================================
+
+TECHNIQUE 1A
+
+Nombre:
+Guardia abierta
+
+Rama:
+Bukijutsu
+
+Rango:
+Genin
+
+Sellos:
+No, pendiente de validación de Staff.
+
+Coste:
+35 Chakra
+
+Potencia candidata:
+50 PV
+
+Alcance:
+Contacto mediante katana.
+
+Efecto candidato:
+Desproteger -5 EVA.
+
+Activación:
+Debe conectar físicamente al menos el 50 % de su potencia.
+
+Sin modificadores:
+
+50 × 0.5 = 25 de potencia.
+
+La reducción de EVA solo afecta al siguiente movimiento ofensivo válido
+de Nozomu contra ese objetivo.
+
+Se consume al realizar esa comparativa, conecte o no.
+
+Si Nozomu deja pasar su siguiente oportunidad válida de atacar al
+objetivo, desaparece.
+
+No acumula.
+No se renueva mientras esté activa.
+No beneficia a aliados.
+No puede usarse para encadenar Guardia abierta consigo misma.
+
+==================================================
+DISEÑO DE LA EVOLUCIÓN CHUNIN
+==================================================
+
+Crea TECHNIQUE 1B como evolución directa de Guardia abierta.
+
+Baseline Chunin:
+
+50 Chakra
+90 potencia
+
+Debe mantener:
+
+- katana;
+- contacto;
+- principio de romper/comprometer guardia;
+- Desproteger como identidad de la línea;
+- condición de al menos 50 % para activar efecto;
+- contrajuego;
+- ausencia de ataques garantizados.
+
+Preferencia inicial de balance:
+
+50 Chakra
+80 PV
+Desproteger -5 EVA
+
+Es decir:
+
+baseline 90
+→ sacrificio de 10 de potencia por el efecto.
+
+Este valor es PROPUESTA, no regla.
+
+La ejecución narrativa debe mostrar evolución real respecto a Genin,
+por ejemplo mediante una secuencia técnicamente más refinada o un corte
+más difícil de neutralizar.
+
+Pero toda la secuencia constituye UNA técnica y UNA ofensiva a efectos
+mecánicos salvo que la normativa diga otra cosa.
+
+NO añadir un segundo ataque independiente.
+
+==================================================
+DISEÑO DE LA EVOLUCIÓN JOUNIN
+==================================================
+
+Crea TECHNIQUE 1C como evolución directa de 1B.
+
+Baseline Jounin:
+
+75 Chakra
+135 potencia
+
+Preferencia inicial:
+
+75 Chakra
+125 PV
+Desproteger -5 EVA
+
+Nuevamente:
+
+baseline 135
+→ sacrificio de 10 de potencia por el efecto.
+
+La versión Jounin debe representar el dominio técnico del principio,
+no una nueva categoría de poder.
+
+Mantén:
+
+- contacto físico;
+- katana;
+- -5 EVA;
+- siguiente ofensiva válida;
+- un único beneficiario: Nozomu;
+- 50 % de potencia para activar;
+- no acumulación;
+- no autocadena;
+- contrajuego.
+
+NO incrementar automáticamente Desproteger a -10.
+
+Si consideras necesario hacerlo para que la evolución sea significativa,
+preséntalo solamente como ALTERNATIVE BALANCE y explica el riesgo.
+
+==================================================
+NOMBRES
+==================================================
+
+Guardia abierta queda fijado para Genin.
+
+Propón 3 pares de nombres para las evoluciones Chunin/Jounin.
+
+Los nombres deben transmitir progresión del mismo estilo.
+
+Evita referencias directas a:
+
+- Iaido;
+- técnicas canon;
+- Armas de Filo;
+- conceptos elementales.
+
+Después recomienda un par.
+
+==================================================
+DESCRIPCIÓN DE LAS EVOLUCIONES
+==================================================
+
+Cada técnica debe poder leerse independientemente.
+
+Debe indicar expresamente:
+
+"Evolución de [técnica anterior]"
+
+siguiendo el patrón observado en las técnicas aceptadas.
+
+La descripción debe explicar físicamente qué mejora Nozomu.
+
+No usar explicaciones abstractas como:
+
+"lee mejor al rival y por eso baja su evasión".
+
+La apertura tiene que proceder de la interacción física con la guardia
+y postura del adversario.
+
+==================================================
+RESULTADO REQUERIDO
+==================================================
+
+Entrega:
+
+1. Tres pares de nombres Chunin/Jounin.
+2. Par recomendado.
+3. Ficha completa GENIN.
+4. Ficha completa CHUNIN.
+5. Ficha completa JOUNIN.
+6. Tabla comparativa:
+
+Rango
+Coste
+Baseline
+Potencia propuesta
+Efecto
+Umbral nominal
+Diferencia frente baseline
+
+7. Justificación de progresión.
+8. Contrajuego común.
+9. Riesgos para revisión del Staff.
+
+Usa formato similar al utilizado por las técnicas creadas del foro:
+
+Nombre:
+Rango:
+Tipo:
+Rama:
+Sellos:
+Coste:
+Daño:
+Descripción:
+Efecto extra:
+
+No actualices NOZOMU_STATE.md como aprendido.
+
+Toda la línea:
+
+STATUS = DRAFT
+APPROVAL = PENDING_STAFF

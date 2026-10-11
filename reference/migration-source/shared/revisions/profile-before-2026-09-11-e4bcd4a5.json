@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "status": "PENDIENTE_CONFIRMACION_USUARIO",
+  "source": "reference/original/Nozomu Combat & Build Agent.md",
+  "name": "Nozomu Yamamoto",
+  "rank": "Genin",
+  "level": 1,
+  "village": "Kirigakure",
+  "clan": null,
+  "system": "S. Sacrificio",
+  "discipline": "Bukijutsu",
+  "style": "Duelista evasivo",
+  "planned_mastery": "Armas de Filo",
+  "invested_attributes": {
+    "control": 20,
+    "inteligencia": 20,
+    "dominio": 20,
+    "velocidad": 50,
+    "aptitud": 50,
+    "fuerza": 20,
+    "resistencia": 50,
+    "evasion": 50
+  },
+  "documented_aptitude_bonus": 10,
+  "documented_derived": {
+    "pv": 240,
+    "chakra_provisional": 310
+  },
+  "documented_inventory": [
+    {
+      "item": "Katana básica",
+      "quantity": 1
+    }
+  ],
+  "confirmed_learned_techniques": null,
+  "pending": [
+    "Confirmar ficha vigente e inventario",
+    "Aportar repertorio aprobado y aprendido",
+    "Contrastar derivados y Sacrificio con reglamento; resolver ambigüedades con staff si procede"
+  ],
+  "history_imported": false
+}

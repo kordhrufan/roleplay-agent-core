@@ -1,0 +1,6 @@
+# Optional reader dependencies, installed only in .venv-forum-watch.
+# No browser download: use the existing msedge channel.
+playwright==1.62.0
+greenlet==3.5.5
+pyee==13.0.1
+typing-extensions==4.16.0

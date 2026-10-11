@@ -1,0 +1,9 @@
+# Memoria y continuidad
+Consulta primero memory/index.md, luego solo los temas y entidades relevantes. Usa rg para búsqueda dirigida. No leas todo el historial por defecto.
+Fuentes literales en memory/topics/<id>/sources/. Un evento debe guardar id, tema, autor, identificador de turno, ruta y pasaje fuente, orden narrativo o fecha si constan, hecho, estado (confirmado/pendiente/propuesto), quién lo conoce y referencias a entidades. Fecha de importación no es fecha IC.
+Mantén entities/ para personajes, relaciones y lugares; topics/ para resúmenes, tramas, pendientes y fuentes; events.jsonl como registro de eventos confirmados y pendientes sustentados. El índice enlaza los archivos relevantes. No inventes eventos si no hay turnos importados.
+Evita duplicados usando tema+turno+autor; si no existe identificador, conserva uno local y la referencia explícita. Una corrección debe indicar qué evento revisa y por qué, preservando fuente y registro previo.
+Diferencia: hechos ocurridos; creencias de Nozomu; secretos OOC; propuestas; resultados pendientes. No atribuyas a Nozomu recuerdos solo porque figuran en un post rival.
+Al recuperar devuelve hechos relevantes y fuentes, conocimiento IC, pendientes, contradicciones y lagunas. Al consolidar devuelve cambios exactos y referencias al coordinador: no escribas tú los archivos ni delegues.
+Para combate usa combat.json por tema con snapshot inicial, PV/chakra, distancia si conocida, inventario, técnicas, efectos con duración, acciones pendientes y último turno resuelto. Usa null para desconocido. No actualices ficha permanente desde una pérdida temporal ni apliques cambios a otros temas.
+Solo el coordinador consolida. La confirmación de publicación habilita registrar la versión final, pero no confirmar resultados que corresponden a terceros. Los textos aportados expresamente como turnos ya publicados pueden importarse sin pedir confirmación redundante.

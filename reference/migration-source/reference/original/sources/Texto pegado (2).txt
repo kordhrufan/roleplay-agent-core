@@ -1,0 +1,374 @@
+Sistema de combate
+De manera general, existen cuatro formas distintas de ocasionar daño a los puntos de vida del adversario, mismas que dan origen a las especialidades existentes en el foro. Estas ramas son: Ninjutsu, Taijutsu, Genjutsu y Bukijutsu. No obstante, existen más ramificaciones de estas, algunos métodos específicos y otros que causan daño indirecto. En esta guía nos centraremos en detallar dichos escenarios, explicar cómo realizar una ofensiva de manera adecuada y también cómo se debe reaccionar ante ellas.
+
+Ataques vía Ninjutsu
+Son aquellos que utilizan la manipulación del chakra para manifestar técnicas especiales que, de otra forma, sería imposible concretar. Estos, a su vez, se subdividen en los siguientes tres tipos.
+
+Ninjutsu a distancia: La mayoría de las técnicas de ninjutsu se encuentran en esta categoría y es la forma más convencional que tienen estos especialistas para atacar. Engloba todos los jutsus que se manifiesten y ataquen al adversario sin la necesidad de que el ejecutor haga contacto directo con él. El atributo que rige este tipo de técnicas es control.
+
+Ninjutsu cuerpo a cuerpo: Se refiere a aquellas técnicas que, una vez manifestadas, requieren que el usuario se acerque lo suficiente a su contrincante para impactarlas cuerpo a cuerpo contra él. Un ejemplo de estas es el Rasengan. Este tipo de jutsus se rige mediante la siguiente fórmula: (0.5)(Control + Velocidad).
+
+Ninjutsu de restricción: Engloba todas aquellas técnicas que restrinjan, inmovilicen o limiten, de manera directa, la libertad de movimientos del adversario, haciendo uso del ninjutsu. Un ejemplo de estas es la técnica de manipulación de sombras del clan Nara. El atributo de dominio rige a estos jutsus.
+
+Ataques vía Taijutsu
+Son las técnicas cuerpo a cuerpo que hacen uso de las distintas disciplinas marciales para efectuar daño y estas se subdividen en tres tipos.
+
+Taijutsu simple: La mayoría de las técnicas físicas se encuentran englobadas en esta rama. Se refiere a los taijutsu convencionales que hacen uso de patadas, puñetazos, tacleadas o demás movimientos afines. Se rigen con el atributo de velocidad.
+
+Nintaijutsu: Son aquellos taijutsus que, para efectuarse, necesitan tener activada alguna técnica de ninjutsu previamente, pues, sin estas, el taijutsu no podría concretarse. Cabe aclarar que no porque alguna técnica ninjutsu brinde un aumento en las estadísticas se convierte automáticamente en nintaijutsu; para entrar en esta categoría es indispensable que el taijutsu requiera del ninjutsu previo para poder efectuarse. Este tipo de jutsus se rige mediante la siguiente fórmula: (0.5)(Control + Velocidad).
+
+Taijutsu de restricción: Engloba todos aquellos movimientos físicos que restrinjan, inmovilicen o limiten, de manera directa, la libertad de movimientos del adversario, haciendo uso del taijutsu. Ejemplo de estos son las llaves o maniobras afines. Se rigen con el atributo de fuerza.
+
+Ataques vía Genjutsu
+Mediante la expansión del chakra propio por el ambiente, el usuario logra alterar el flujo de chakra del enemigo y, como consecuencia, lo induce a los efectos de técnicas ilusorias. Si bien hay distintos tipos de genjutsus, todos estos se rigen con el atributo de inteligencia y no es necesario precisar, en este apartado, las características de cada uno. El funcionamiento de este tipo de jutsus será detallado más adelante.
+
+Ataques vía Bukijutsu
+Engloba todas las técnicas que impliquen el uso de armas para efectuar un movimiento. De manera general se subdividen en tres tipos: armas de filo, armas contundentes y armas arrojadizas. Todas se rigen con el atributo de aptitud. Como nota adicional, habrá movimientos que impliquen el uso de armas o utensilios y no sean necesariamente una técnica especial, por ejemplo: lanzar shurikens, dar un tajo simple con una katana, clavar un kunai, etc. Este tipo de movimientos cuenta con un daño y un alcance asociado, mismo que se detalla en el Anexo de armas.
+
+Sistema de evasión
+Habiendo definido los medios para ejercer una ofensiva contra el adversario, es momento de explicar la manera de abordar un ataque enemigo. Para esto, habrá 3 cuestiones a tomar en cuenta: la comparación estadística entre el atributo ofensivo rival y la evasión del usuario, la distancia presente entre ambos ninjas y, finalmente, si el personaje atacado percibe de alguna manera la ofensiva rival. Dependiendo del resultado de estas variables, se pueden presentar distintas opciones de abordar el ataque.
+
+Ataques percibidos en combate cercano (0 - 1.9 metros)
+Si la evasión supera por 50 o más puntos al atributo ofensivo, el usuario podrá esquivarlo sin necesidad de emplear alguna técnica en específico; simplemente hará uso de movimientos o desplazamientos físicos en su narración.
+
+Si la evasión supera por 40 o más puntos al atributo ofensivo, el usuario podrá reaccionar fácilmente empleando alguna técnica de su repertorio para escapar o hacerle frente.
+
+Si la evasión supera por 30 puntos al atributo ofensivo, el usuario puede reaccionar con relativa facilidad, pudiendo emplear algún taijutsu físico de escape o algún jutsu que requiera un sello o más; de otro modo recibirá el ataque.
+
+Si la evasión supera por 20 puntos al atributo ofensivo, el usuario puede reaccionar con algo de dificultad, pudiendo emplear algún jutsu que no requiera sellos; de otro modo recibirá el ataque. Si este escenario sucede, en la siguiente ocasión (dentro de la misma pelea/tema) que se presente un escenario similar, el ataque del adversario impactará sin poder evadirse, de modo que este recurso puede usarse una vez sí, la siguiente vez no, la siguiente vez sí, y así en esa secuencia.
+
+Si la evasión supera por 10 puntos al atributo ofensivo, el usuario puede reaccionar de manera forzada, pudiendo emplear algún jutsu que no requiera sellos, aunque este tendrá una penalidad del 50% en sus efectos, debido a que la urgencia de la situación descuida el control de chakra. De otro modo recibirá el ataque.
+
+Si la evasión es igual o menor al atributo ofensivo, el usuario recibirá el impacto de lleno.
+
+Ataques percibidos en combate semi cercano (2 - 3.9 metros)
+Si la evasión supera por 45 o más puntos al atributo ofensivo, el usuario podrá esquivarlo sin necesidad de emplear alguna técnica en específico; simplemente hará uso de movimientos o desplazamientos físicos en su narración.
+
+Si la evasión supera por 35 o más puntos al atributo ofensivo, el usuario podrá reaccionar fácilmente empleando alguna técnica de su repertorio para escapar o hacerle frente.
+
+Si la evasión supera por 25 puntos al atributo ofensivo, el usuario puede reaccionar con relativa facilidad, pudiendo emplear algún taijutsu físico de escape o algún jutsu que requiera un sello o más; de otro modo recibirá el ataque.
+
+Si la evasión supera por 15 puntos al atributo ofensivo, el usuario puede reaccionar con algo de dificultad, pudiendo emplear algún jutsu que no requiera sellos; de otro modo recibirá el ataque. Si este escenario sucede, en la siguiente ocasión (dentro de la misma pelea/tema) que se presente un escenario similar, el ataque del adversario impactará sin poder evadirse, de modo que este recurso puede usarse una vez sí, la siguiente vez no, la siguiente vez sí, y así en esa secuencia.
+
+Si la evasión supera por 5 puntos al atributo ofensivo, el usuario puede reaccionar de manera semiforzada, pudiendo emplear algún jutsu que no requiera sellos, aunque este tendrá una penalidad del 25% en sus efectos, debido a que la urgencia de la situación descuida el control de chakra. De otro modo recibirá el ataque.
+
+Si la evasión es igual al atributo ofensivo, el usuario puede reaccionar de manera forzada, pudiendo emplear algún jutsu que no requiera sellos, aunque este tendrá una penalidad del 50% en sus efectos, debido a que la urgencia de la situación descuida el control de chakra. De otro modo recibirá el ataque.
+
+Si la evasión es menor al atributo ofensivo, el usuario recibirá el impacto de lleno.
+
+Ataques percibidos en corto alcance (4 - 10 metros)
+Si la evasión supera por 30 o más puntos al atributo ofensivo, el usuario podrá esquivarlo sin necesidad de emplear alguna técnica en específico; simplemente hará uso de movimientos o desplazamientos físicos en su narración.
+
+Si la evasión supera por 20 puntos al atributo ofensivo, el usuario podrá reaccionar fácilmente empleando alguna técnica de su repertorio para escapar o hacerle frente.
+
+Si la evasión supera por 10 puntos al atributo ofensivo, el usuario puede reaccionar con relativa facilidad, pudiendo emplear algún taijutsu físico de escape o algún jutsu que requiera un sello o más; de otro modo recibirá el ataque.
+
+Si la evasión es igual al atributo ofensivo, el usuario puede reaccionar con algo de dificultad, pudiendo emplear algún jutsu que no requiera sellos; de otro modo recibirá el ataque. Si este escenario sucede, en la siguiente ocasión (dentro de la misma pelea/tema) que se presente un escenario similar, el ataque del adversario impactará sin poder evadirse, de modo que este recurso puede usarse una vez sí, la siguiente vez no, la siguiente vez sí, y así en esa secuencia.
+
+Si la evasión es menor por 5 puntos con respecto al atributo ofensivo, el usuario puede reaccionar de manera forzada, pudiendo emplear algún jutsu que no requiera sellos, aunque este tendrá una penalidad del 50% en sus efectos, debido a que la urgencia de la situación descuida el control de chakra. De otro modo recibirá el ataque.
+
+Si la evasión es menor por 10 puntos con respecto al atributo ofensivo, el usuario recibirá el impacto de lleno.
+
+Ataques percibidos en medio alcance (10.1 - 19.9 metros)
+Si la evasión supera por 20 o más puntos al atributo ofensivo, el usuario podrá esquivarlo sin necesidad de emplear alguna técnica en específico; simplemente hará uso de movimientos o desplazamientos físicos en su narración.
+
+Si la evasión supera por 10 puntos al atributo ofensivo, el usuario podrá reaccionar fácilmente empleando alguna técnica de su repertorio para escapar o hacerle frente.
+
+Si la evasión es igual al atributo ofensivo, el usuario puede reaccionar con relativa facilidad, pudiendo emplear algún taijutsu físico de escape o algún jutsu que requiera un sello o más; de otro modo recibirá el ataque.
+
+Si la evasión es menor por 5 puntos con respecto al atributo ofensivo, el usuario puede reaccionar con algo de dificultad, pudiendo emplear algún jutsu que no requiera sellos; de otro modo recibirá el ataque. Si este escenario sucede, en la siguiente ocasión (dentro de la misma pelea/tema) que se presente un escenario similar, el ataque del adversario impactará sin poder evadirse, de modo que este recurso puede usarse una vez sí, la siguiente vez no, la siguiente vez sí, y así en esa secuencia.
+
+Si la evasión es menor por 10 puntos con respecto al atributo ofensivo, el usuario puede reaccionar de manera forzada, pudiendo emplear algún jutsu que no requiera sellos, aunque este tendrá una penalidad del 50% en sus efectos, debido a que la urgencia de la situación descuida el control de chakra. De otro modo recibirá el ataque.
+
+Si la evasión es menor por 20 puntos con respecto al atributo ofensivo, el usuario recibirá el impacto de lleno.
+
+Ataques percibidos en largo alcance (20 - 30 metros)
+Si la evasión supera por 10 o más puntos al atributo ofensivo, el usuario podrá esquivarlo sin necesidad de emplear alguna técnica en específico; simplemente hará uso de movimientos o desplazamientos físicos en su narración.
+
+Si la evasión es igual al atributo ofensivo, el usuario podrá reaccionar fácilmente empleando alguna técnica de su repertorio para escapar o hacerle frente.
+
+Si la evasión es menor por 5 puntos, el usuario puede reaccionar con relativa facilidad, pudiendo emplear algún taijutsu físico de escape o algún jutsu que requiera un sello o más; de otro modo recibirá el ataque.
+
+Si la evasión es menor por 10 puntos con respecto al atributo ofensivo, el usuario puede reaccionar con algo de dificultad, pudiendo emplear algún jutsu que no requiera sellos; de otro modo recibirá el ataque. Si este escenario sucede, en la siguiente ocasión (dentro de la misma pelea/tema) que se presente un escenario similar, el ataque del adversario impactará sin poder evadirse, de modo que este recurso puede usarse una vez sí, la siguiente vez no, la siguiente vez sí, y así en esa secuencia.
+
+Si la evasión es menor por 15 puntos con respecto al atributo ofensivo, el usuario puede reaccionar de manera forzada, pudiendo emplear algún jutsu que no requiera sellos, aunque este tendrá una penalidad del 50% en sus efectos, debido a que la urgencia de la situación descuida el control de chakra. De otro modo recibirá el ataque.
+
+Si la evasión es menor por 20 puntos con respecto al atributo ofensivo, el usuario puede reaccionar de manera forzada, pudiendo emplear algún jutsu que no requiera sellos, aunque este tendrá una penalidad del 75% en sus efectos, debido a que la urgencia de la situación descuida el control de chakra. De otro modo recibirá el ataque.
+
+Si la evasión es menor por 25 puntos con respecto al atributo ofensivo, el usuario recibirá el impacto de lleno.
+
+Ataques percibidos en muy largo alcance (+ 31 metros)
+Si la evasión es igual o mayor al atributo ofensivo, el usuario podrá esquivarlo sin necesidad de emplear alguna técnica en específico; simplemente hará uso de movimientos o desplazamientos físicos en su narración.
+
+Si la evasión es menor por 10 puntos, el usuario podrá reaccionar fácilmente empleando alguna técnica de su repertorio para escapar o hacerle frente.
+
+Si la evasión es menor por 15 puntos, el usuario puede reaccionar con relativa facilidad, pudiendo emplear algún taijutsu físico de escape o algún jutsu que requiera un sello o más; de otro modo recibirá el ataque.
+
+Si la evasión es menor por 20 puntos con respecto al atributo ofensivo, el usuario puede reaccionar con algo de dificultad, pudiendo emplear algún jutsu que no requiera sellos; de otro modo recibirá el ataque. Si este escenario sucede, en la siguiente ocasión (dentro de la misma pelea/tema) que se presente un escenario similar, el ataque del adversario impactará sin poder evadirse, de modo que este recurso puede usarse una vez sí, la siguiente vez no, la siguiente vez sí, y así en esa secuencia.
+
+Si la evasión es menor por 25 puntos con respecto al atributo ofensivo, el usuario puede reaccionar de manera forzada, pudiendo emplear algún jutsu que no requiera sellos, aunque este tendrá una penalidad del 50% en sus efectos, debido a que la urgencia de la situación descuida el control de chakra. De otro modo recibirá el ataque.
+
+Si la evasión es menor por 30 puntos con respecto al atributo ofensivo, el usuario puede reaccionar de manera forzada, pudiendo emplear algún jutsu que no requiera sellos, aunque este tendrá una penalidad del 75% en sus efectos, debido a que la urgencia de la situación descuida el control de chakra. De otro modo recibirá el ataque.
+
+Si la evasión es menor por 35 puntos con respecto al atributo ofensivo, el usuario recibirá el impacto de lleno.
+
+Notas adicionales
+El espacio, en metros o centímetros, faltante entre los rangos se redondea siempre hacia arriba, para evitar vacíos legales.
+
+Dentro de la narrativa convencional has de ocupar la distancia, en metros, de manera cerrada. La minuciosidad de los centímetros solo se ocupará para casos muy puntuales.
+
+Si, por ejemplo, tu comparativa de estadísticas marca que tienes una ventaja de +19 de evasión, se considera que tienes +10 en vez de +20.
+
+Aunque tengas la capacidad de reaccionar ante una ofensiva y desplazarte libremente, los metros que podrás moverte están regidos por el atributo de velocidad. De modo que, si ciertas condiciones se cumplen, aún si puedes desplazarte X cantidad de metros, puede que no seas capaz de escapar de algún ataque de área.
+
+Los escenarios están planteados desde que el usuario percibe la ofensiva; si nunca lo hace, el ataque impacta seguro. En cambio, si percibe indicios de esta antes de que ocurra, puede usar la narrativa para prepararse mejor. Este último escenario es recurrente en arremetidas físicas frontales.
+
+Percibir la secuencia de sellos manuales del adversario ofrece una ligera ventaja en cuanto a preparación narrativa se refiere, ya que no es lo mismo percibir desde el momento de la preparación que percibir la ofensiva ya venidera.
+
+Para fines prácticos, una respuesta de taijutsu simple (como puede ser una patada o puñetazo individual) corresponde al mismo nivel de reacción que aplicar una técnica de un solo sello.
+
+Para fines prácticos, una respuesta de bukijutsu simple (como puede ser un tajo de espada o un golpe de marro) corresponde al mismo nivel de reacción que aplicar una técnica de un solo sello.
+
+Las técnicas de genjutsu no aplican para esta comparativa y se tratarán exclusivamente en su propia sección.
+
+Los casos excepcionales no contemplados serán analizados entre los miembros del combate y el equipo de moderación.
+
+Sistema de aprisionamiento
+Son aquellas técnicas que restringen o imposibilitan, total o parcialmente, la libertad de movimiento de un personaje, de manera directa. Se dividen, de manera general, en dos tipos: por vía ninjutsu y por vía taijutsu. Las primeras utilizan el atributo de dominio para la comparación estadística, mientras que las segundas emplean el atributo de fuerza a su favor. En ambos casos, la comparativa se realizará en contra del atributo de resistencia del personaje afectado.
+
+Si el atributo ofensivo supera el valor de la resistencia del afectado, este se someterá a los efectos totales de la técnica.
+
+Si el atributo ofensivo es igual al valor de resistencia del afectado, este igualmente quedará sometido, pero el usuario no podrá realizar ninguna otra acción consecuente, pues todos sus esfuerzos estarán centrados en mantener la técnica.
+
+Si el atributo ofensivo es menor que la resistencia del afectado, la técnica no surtirá efecto alguno.
+
+Cada turno extra que la víctima se encuentre bajo los efectos del aprisionamiento, ganará 10 puntos de resistencia de cara a la comparativa.
+
+Sistema de bonificaciones
+Existen varias técnicas, habilidades pasivas o bonos de especialización que alteran de manera temporal, o permanente, algunas condiciones del juego competitivo, como pueden ser: aumento/disminución de las estadísticas, aumento en el daño de las técnicas, reducción en la cantidad de chakra que requiere una técnica, aumento del alcance de los efectos, u otras situaciones afines. Como notación, es posible la acumulación de varias bonificaciones, siempre y cuando no se superen los límites establecidos.
+
+Ninguna estadística puede aumentarse o disminuirse en más de 30 puntos con respecto a su valor original, salvo que sea una técnica de carácter excepcional y lo detalle específicamente en su descripción.
+
+El límite para el daño extra que pueda ejercer una técnica vía bonificaciones es del doble, sin importar si tiene más maneras para acumular daño extra.
+
+Las técnicas que cuesten menos de 20 puntos de chakra no pueden reducir su gasto de ninguna manera. Asimismo, ninguna técnica puede reducir su gasto asociado por debajo de los 15 puntos, siendo este el límite.
+
+El alcance de las técnicas solo podrá aumentarse, vía bonificaciones, hasta un 30% de su rango original, salvo que sea una técnica/habilidad de carácter excepcional y lo detalle específicamente en su descripción.
+
+Anexo de efectos y condiciones anómalas
+Anosmia: El afectado no podrá percibir ningún olor mientras se mantenga el efecto.
+
+Asfixiar: Cuando un personaje haya llegado a su límite respecto a la cantidad de turnos que pueda mantener la respiración y llegue el siguiente turno, caerá inconsciente sin la posibilidad de continuar el combate.
+
+Aturdimiento: El afectado pierde la concentración y su control de chakra se ve interrumpido, de modo que corta por la mitad cualquier preparación que se encontrase realizando.
+
+Cegar: El afectado no podrá ver nada mientras se mantenga el efecto.
+
+Congelar: El afectado no podrá realizar movimiento alguno con su cuerpo. Aun así, es capaz de realizar técnicas que no requieran de movimientos corporales, puesto que aún es capaz de manejar su chakra.
+
+Desarmar: El personaje suelta cualquier arma, objeto o utensilio que se encontrase portando.
+
+Desproteger: Reduce la evasión del adversario de cara al siguiente movimiento inmediato.
+
+Drenar: El usuario absorbe chakra o vida de la víctima, en una relación 1:1.
+
+Empujar: Lanza hacia atrás al afectado en X número de metros.
+
+Ensordecer: El afectado no podrá escuchar nada mientras se mantenga el efecto.
+
+Envenenar: Causa daños de manera residual. Entre mayor sea el grado del veneno, mayores serán los efectos.
+
+Incapacitar: La extremidad afectada quedará inutilizada el tiempo que dicte la técnica.
+
+Inconsciencia: El afectado queda imposibilitado de continuar el combate. Cuando los puntos de vida lleguen a 0 u ocurra alguna situación narrativa o efecto que lo amerite, caerás en este estado.
+
+Inmovilizar: Se trata de una parálisis del tronco inferior. El usuario no podrá mover sus piernas ni desplazarse.
+
+Lanzar: Lanza hacia arriba al afectado en X número de metros.
+
+Mermar: Reduce una estadística específica en el adversario.
+
+Muerte: Si recibes un daño adicional una vez que tus puntos de vida han llegado a 0, mueres. Habrá otras situaciones narrativas del rol que puedan propiciar este efecto.
+
+Parálisis: El afectado no podrá realizar ningún tipo de acción, ya sea mover alguna parte de su cuerpo o hacer uso de chakra.
+
+Quemar: Causa daño pasivo por turno; entre mayor sea el nivel de quemadura, más daño causará.
+
+Sangrar: Causa daño pasivo por turno; entre mayor sea el nivel de sangrado, más daño causará.
+
+Sellar: Puede presentarse de manera total o parcial. Será parcial si ocurre sobre alguna extremidad; en este caso el afectado no podrá usarla para absolutamente nada, ni siquiera podrá moverla, estará rígida el tiempo que dure el efecto. Si el sellado es total, el afectado quedará atrapado en algún objeto que haga de contenedor, sin posibilidad propia de escapar de ahí.
+
+Sellado de chakra: Según sea el caso, puede limitar el uso de chakra o impedirlo completamente durante el tiempo que el efecto prevalezca.
+
+Choque entre Ninjutsus
+Cuando dos técnicas de ninjutsu colisionan entre sí, se aplica la siguiente normativa para determinar los daños y efectos resultantes. Primero, la técnica que tenga más daño asociado ganará el choque, reduciendo de su potencia el daño asociado de la técnica perdedora. Antes de pasar al siguiente paso, verifiquemos las relaciones elementales.
+
+Katon gana a Fuuton.
+
+Fuuton gana a Raiton.
+
+Raiton gana a Doton.
+
+Doton gana a Suiton.
+
+Suiton gana a Katon.
+
+Si no existe ventaja elemental entre las técnicas conjuradas, la técnica ganadora seguirá su curso normal hasta impactar al enemigo o recorrer su distancia establecida, disminuyendo de su daño asociado la potencia de la técnica perdedora. En caso de que sí exista una ventaja elemental, la técnica del elemento con ventaja multiplicará su daño base por 1.5 y se realizará el mismo procedimiento para el cálculo de daños finales.
+
+Aclaraciones
+En caso de existir múltiples bonificadores de daño, primero se aplica el 1.5 al daño base de la técnica y posteriormente se añaden el resto.
+
+Si la técnica ganadora avanza hasta impactar al adversario, este no podrá optar por realizar ninguna otra nueva maniobra evasiva o de bloqueo y deberá restar de sus puntos de salud el daño resultante.
+
+Las técnicas ambientales (gases, nubes o similares) no se ven afectadas por los jutsus convencionales ni participan en los choques. No obstante, podrán ser dispersadas por técnicas del elemento Fuuton.
+
+El elemento Suiton no tiene debilidad contra el elemento Raiton, ni tampoco es conductor de electricidad a menos de que la técnica lo especifique.
+
+Aspectos puntuales
+Además de lo anterior, hay ciertos detalles a tener en cuenta en lo que respecta a la utilización de las técnicas ninjutsu. Según lo amerite la situación, pueden presentarse los siguientes casos.
+
+Las técnicas que impliquen un daño de área de manera radial (o diametral) se asumirán como si de una esfera se tratase.
+
+Las barreras físicas creadas mediante jutsus se consideran ninjutsu. Estas cuentan con una resistencia específica y perdurarán hasta que la misma sea reducida a cero o hasta que el ejecutor deshaga la técnica. La resistencia de la barrera se irá mermando restando la potencia de las técnicas que la encaren.
+
+Por defecto, los efectos de las técnicas duran un turno sobre el terreno de batalla, a menos que la descripción especifique lo contrario.
+
+Hay técnicas que cuentan con un efecto añadido; este solo podrá aplicarse si la técnica impacta al menos con el 50% de su potencia contra el rival.
+
+Respecto a los Taijutsu
+Habiendo detallado previamente qué son los taijutsu, cómo se clasifican y qué atributos emplean en su funcionamiento, nos enfocaremos ahora en aspectos muy puntuales que pueden presentarse durante un enfrentamiento, así como ciertas restricciones que estos poseen.
+
+Las dos técnicas colisionan entre sí. La que tenga mayor daño asociado verá mermada su potencia en la misma cantidad que el daño asociado de la técnica perdedora y la diferencia resultante se restará de los puntos de vida del perdedor.
+
+Si el taijutsu contaba con algún efecto añadido, este solo se hará válido si el golpe acierta al menos con el 50% de su potencia.
+
+En un choque entre taijutsu y ninjutsu genérico, ganará aquella técnica que tenga mayor potencia de daño. En caso de que el vencedor sea el Ninjutsu, la diferencia entre las potencias irá en contra de la salud del usuario de Taijutsu. En contraste, si el vencedor es el Taijutsu, se pueden presentar dos escenarios distintos según la distancia que haya entre los contrincantes. Si la distancia es óptima, el Taijutsu dispersará al Ninjutsu y continuará su camino para impactar contra el enemigo; el daño ocasionado sería igual a la diferencia de las potencias. Si la distancia no es óptima, el Taijutsu únicamente dispersará el Ninjutsu y ninguno de los participantes recibirá daños a su salud.
+
+Los jutsus ambientales (nubes, gases, etc.) no se verán afectados por el choque y, si tienen un daño asociado, este afectará de manera íntegra al ejecutor del taijutsu. Por otro lado, tampoco sirven para detener físicamente las arremetidas cuerpo a cuerpo.
+
+Si el taijutsu se ejecuta en contra de alguna barrera, la potencia de la técnica física se medirá contra la resistencia de la barrera. Si el taijutsu gana la comparativa, y las condiciones de distancia son óptimas, el usuario continuaría su camino hasta alcanzar a su objetivo y asestar el daño residual contra su salud.
+
+Las dos técnicas colisionan entre sí. La que tenga mayor daño asociado verá mermada su potencia en la misma cantidad que el daño asociado de la técnica perdedora y la diferencia resultante se restará de los puntos de vida del perdedor.
+
+Si, por ejemplo, una técnica de arma de filo choca contra una técnica física, como puede ser un puñetazo, el cuerpo del taijutser no sufrirá estragos extra por parte del arma (refiriéndose a cortes o heridas por la narrativa), a menos que esta gane el choque correspondiente y aplique al menos el 50% de su daño base.
+
+Si las armas arrojadizas no llevan un bonus de daño brindado por chakra añadido, estas simplemente serán repelidas por cualquier taijutsu convencional. En caso de llevar daño añadido, este se restará de la potencia del taijutsu ejecutado. Como observación final, el choque sería contra la parte del cuerpo que realiza el taijutsu. Si un taijutsu es realizado por el brazo o pierna, pero el arma arrojadiza impacta sobre el pecho, le ocasionará daño de manera íntegra.
+
+Nota adicional: Importante tener en cuenta que, cuando un taijutsu es realizado, no podrás interrumpirlo de manera voluntaria buscando sacar provecho de ello. Esto ocurre generalmente en aquellos ataques que constan de combinaciones; por ejemplo, si la descripción de la técnica dijese lo siguiente: "El usuario realiza 5 puñetazos en contra del adversario y lo lanza hacia atrás 5 metros contra el suelo para, posteriormente, dar un salto y rematarle con una patada descendente". En este caso, no podrías interrumpir las acciones a la mitad para realizar otras a conveniencia. Tienes que seguir tal cual todo el combo que establece la descripción del taijutsu.
+Respecto al Bukijutsu
+El uso de armas y utensilios ninja es otra alternativa de ataque. Estos, por sí solos, implican un riesgo latente para los adversarios, pero en combinación con técnicas especializadas y el chakra del usuario, se vuelven instrumentos aún más peligrosos, y es a esto lo que se conoce como Bukijutsu.
+
+Las dos técnicas colisionan entre sí. La que tenga mayor daño asociado verá mermada su potencia en la misma cantidad que el daño asociado de la técnica perdedora y la diferencia resultante se restará de los puntos de vida del perdedor.
+
+Si el Bukijutsu contaba con algún efecto añadido, este solo se hará válido si el golpe acierta al menos con el 50% de su potencia.
+
+El anexo correspondiente de armas detalla las características propias de cada objeto, así como el daño asociado que poseen.
+
+Nota: Los ataques simples de armas, ya sean arrojadizas o aquellas que necesitan ser sostenidas, y que no impliquen el uso de alguna técnica para su ejecución, o de chakra añadido para ser potenciadas, solamente causarán daño si atacan directamente al cuerpo del adversario. En un sistema de choque contra cualquier técnica que implique el uso de chakra, saldrán rebotadas sin efectuar daño alguno.
+Funcionamiento de los Genjutsu
+Los genjutsu son técnicas que afectan la mente del rival a través de la realización de ilusiones. De manera general se dividen en dos grandes tipos: Genjutsus realistas y Genjutsus terroríficos. Los primeros afectan la percepción y los sentidos del adversario, mientras que los últimos le ocasionan daño psicológico. Antes de profundizar en ellos, abordaremos la metodología para poder llevar a cabo uno correctamente.
+
+1. Procedimiento adecuado para ejecutar estas técnicas ilusorias
+El primer paso consta de propagar el chakra por el ambiente en dirección hacia el contrincante; esto generalmente se hace disfrazando la intención por medio de la narrativa, para mantener el factor sorpresa. No obstante, podrás describir tus intenciones con total normalidad dentro de tu post si así lo deseas, ya que el uso del metarol como medio de identificación está totalmente prohibido y fuertemente penado. Esta propagación de chakra ha de hacerse durante un turno completo.
+
+En el turno dos, el usuario ha de realizar los sellos correspondientes a la técnica y, tras completarlos, el adversario caerá inducido en la ilusión.
+
+La distancia máxima a la que el usuario puede propagar su chakra por el ambiente es igual a su atributo de inteligencia dividido entre tres.
+
+Existen algunas técnicas que reemplazan la propagación tradicional por métodos como el contacto visual o la transmisión auditiva. Siendo cualidades exclusivas de ciertos clanes, pero, para fines prácticos, es el mismo escenario.
+
+Si el ejecutor expande su chakra al final de su turno (tras haber realizado otras acciones previas), el turno completo se cumplirá en la parte final de su siguiente turno, no al inicio.
+
+Por defecto, un genjutsu afecta a una sola persona, a menos que la descripción del mismo especifique lo contrario.
+
+2. Condiciones durante la expansión y post expansión
+Durante la fase de expansión de chakra y aun atrapando ya al adversario en el genjutsu, el ejecutor se encontrará restringido a las siguientes condiciones.
+
+El usuario solo podrá moverse a la velocidad de andar/caminar durante la expansión.
+
+Durante la expansión, no podrá hacer uso de técnicas que requieran gasto de chakra, a menos que previamente las tuviera activadas y estas no supongan una contradicción con la metodología del genjutsu.
+
+Después de concretar la ilusión, podrá hacer uso de sus recursos, incluido el gasto de chakra, libremente.
+
+3. Puntos adicionales a tener en cuenta
+Existen, además, algunas condiciones extras en lo referente a los genjutsu, así como ciertos escenarios donde no será posible llevar a cabo su realización.
+
+Para que el usuario atrape a un enemigo en una ilusión, este deberá ubicarlo visualmente o al menos ser consciente de su posición espacial, para dirigir su chakra hacia esa dirección.
+
+El adversario no puede estar rodeado totalmente por alguna barrera. Por ejemplo, si se encuentra en el interior de una cúpula de rocas o en una habitación cerrada a la cual el usuario no tiene una vía de acceso para su chakra.
+
+No se puede realizar otro genjutsu mientras tengas activo uno; de intentarlo, se cancelará el primero.
+
+Los clones no pueden realizar técnicas ilusorias.
+
+Los clones tampoco pueden estar sometidos a los efectos de un genjutsu. En cuanto se vean afectados, desaparecerán.
+
+Alguien que ha sufrido de los efectos de un genjutsu o que se ha liberado de uno, contará con un turno de inmunidad antes de poder ser atrapado por otra ilusión; esto es porque su flujo de chakra se encuentra inestable.
+
+Cómo liberarse de un Genjutsu
+Los atributos a tener en cuenta serán la inteligencia (para el personaje genjutser) y el dominio (para la víctima), mismos que entrarán en una comparación estadística para ver los posibles escenarios.
+
+Si el atributo de dominio es al menos 10 puntos mayor que la inteligencia, podrá percibir que están intentando atraparlo y realizar la técnica Kai de manera preventiva para evitar cualquier estrago posible.
+
+Si el atributo de dominio es igual que la inteligencia, tendrá indicios de que ha sido atrapado en una técnica ilusoria desde su concepción, pero no será consciente de cuál es el efecto de dicha técnica; de modo que, si es discreto y bien roleado, puede pasar desapercibido. Si se trataba de un genjutsu realista, los detalles simples pasarán desapercibidos para él, pero los más complejos le causarán mucha extrañeza. Si se trata de un genjutsu terrorífico, lo percibirá de inmediato y podrá escapar antes de que le ocasione un daño serio (solamente aplicará el 49% del daño). Puede realizar el Kai sin ningún impedimento para escapar de estos escenarios en cuanto identifique la ilusión.
+
+Si el atributo de dominio es menor por 10 puntos con respecto a la inteligencia, los genjutsu terroríficos aplicarán el 100% de su daño. Por su parte, los realistas no podrán ser detectados durante el primer turno de su ejecución, a menos que tengan incongruencias narrativas graves.
+
+Si el atributo de dominio es menor por 20 puntos con respecto a la inteligencia, los genjutsu terroríficos aplicarán el 125% de su daño. Por su parte, los realistas no podrán ser detectados durante los primeros dos turnos de su ejecución, a menos que tengan incongruencias narrativas graves.
+
+Cada 10 puntos extra que aumente la ventaja de la inteligencia con respecto al dominio, será un turno adicional en la duración de los genjutsu realistas y un 25% extra en el daño base de los terroríficos.
+
+Nota: Por más que el personaje tenga una ventaja estadística, si está imposibilitado para realizar el Kai u omite hacerlo, seguirá sufriendo los efectos del genjutsu.
+Adicionalmente, hay otros métodos para escapar de una ilusión, ajenos a los resultados de la comparación de estadísticas.
+
+Que el ejecutor del genjutsu reciba un daño a sus puntos de vida mayor o igual a su atributo de inteligencia.
+
+Que el afectado por el genjutsu reciba un daño a sus puntos de vida mayor o igual al atributo de inteligencia del ejecutor.
+
+Que un aliado sea consciente de que has sido atrapado en una ilusión y realice la técnica de Kai sobre ti.
+
+Tipos de Genjutsu
+Explicada ya la metodología para realizar una técnica ilusoria y la manera en que puedes encarar esta para liberarte de sus efectos, es importante precisar cuál es la diferencia fundamental entre las dos ramas en que se divide el genjutsu.
+
+Estas afectan el plano dimensional real, sobre el cual batallan tanto el usuario como el adversario. Influyen sobre los sentidos de la víctima para que esta perciba el panorama de una manera diferente. Todo el daño que se produzca en batalla mientras alguna ilusión realista esté activa, es daño real que va directamente contra el cuerpo del afectado y no en contra de su mente. Se distinguen por tener un gasto de chakra asociado por turno.
+
+La mente del afectado es transportada a otro plano, alejada totalmente de la dimensión donde ocurre la batalla real. En este ambiente, el ejecutor someterá a su víctima ante los efectos de la ilusión, que generalmente son sus miedos, monstruos o situaciones traumáticas. El daño ocasionado es directamente a la mente y repercute proporcionalmente a los puntos de vida del enemigo. Se distinguen por ser de corta duración; concluye el efecto de la técnica y el contrincante quedará libre de la ilusión.
+
+Normativa de Batalla
+De manera general, un enfrentamiento bélico llevará una secuencia de un post por persona entre todos aquellos involucrados, y nos referiremos a ello como ronda o turno. Las batallas terminarán cuando los contrincantes pacten el final del encuentro, alguno de los participantes admita la derrota, o alguno de los personajes se encuentre imposibilitado para continuar peleando, ya sea porque ha sido restringido por alguna técnica, ha perdido el conocimiento o sus niveles de chakra y/o vida han llegado a cero. Hay aspectos muy puntuales que hemos de tener en cuenta a la hora de encarar un enfrentamiento y es de vital importancia llevarlo adecuadamente para que el tema sea fluido, pudiendo así evitar problemas innecesarios.
+
+En el primer post de batalla han de especificar en un spoiler debidamente identificado el inventario con el que cuentan en ese momento.
+
+Deberán fijar sus estadísticas en el primer post de batalla; estas no se actualizarán durante todo el tema.
+
+Las técnicas disponibles para el enfrentamiento se limitarán a aquellas con las que cuenten al momento del primer post del tema.
+
+Al momento de realizar alguna técnica, has de copiar y pegar la descripción de sus efectos en un spoiler debidamente identificado.
+
+Está prohibido controlar las acciones del personaje rival.
+
+Las acciones a realizarse bajo el claro uso del metarol serán anuladas y sancionadas.
+
+No incurrir en el godroleo, también ameritará sanción y anulación del post en cuestión.
+
+El doble post está prohibido a menos de que hayan pasado 48 horas y el adversario no haya justificado, con peso, su ausencia. Se darán como válidas las acciones del personaje que aplique el salto.
+
+Si el chakra llega a cero, el personaje caerá en desmayo.
+
+Si la vida llega a cero, el personaje caerá en desmayo. Si tras esto, recibe nuevamente daño, el personaje morirá.
+
+La muerte instantánea solo se aplicará si la condición de la técnica la implica y se cumplen las condiciones necesarias, o si se percibe daño extra una vez que el personaje ha dejado en cero su vida. Para casos muy específicos que puedan suceder en una narración, tendrá que ser un fallo muy garrafal por parte del usuario y un escenario igualmente letal para que se produzca. Situaciones como una estocada al corazón, un intento de decapitación (sin el uso de una técnica que especifique esa acción), algún arma arrojadiza a la cabeza, o en acciones de naturaleza similar... la narrativa se adaptará para que el daño letal de muerte instantánea no se produzca y solo se efectúe el daño asociado de la técnica o el arma en cuestión.
+
+Si dejas una secuencia de sellos pendiente para realizar una técnica en un turno futuro, has de aclarar para qué técnica es.
+
+El incumplimiento de estas normas ocasionará repercusiones en la batalla, según sea la gravedad de las faltas cometidas. En caso de existir discordancia de criterio entre los miembros participantes del tema y al no poder llegar a algún acuerdo para proseguir con el mismo, podrán solicitar a un moderador de combate su intervención para una resolución, siguiendo la siguiente metodología.
+
+Alguno de los miembros implicados posteará en el tema de solicitud de moderación de combate, señalando aquellos puntos que generen el conflicto.
+
+La otra parte contará con un lapso de 24 horas si es que desea realizar alguna réplica o señalamiento al respecto. En caso de no poder o querer hacerlo, tampoco habrá problema, puesto que el moderador en turno analizará el contexto pertinente.
+
+Deben ser precisos en señalar aquello que origina el problema; acciones de turnos pasados que ya han sido aceptadas por ambos no podrán ser tomadas en cuenta como parte de la defensa de sus intereses. Solo en caso de que haya una falta verdaderamente grave, se moderará sobre ello.
+
+Tras la resolución del moderador de batalla, han de seguir con la dinámica del encuentro según sea su veredicto. Esta moderación será hecha por todo el staff, así que no habrá derecho a debates o nuevo pedido de moderación sobre lo mismo. Lo expuesto ahí será ley.
+
+En caso de que un tema bélico cuente con demasiadas peticiones de moderación, el staff se tomará la libertad de ponerle fin al tema, dándole la instrucción a un narrador para que postee dándole fin y explicando las consecuencias sufridas por cada personaje.

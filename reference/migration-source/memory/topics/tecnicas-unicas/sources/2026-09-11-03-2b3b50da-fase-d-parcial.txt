@@ -1,0 +1,201 @@
+Continuamos con:
+
+TECHNIQUE 1 = PROPOSAL A — GUARDIA ABIERTA
+
+La propuesta queda seleccionada a nivel conceptual.
+
+NO la registres como aprobada ni aprendida.
+
+==================================================
+OBJETIVO DE DISEÑO
+==================================================
+
+La técnica debe representar un corte deliberado con katana cuyo
+objetivo no es maximizar daño inmediato, sino alterar brevemente la
+guardia/postura defensiva del rival y crear una oportunidad posterior.
+
+Identidad:
+
+PRECISIÓN
+→ CONTACTO
+→ APERTURA
+→ DECISIÓN DE COMPROMETERSE O NO EN EL SIGUIENTE ATAQUE
+
+No debe sentirse como un debuff abstracto aplicado simplemente porque
+Nozomu declaró que "leyó al rival".
+
+La apertura debe surgir de una acción física exitosa.
+
+==================================================
+REGLA CRÍTICA
+==================================================
+
+Antes de fijar valores:
+
+1. Localiza la definición oficial de DESPROTEGER.
+2. Determina exactamente:
+   - qué reduce;
+   - cuánto reduce;
+   - cuánto dura;
+   - si afecta a un único ataque o a múltiples acciones;
+   - si puede acumularse;
+   - si existe alguna condición estándar de eliminación.
+
+NO inventes una versión propia si el estado ya está definido por las
+reglas.
+
+Si la normativa no especifica magnitud o duración suficientes para
+utilizarlo directamente, informa:
+
+REQUIERE AJUSTE DE EFECTO
+
+pero puedes continuar proponiendo alternativas de balance.
+
+==================================================
+CONDICIONES OBLIGATORIAS
+==================================================
+
+La técnica deberá cumplir:
+
+- Bukijutsu.
+- Katana o arma de filo compatible según normativa.
+- Rango inicial Genin.
+- Sin propiedades permanentes al arma.
+- Sin movimiento gratuito.
+- Sin ataque adicional.
+- Sin reacción fuera de turno.
+- Sin evasión automática.
+- Sin impacto garantizado.
+- Sin daño residual automático.
+- Sin hemorragia como identidad.
+- Sin extensión de hoja.
+- Sin onda/corte de chakra.
+- Sin mecánica de Iaido.
+- Sin acumulación del efecto.
+
+El efecto adicional solo se activa si se cumple el umbral oficial
+aplicable a efectos Bukijutsu, actualmente documentado como conectar
+al menos el 50 % del daño final.
+
+==================================================
+ALCANCE
+==================================================
+
+No uses los 10 m estándar de Genin para convertir una katana en un arma
+a distancia.
+
+La técnica es de contacto físico.
+
+Su alcance debe corresponder al arma y a cualquier desplazamiento
+legal que ya permita el sistema.
+
+==================================================
+BENEFICIARIO DEL EFECTO
+==================================================
+
+Preferencia de diseño:
+
+la apertura debe beneficiar únicamente a NOZOMU.
+
+No debe reducir la Evasión del objetivo frente a todos los aliados salvo
+que la normativa obligue expresamente a que el estado Desproteger sea
+global.
+
+Si el estado oficial necesariamente es global, señala ese riesgo antes
+de finalizar la técnica.
+
+==================================================
+DURACIÓN
+==================================================
+
+La apertura debe ser breve.
+
+Preferencia:
+
+- siguiente ofensiva válida de Nozomu;
+o
+- hasta una ventana temporal muy corta definida por las reglas.
+
+Debe desaparecer si no se aprovecha.
+
+No puede conservarse indefinidamente.
+
+No puede acumularse consigo misma.
+
+==================================================
+DAÑO
+==================================================
+
+Baseline Genin:
+
+35 Chakra
+60 daño
+
+La técnica recibe un efecto táctico relevante.
+
+Por tanto, NO asumas automáticamente que puede conservar los 60 puntos
+de daño completos.
+
+Debes justificar cuánto daño se sacrifica por el efecto.
+
+No inventes todavía un valor definitivo basándote únicamente en
+intuición.
+
+==================================================
+ESCALADO
+==================================================
+
+La técnica debe tener una línea coherente:
+
+GENIN
+→ CHUNIN
+→ JOUNIN
+
+El escalado NO debe consistir en añadir cada vez más efectos.
+
+Preferencia:
+
+mantener la misma identidad mecánica y mejorar principalmente:
+
+- potencia;
+- fiabilidad dentro de límites legales;
+- eficiencia del intercambio daño/apertura;
+
+sin eliminar el contrajuego original.
+
+La versión Jounin debe seguir siendo reconociblemente la misma técnica.
+
+==================================================
+TAREA
+==================================================
+
+Ahora realiza FASE D PARCIAL.
+
+No quiero todavía una técnica definitiva.
+
+Devuelve tres variantes de balance para el mismo concepto:
+
+VARIANTE CONSERVADORA
+VARIANTE INTERMEDIA
+VARIANTE AGRESIVA
+
+Para cada una indica:
+
+COSTE
+DAÑO
+ALCANCE
+EFECTO
+DURACIÓN DE APERTURA
+CONDICIÓN DE ACTIVACIÓN
+CONTRAJUEGO
+VENTAJA
+RIESGO DE BALANCE
+COMPATIBILIDAD CON REGLAS
+
+Después recomienda una.
+
+No redactes todavía el texto narrativo final del jutsu.
+
+No diseñes Técnica 2.
+
+No actualices NOZOMU_STATE.md.

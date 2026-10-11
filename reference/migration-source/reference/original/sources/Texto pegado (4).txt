@@ -1,0 +1,231 @@
+La creación de técnicas es un elemento importante para personalizar la construcción de nuestro personaje, pues permitirá acentuar aquellas áreas donde se ha especializado y dotarlo de más recursos a la hora de encarar un tema/combate. El usuario podrá plasmar su creatividad, rigiéndose siempre con los lineamientos que usa el foro, para incluir en su repertorio de jutsus aquellos detalles puntuales que su personaje necesitaba para completar su construcción. Hay ciertos aspectos que condicionan este sistema de creaciones y se abordarán todos en esta guía.
+- Los personajes que hayan optado por empezar con algún clan podrán crear sus jutsus una vez alcanzado el rango chunin.
+- 
+
+- Los personajes sin clan pueden crear dos técnicas gratis siendo genin. La primera deberá ser una que cuente con escalado hasta rango jounin, que servirá como técnica base de su estilo de pelea. La segunda, será una técnica normal de rango genin, que mantenga algún sentido con la primera técnica mandada.
+- 
+
+- Primero deberás abrir un tema en el subforo "Registro de técnicas únicas", siguiendo la metodología indicada allí mismo.
+- 
+
+- Después, para cada creación que quieras solicitar deberás crear un tema en el subforo "Solicitud de técnicas únicas". Indicando las características del jutsu que deseas crear.
+- 
+
+- Un moderador posteará, en primera instancia, indicando si todo está en orden. En caso de que lo esté, la técnica será mandada a revisión; si no está en orden, te indicará las correcciones puntuales que deberás hacerle antes de que sea mandada a revisión.
+- 
+
+- El moderador mandará un segundo post después de que la revisión se haya completado y te indicará si la técnica ha sido aprobada o rechazada.
+- 
+
+- En caso de que no haya sido aprobada, podrás modificar según las indicaciones que se te dieron u optar por mandar otra técnica.
+- 
+
+- Si la técnica fue aprobada, el moderador la añadirá a tu ficha y al registro de técnicas únicas, cerrando además el tema.
+- 
+
+- Genin: 15 días.
+- 
+
+- Chunin: 30 días.
+- 
+
+- Jounin: 45 días.
+- 
+
+- Jounin élite: 60 días.
+- 
+
+- Técnicas de rango especial: Estas no demoran días en específico, porque su gasto se limita al Slot invertido.
+- 
+
+Nota: El tiempo de espera empieza a contar desde el momento en que el moderador en turno aprueba tu técnica como una válida para ser revisada. Además, solo podrá mandarse una técnica por vez, a menos que tengas algún premio o bonificación que te permita hacer una creación que ignore el tiempo de espera.
+Aunque se le da la libertad creativa a los usuarios para que ideen sus jutsus de la manera en que lo crean conveniente, estos deberán centrarse en las ramas que su personaje domina. La intención es hacer que se acentúen los puntos fuertes, no tratar de hacerlo un todoterreno que tenga mil recursos a su disposición para cualquier escenario posible. De modo que las creaciones deberán estar sujetas a lo siguiente:
+- A la mecánica del clan o del estilo único de cada personaje.
+- 
+
+- De la rama en la que están especializados (esto hasta rango jounin).
+- 
+
+- La rama de subespecialización sí que puede hacerse en cualquier rango.
+- 
+
+- Del elemento en cuestión.
+- 
+
+- De la maestría que hayas escogido.
+- 
+
+De manera general deberás guiarte en los lineamientos de las técnicas ya existentes en el foro. Todas llevan, en la medida de lo posible, el mismo equilibrio entre gasto de chakra, daño efectuado y rango de alcance. Además, la adición de efectos de estado, buffeos o debuffeos y condiciones narrativas, pueden aumentar o disminuir esos rangos que se manejan. A continuación, se presentan algunos de los valores fijos que se tomaron en cuenta para las técnicas del foro, mismos que podrán tomar como base, o hacer modificaciones ligeras en pro de la narrativa.
+- Gasto de chakra: Genin: 35 puntos; Chunin: 50 puntos; Jounin: 75 puntos; Jounin élite: 100 puntos.
+- 
+
+- Potencia de daño: Genin: 60 puntos; Chunin 90 puntos; Jounin: 135 puntos; Jounin élite: 180 puntos.
+- 
+
+- La eficiencia de las técnicas (gasto/potencia) suele rondar el valor de 1.8 en la mayoría de los casos.
+- 
+
+- Alcance: En rango genin es de 10 metros y aumenta 5 metros más por cada rango superior. Para técnicas de efecto de área, el alcance suele ser menor si no se quiere sacrificar la potencia.
+- 
+
+- Los valores anteriores pueden moverse más o menos, en función de la narrativa de la técnica.
+- 
+
+- Las técnicas de rango especial rompen los parámetros anteriores, pero serán revisadas con extremo cuidado para que no haya un desbalance desmedido en el juego.
+- 
+
+- No pueden tomarse conceptos específicos de otros clanes/maestrías.
+- 
+
+- Salvo que la técnica sea de carácter muy general, no podrás copiar las mecánicas de otros usuarios.
+- 
+
+- Habilidades pasivas están descartadas.
+- 
+
+- Descartada la creación de doujutsu.
+- 
+
+- Técnicas espacio/temporales están prohibidas. Aunque pueden hacerse concesiones muy puntuales para técnicas de rango especial.
+- 
+
+- El manejo de las fuerzas de gravedad está prohibido, así como el de la materia a nivel molecular.
+- 
+
+- Las técnicas de armadura están prohibidas.
+- 
+
+- El listado puede actualizarse según vayan sucediendo escenarios.
+- 
+
+Los jugadores también podrán optar por crear un arma personalizada que se adapte a sus necesidades y potencie su estilo de batalla. En el foro se manejan cinco niveles para clasificar las herramientas, siendo el primero el más básico y el quinto el de mayor categoría. Dependiendo del nivel del arma, variará las condiciones necesarias para conseguirle, así como las ventajas únicas que pueda ofrecer.
+Se trata del nivel más bajo y corresponde a las herramientas ninja que pueden conseguirse en la Tienda a través de la compra con los ryos. Tanto sus especificaciones como su daño asociado se encuentran establecidos en su descripción y no cuentan con ningún tipo de bonificación ni efecto especial agregado.
+Se consiguen a través de recompensas simples o en dinámicas del foro. Para fines prácticos y bélicos mantienen la misma función que el armamento de nivel uno, con la diferencia de que el personaje puede darle el retoque estético que desee, armas de cierto color, con grabado, con algún listón o distintivo especial. El detalle visual es libre siempre y cuando no pierda la esencia del arma base, además, por más que se establezca algún aspecto específico, este no supondrá ninguna ventaja (o desventaja) en un escenario de batalla.
+Algunas maestrías otorgan uno base al personaje. Otra forma de conseguirlas es a través de eventos o misiones eventuales. Consisten en armamento básico que ha sido personalizado de manera estética y al cual también se le ha agregado alguna bonificación de daño o potenciador de batalla.
+De las siguientes opciones haz de seleccionar una para agregarla como habilidad base de tu arma:
+- En cualquier momento, durante la ejecución de una técnica Bukijutsu, puede imbuir su arma con alguna de sus naturalezas de chakra para sacar beneficio de algún choque de técnicas, si la situación lo favorece.
+- 
+
+- Si el arma se encuentra a menos de (Aptitud / 6) metros de distancia, podrá recuperarla estirando su mano hacia ella. El tiempo de recuperación equivale a una secuencia de sellos.
+- 
+
+- Si el arma en cuestión requiere de ambas manos para su uso, podrá manejarla con una mano sin recibir penalizaciones.
+- 
+
+- Los efectos secundarios se activan acertando el 45% del daño final de la técnica Bukijutsu (Excepto efecto de muerte, sellado o congelamiento).
+- 
+
+De las siguientes opciones, seleccionarás una como bonificador de tu arma:
+- Aumenta en 10 puntos la potencia de los Bukijutsu que le utilicen.
+- 
+
+- Reduce en 10 puntos el gasto de chakra de las técnicas Bukijutsu que le utilicen.
+- 
+
+- Si se utiliza para técnicas Bukijutsu en turnos consecutivos, en el segundo aumentará en +5 su Aptitud. Tras finalizar el ataque, el contador se resetea.
+- 
+
+A partir de este nivel es cuando realmente puedes crear un arma personalizada a tu gusto, siempre y cuando ostentes al menos el rango chunin. El procedimiento es sencillo, deberás apegarte al modelo de creación de armas y realizar el pago correspondiente, en Ryos y PPs, para que se otorgue su propiedad. La herramienta que decidas crear deberá encontrarse en el apartado de "Tienda de Armas", dependiendo de las especificaciones y bonificaciones extra que le agregues variará su valor final de compra. Podrás agregar 1 bonificación en sus características físicas (2 si eres jounin), 1 habilidad pasiva básica (2 si eres jounin) y dotarle de 1 técnica asociada que podrás crearle y que tenga especificaciones similares a las de rango chunin (o hasta de rango jounin si ya lo posees). Recuerda que entre más detalles le agregues, más cara será. Además, una vez recibida el arma, no podrá mejorarse aún subiendo de rango. Si deseas una mejor tendrás que hacer una nueva petición y otro desembolso de recursos.
+- Aumenta en 25% el daño final que realiza como golpe blanco.
+- 
+
+- Si es arrojadiza, aumenta en 5 metros el alcance de los Bukijutsu realizados con el arma especial.
+- 
+
+- Si es de filo o contundente, aumenta el alcance de los Bukijutsu realizados con el arma especial en medio metro.
+- 
+
+- Si el arma en cuestión requiere de ambas manos para su uso, podrá manejarla con una mano sin recibir penalizaciones.
+- 
+
+- Aumenta en 20 puntos la potencia de los Bukijutsu que le utilicen.
+- 
+
+- Reduce en 15 puntos el gasto de chakra de las técnicas Bukijutsu que le utilicen.
+- 
+
+- Ocasiona sangrado leve en el enemigo, perdiendo 10 de vida durante tres turnos.
+- 
+
+- Si se utiliza para técnicas Bukijutsu en turnos consecutivos, en el segundo aumentará en +5 su Aptitud. Tras finalizar el ataque, el contador se resetea.
+- 
+
+- En cualquier momento, durante la ejecución de una técnica Bukijutsu, puede imbuir su arma con alguna de sus naturalezas de chakra para sacar beneficio de algún choque de técnicas, si la situación lo favorece.
+- 
+
+- Si el arma se encuentra a menos de (Aptitud / 5) metros de distancia, podrá recuperarla estirando su mano hacia ella. El tiempo de recuperación equivale a una secuencia de sellos.
+- 
+
+- Los efectos secundarios se activan acertando el 45% del daño final de la técnica Bukijutsu (Excepto efecto de muerte).
+- 
+
+- El arma solo reaccionará ante el chakra del portador original, de modo que a manos de cualquier otra persona será una herramienta ornamentaria.
+- 
+
+- El arma puede reducirse hasta el tamaño de un llavero para facilitar su transporte, pero una vez transformada a su tamaño real, deberá continuar así por el resto del tema/combate.
+- 
+
+- Una vez por tema/batalla, puede realizar un golpe blanco y asestar el 100% de su potencia como si fuese una técnica que emplea chakra.
+- 
+
+- Una vez por tema/batalla, puede destruir cualquier arma de nivel 1 o 2 contra la cual impacte si es que gana o empata la comparativa de potencias.
+- 
+
+- Una vez por tema/batalla puede liberar una explosión equivalente a un sello explosivo cuando el arma cause daño directo en el adversario, de modo que la potencia equivalente al sello explosivo se restará de los puntos de vida del adversario.
+- 
+
+Estas creaciones demandan rango Jounin como mínimo, el gasto de 1 slot y una gran cantidad de Ryos. Podrás aspirar a crear cualquier arma que encaje en el universo de Naruto, ya sea se encuentre en la Tienda de Armas o no (armaduras o escudos están prohibidos), ejemplo de lo anterior podría ser una guadaña o un estoque. Estas armas poseen un carácter excepcional y dado que su creación demanda un slot al jugador, tiene que tener beneficios equivalentes a ello.
+De entrada la fórmula para su golpe blanco será equivalente a las ya existentes, pero añadiendo un multiplicador por dos al final. De modo que si te has creado, por ejemplo, una katana demoniaca, esta utilizará la fórmula de las katanas para su cálculo de golpe blanco, y el resultado final será duplicado. En caso de que te hayas creado un armamento que no exista en la Tienda de Armas, su fórmula será acordada con el staff.
+También podrás asignarle 2 mejoras físicas, 2 habilidades pasivas, 2 habilidades activas (una básica y una avanzada) y técnica especial asociada con especificaciones similares a las de rango jounin elite.
+- Aumenta en 30% el daño final que realiza como golpe blanco.
+- 
+
+- Si es arrojadiza, aumenta en 5 metros el alcance de los Bukijutsu realizados con el arma especial.
+- 
+
+- Si es de filo o contundente, aumenta el alcance de los Bukijutsu realizados con el arma especial en medio metro.
+- 
+
+- Si el arma en cuestión requiere de ambas manos para su uso, podrá manejarla con una mano sin recibir penalizaciones.
+- 
+
+- Aumenta en 20 puntos la potencia de los Bukijutsu que le utilicen.
+- 
+
+- Reduce en 15 puntos el gasto de chakra de las técnicas Bukijutsu que le utilicen.
+- 
+
+- Ocasiona sangrado leve en el enemigo, perdiendo 12 de vida durante cuatro turnos.
+- 
+
+- Si se utiliza para técnicas Bukijutsu en turnos consecutivos, en el segundo aumentará en +5 su Aptitud. Tras finalizar el ataque, el contador se resetea.
+- 
+
+- En cualquier momento, durante la ejecución de una técnica Bukijutsu, puede imbuir su arma con alguna de sus naturalezas de chakra para sacar beneficio de algún choque de técnicas, si la situación lo favorece.
+- 
+
+- Si el arma se encuentra a menos de (Aptitud / 5) metros de distancia, podrá recuperarla estirando su mano hacia ella. El tiempo de recuperación equivale a un sello de manos.
+- 
+
+- Los efectos secundarios se activan acertando el 40% del daño final de la técnica Bukijutsu (Excepto efecto de muerte).
+- 
+
+- El arma solo reaccionará ante el chakra del portador original, de modo que a manos de cualquier otra persona será una herramienta ornamentaria.
+- 
+
+- El arma puede reducirse hasta el tamaño de un llavero para facilitar su transporte, pero una vez transformada a su tamaño real, deberá continuar así por el resto del tema/combate.
+- 
+
+- Una vez por tema/batalla, puede realizar un golpe blanco y asestar el 100% de su potencia como si fuese una técnica que emplea chakra.
+- 
+
+- Una vez por tema/batalla, puede destruir cualquier arma de nivel 1 o 2 contra la cual impacte si es que gana o empata la comparativa de potencias.
+- 
+
+- Una vez por tema/batalla puede liberar una explosión equivalente a un sello explosivo cuando el arma cause daño directo en el adversario, de modo que la potencia equivalente al sello explosivo se restará de los puntos de vida del adversario.
+- 
+
+Estas son de libre creación para el usuario y su uso demanda gasto de chakra, casi como si de una técnica se tratase, pero para su validación deberá pasar la revisión del staff.
+La habilidad activa básica tendrá sus efectos muy limitados, del orden de, por ejemplo, clavarla sobre la superficie y crear un cuerpo de agua, blandirla y crear una cortina de humo, impactar sobre algún sitio y dejar una marca de chakra, etc. Cosas de ese orden.
+La habilidad activa avanzada sí contará con efectos de mayor peso, puede agregar algún efecto extra a una técnica, establecer condiciones circunstanciales, ambientales, algún efecto relacionado con la maestría o clan, en caso de poseer alguno. Del mismo modo, aunque se da libertad creativa, también pasará por el proceso de revisión por parte del Staff.
+Nota: El precio de las armas de los niveles 4 y 5 se establecerán una vez que se analice el desarrollo de los jugadores.

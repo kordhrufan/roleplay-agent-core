@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "storage_mode": "SYNTHETIC_ONLY",
+  "authorized_host": "narutorol.jcink.net",
+  "expected_account_id": 59,
+  "poll_interval_seconds": 14400,
+  "forum_permission": "USER_CONFIRMED",
+  "initial_topic": {
+    "topic_id": 275,
+    "original_url": "https://narutorol.jcink.net/index.php?showtopic=275&st=0#entry1144",
+    "state": "PAUSED",
+    "title": null,
+    "participants": null,
+    "scene_classification": null,
+    "memory_topic_path": null,
+    "last_processed_message_id": null
+  }
+}

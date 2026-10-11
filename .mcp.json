@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "codex": {
+      "type": "stdio",
+      "command": "cmd.exe",
+      "args": [
+        "/d", "/c", "codex.cmd", "mcp-server",
+        "-c", "model=gpt-5.6-sol",
+        "-c", "model_reasoning_effort=high",
+        "-c", "forced_login_method=chatgpt"
+      ]
+    }
+  }
+}

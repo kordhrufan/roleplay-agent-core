@@ -1,0 +1,162 @@
+Continuamos con GUARDIA ABIERTA.
+
+La VARIANTE CONSERVADORA queda seleccionada como base de diseño:
+
+GENIN
+35 Chakra
+40 potencia
+Contacto
+Desproteger candidato: -5 EVA
+
+NO está aprobada.
+NO está aprendida.
+
+\==================================================
+CORRECCIÓN IMPORTANTE SOBRE LA DURACIÓN
+=======================================
+
+No fijes:
+
+"en el mismo turno"
+
+La normativa únicamente establece:
+
+"Desproteger: Reduce la evasión del adversario de cara al siguiente
+movimiento inmediato".
+
+No tenemos base suficiente para afirmar que el movimiento deba producirse
+en el mismo turno.
+
+Además, Guardia abierta ya constituye una acción ofensiva, por lo que
+una ventana limitada al mismo turno podría hacer imposible aprovechar
+el efecto dependiendo de la economía de acciones.
+
+Usa como PROPUESTA DE DISEÑO:
+
+El efecto afecta únicamente al siguiente movimiento ofensivo válido de
+Nozomu contra el objetivo afectado.
+
+Se consume cuando se realiza dicha comparativa, independientemente de
+si el ataque conecta.
+
+Si Nozomu deja pasar su siguiente oportunidad legal de actuar sin atacar
+al objetivo, el efecto desaparece.
+
+Esto NO debe presentarse como interpretación oficial de Desproteger.
+Es una condición propuesta de la técnica y queda pendiente de aceptación
+por Staff.
+
+\==================================================
+VALORES PROVISIONALES
+=====================
+
+GENIN
+
+Coste:
+35 Chakra
+
+Potencia:
+40 PV
+
+Alcance:
+Contacto físico mediante la katana.
+
+Efecto candidato:
+-5 Evasión exclusivamente frente al siguiente movimiento ofensivo válido
+de Nozomu.
+
+Condición:
+El ataque debe conectar físicamente y alcanzar al menos el 50 % de su
+potencia conforme a las reglas Bukijutsu.
+
+Con potencia nominal 40 y sin modificadores:
+
+umbral = 20 de potencia conectada.
+
+No aplicar el efecto:
+
+- por mera lectura del rival;
+- por rozar o chocar armas;
+- si el daño/potencia efectiva no satisface el umbral correspondiente;
+- antes de resolver Guardia abierta.
+
+\==================================================
+RESTRICCIONES
+=============
+
+El efecto:
+
+- no acumula;
+- no se renueva mientras continúe activo;
+- no beneficia a aliados;
+- no concede ataque adicional;
+- no altera iniciativa u orden de acciones;
+- no garantiza que el siguiente ataque impacte;
+- no impide respuestas defensivas;
+- no modifica otras estadísticas;
+- no puede aprovecharse para encadenar Guardia abierta consigo misma.
+
+Si cualquier punto anterior entra en conflicto con una regla oficial,
+indícalo.
+
+\==================================================
+ESCALADO CANDIDATO
+==================
+
+Mantén la misma identidad y el mismo -5 EVA:
+
+GENIN
+35 Chakra
+40 potencia
+-5 EVA
+
+CHUNIN
+50 Chakra
+70 potencia
+-5 EVA
+
+JOUNIN
+75 Chakra
+115 potencia
+-5 EVA
+
+Los valores conservan una renuncia de 20 potencia respecto al baseline
+de cada rango.
+
+Esto es una hipótesis de balance, NO una fórmula normativa.
+
+No añadas nuevos efectos al subir de rango.
+
+\==================================================
+TAREA
+=====
+
+Redacta ahora una FICHA TÉCNICA COMPLETA de Guardia abierta para revisión.
+
+Debe incluir:
+
+NOMBRE
+RAMA
+RANGO
+REQUISITO
+SELLOS
+COSTE
+DAÑO/POTENCIA
+ALCANCE
+EFECTO
+CONDICIÓN DE ACTIVACIÓN
+DURACIÓN
+LIMITACIONES
+CONTRAJUEGO
+ESCALADO CHUNIN
+ESCALADO JOUNIN
+JUSTIFICACIÓN DE BALANCE
+PUNTOS QUE STAFF DEBE VALIDAR
+ESTADO
+
+ESTADO:
+
+BORRADOR — PENDIENTE DE APROBACIÓN
+
+No actualices NOZOMU\_STATE.md.
+No diseñes todavía Técnica Única 2.

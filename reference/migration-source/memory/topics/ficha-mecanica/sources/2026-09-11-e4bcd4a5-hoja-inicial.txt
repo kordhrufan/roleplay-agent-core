@@ -1,0 +1,485 @@
+# NOZOMU YAMAMOTO — CURRENT MECHANICAL STATE
+
+Last updated: Initial Genin / Level 1 state
+
+This document is the current mechanical source of truth for Nozomu.
+Do not infer equipment, techniques, bonuses or progression not explicitly
+registered here.
+
+---
+
+## 1. IDENTITY
+
+Name: Nozomu Yamamoto
+Village: Kirigakure
+Rank: Genin
+Level: 1
+Clan: None
+System: Sacrifice
+Sacrifice discipline: Bukijutsu
+
+Combat archetype:
+Evasive duelist
+
+Future intended mastery:
+Armas de Filo
+
+Primary weapon:
+Katana
+
+---
+
+## 2. ATTRIBUTE POINTS
+
+Total PA: 280
+Spent PA: 280
+Remaining PA: 0
+
+| Attribute | Base |
+|---|---:|
+| Control | 20 |
+| Intelligence | 20 |
+| Domain | 20 |
+| Speed | 50 |
+| Aptitude | 50 |
+| Strength | 20 |
+| Resistance | 50 |
+| Evasion | 50 |
+
+---
+
+## 3. SACRIFICE BONUS
+
+Bukijutsu Sacrifice grants:
+
++10 permanent Aptitude.
+
+Base Aptitude:
+50
+
+Effective Aptitude when the Sacrifice bonus applies:
+60
+
+IMPORTANT:
+Do not write 60 as invested PA.
+Only 50 PA were invested into Aptitude.
+
+Do not use the +10 Sacrifice bonus when calculating Chakra unless an
+official rule explicitly confirms that non-PA bonuses affect derived
+resource calculations.
+
+Current Chakra is therefore calculated using base PA only.
+
+---
+
+## 4. DERIVED VALUES
+
+HP calculation:
+
+Resistance:
+50 × 3 = 150
+
+Strength:
+20 × 2 = 40
+
+Evasion:
+50 × 1 = 50
+
+TOTAL HP:
+240
+
+
+Chakra calculation:
+
+Control:
+20 × 3 = 60
+
+Domain:
+20 × 2.5 = 50
+
+Intelligence:
+20 × 2.5 = 50
+
+Speed:
+50 × 1.5 = 75
+
+Base Aptitude:
+50 × 1.5 = 75
+
+TOTAL CHAKRA:
+310
+
+---
+
+## 5. PHYSICAL CAPABILITIES
+
+Movement speed:
+50 / 10 = 5 m/s
+
+Vertical jump:
+2 m
+
+Horizontal jump:
+4 m
+
+Carrying capacity:
+40 kg
+
+Conventional throwing distance:
+10 m
+
+Maximum throwing distance for throwing weapons:
+(0.5 × Strength) + 10
+= 20 m
+
+---
+
+## 6. CURRENT INVENTORY
+
+### Weapons
+
+Katana ×1
+
+Properties:
+
+- Blade weapon.
+- Length: 1 metre.
+- Two-handed weapon.
+- Simple thrust damage: Aptitude + 20.
+- Simple cutting damage: (Aptitude × 0.8) + 18.
+
+Using effective Aptitude 60 when applicable:
+
+Thrust:
+80 damage.
+
+Cut:
+66 damage.
+
+### Other equipment
+
+None confirmed.
+
+Nozomu currently DOES NOT possess:
+
+- kunai;
+- shuriken;
+- Fuuma Shuriken;
+- metallic wire;
+- explosive tags;
+- smoke bombs;
+- flash bombs;
+- makibishi;
+- standard kunai pouch;
+- standard utensil pouch.
+
+Never generate or use these unless this document is updated after
+an official acquisition.
+
+---
+
+## 7. STUDENT TECHNIQUES
+
+All Student-rank Ninjutsu techniques are free.
+
+Staff has confirmed that Sacrifice characters still retain these basic
+Student techniques and they do not consume the three Genin technique
+choices.
+
+Known:
+
+### Transformation
+
+Cost:
+10 Chakra.
+
+Visual transformation only.
+
+Does not copy:
+
+- abilities;
+- physical attributes;
+- psychological attributes;
+- knowledge;
+- voice;
+- chakra colour.
+
+Ends voluntarily or after receiving more than 10 damage.
+
+
+### Illusory Clones
+
+Cost:
+5 Chakra per clone.
+
+Maximum:
+5 clones.
+
+Maximum distance:
+15 m.
+
+They:
+
+- are not physical;
+- make no sound;
+- cast no shadow;
+- disappear after one turn or when crossed by an object.
+
+
+### Substitution / Kawarimi
+
+Cost:
+20 Chakra.
+
+Must be prepared one turn beforehand.
+
+Replacement object:
+maximum 15 m away.
+
+Cannot appear:
+
+- within 5 m of opponent;
+- behind opponent.
+
+If Nozomu immediately performs an offensive technique afterward,
+the opponent gains +10 Evasion against that action.
+
+Maximum:
+2 uses per combat.
+
+Cooldown:
+3 turns.
+
+
+### Genjutsu Release / Kai
+
+Cost:
+20 Chakra.
+
+One seal.
+
+Use according to the official Intelligence vs Domain Genjutsu rules.
+
+
+### Vertical Surface Movement
+
+Cost:
+0.
+
+No seals.
+
+Allows normal physical movement across vertical surfaces while Chakra
+is not blocked.
+
+
+### Liquid Surface Movement
+
+Cost:
+0.
+
+No seals.
+
+Allows normal physical movement across liquid surfaces while Chakra
+is not blocked.
+
+---
+
+## 8. SELECTED GENIN BUKIJUTSU
+
+Nozomu has three Genin technique selections.
+
+### Selection 1 — Wire-guided projectile manipulation
+
+Branch:
+Bukijutsu / Throwing Weapons.
+
+Cost:
+20 Chakra per object.
+
+Seals:
+None.
+
+Function:
+Metallic wire can alter the trajectory of throwing weapons by up to
+1 metre.
+
+Current status:
+KNOWN / NOT CURRENTLY USABLE.
+
+Reason:
+Nozomu owns neither metallic wire nor throwing weapons.
+
+
+### Selection 2 — Explosive tag wire attack
+
+Branch:
+Bukijutsu.
+
+Cost:
+35 Chakra.
+
+Damage:
+60.
+
+Seals:
+One.
+
+Function:
+Explosive tags are attached to chakra-infused metallic wire and
+propelled along it before detonating.
+
+Current status:
+KNOWN / NOT CURRENTLY USABLE.
+
+Reason:
+Nozomu owns neither metallic wire nor explosive tags.
+
+
+### Selection 3 — Kirigakure Fuuma Shuriken technique
+
+Branch:
+Bukijutsu / Throwing Weapons.
+
+Village:
+Kirigakure.
+
+Cost:
+35 Chakra.
+
+Seals:
+One.
+
+Requirement:
+Fuuma Shuriken.
+
+Effect:
++20 damage to the base weapon damage.
+
+The combined weapon + technique damage can participate fully in
+technique clashes.
+
+Current status:
+KNOWN / NOT CURRENTLY USABLE.
+
+Reason:
+Nozomu does not own a Fuuma Shuriken.
+
+---
+
+## 9. UNIQUE TECHNIQUES
+
+Nozomu is clanless.
+
+He therefore has access to the clanless Genin unique-technique system.
+
+Current status:
+
+Unique Technique 1:
+PENDING DESIGN.
+
+Requirement:
+Must be the foundation of his personal fighting style and scale up to
+Jounin rank.
+
+Unique Technique 2:
+PENDING DESIGN.
+
+Requirement:
+Must be a Genin-rank technique conceptually related to Unique
+Technique 1.
+
+The Combat & Build Agent is responsible for assisting with their design
+and validation.
+
+Do not treat either technique as learned until Staff approval is
+confirmed and this document is updated.
+
+---
+
+## 10. CURRENT COMBAT STYLE
+
+Nozomu is an evasive sword duelist.
+
+Primary priorities:
+
+1. Survive.
+2. Read the opponent.
+3. Maintain favourable distance.
+4. Avoid unnecessary frontal exchanges.
+5. Use Evasion and Speed to create openings.
+6. Attack using Aptitude.
+7. Prefer precision over brute force.
+8. Preserve Chakra when a simple armed action is sufficient.
+9. Do not rely on Strength.
+10. Do not invent equipment or abilities to solve bad situations.
+
+Nozomu currently lacks dedicated Katana Bukijutsu techniques.
+
+Until his unique techniques are approved, his Katana attacks are
+primarily simple weapon attacks under the weapon rules.
+
+---
+
+## 11. IMPORTANT RULE DISTINCTION
+
+KNOWN != CURRENTLY USABLE
+
+A technique may be learned but unusable because:
+
+- required equipment is missing;
+- Chakra is insufficient;
+- distance is invalid;
+- preparation was not performed;
+- cooldown prevents use;
+- another mechanical prerequisite is absent.
+
+Always verify usability before recommending an action.
+
+---
+
+## 12. PENDING PROGRESSION
+
+Future intended direction:
+
+Sacrifice
+→ Bukijutsu
+→ evasive duelist
+→ Armas de Filo mastery
+
+Do not assume the mastery is currently active.
+
+Do not grant its bonuses or techniques before Nozomu meets the
+requirements and officially acquires it.
+
+---
+
+## 13. PENDING ITEMS
+
+Still to be added later:
+
+- IDs of Student techniques;
+- IDs of selected Genin techniques;
+- two clanless unique techniques;
+- future purchases;
+- technique approvals;
+- PH / PP / Ryo progression;
+- future skill-tree choices;
+- future mastery;
+- custom weapons;
+- combat history.
+
+---
+
+## 14. HARD RULE
+
+When documentation and this state file disagree, stop.
+
+Return:
+
+REQUIRES RULE REVIEW
+
+When official rules are ambiguous, return:
+
+REQUIRES STAFF CONFIRMATION
+
+Do not choose the interpretation most beneficial to Nozomu.

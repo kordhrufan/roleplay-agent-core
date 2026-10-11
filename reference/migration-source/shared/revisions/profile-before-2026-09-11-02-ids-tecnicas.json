@@ -1,0 +1,176 @@
+{
+  "schema_version": 2,
+  "status": "CONFIRMADO_USUARIO",
+  "status_scope": "Ficha actual declarada por el usuario; no acredita verificacion independiente del staff ni recursos restantes en una escena.",
+  "source": "memory/topics/ficha-mecanica/sources/2026-09-11-e4bcd4a5-hoja-inicial.txt",
+  "source_path_base": "workspace_root",
+  "source_event_id": "ficha-mecanica-e4bcd4a5-4090-4e78-b775-0a331763c8de",
+  "previous_revision": "shared/revisions/profile-before-2026-09-11-e4bcd4a5.json",
+  "imported_on": "2026-09-11",
+  "source_state": "Initial Genin / Level 1 state",
+  "rule_validation": {
+    "arithmetic": "VERIFICADA",
+    "local_rule_comparison": "PARCIAL_SIN_CONTRADICCION_DEMOSTRADA",
+    "forum_currentness": "NO_VERIFICADA",
+    "technique_details": "APORTADOS_USUARIO_SIN_TEXTOS_ORIGINALES_INDEPENDIENTES"
+  },
+  "name": "Nozomu Yamamoto",
+  "rank": "Genin",
+  "level": 1,
+  "village": "Kirigakure",
+  "clan": null,
+  "clan_status": "SIN_CLAN",
+  "system": "S. Sacrificio",
+  "discipline": "Bukijutsu",
+  "style": "Duelista evasivo",
+  "planned_mastery": "Armas de Filo",
+  "acquired_mastery": null,
+  "attribute_points": { "total": 280, "spent": 280, "remaining": 0 },
+  "invested_attributes": {
+    "control": 20,
+    "inteligencia": 20,
+    "dominio": 20,
+    "velocidad": 50,
+    "aptitud": 50,
+    "fuerza": 20,
+    "resistencia": 50,
+    "evasion": 50
+  },
+  "documented_aptitude_bonus": 10,
+  "effective_aptitude_when_bonus_applies": 60,
+  "documented_derived": {
+    "pv": 240,
+    "chakra": 310,
+    "scope": "Valores calculados de ficha, no reservas restantes por tema.",
+    "pv_formula": "resistencia * 3 + fuerza * 2 + evasion",
+    "chakra_formula": "control * 3 + dominio * 2.5 + inteligencia * 2.5 + velocidad * 1.5 + aptitud_invertida * 1.5",
+    "chakra_bonus_policy": "Usar PA base sin el +10 de Sacrificio; pendiente regla oficial si se plantea incluir bonos no invertidos."
+  },
+  "physical_capabilities": {
+    "movement_m_per_second": 5,
+    "vertical_jump_m": 2,
+    "horizontal_jump_m": 4,
+    "carrying_capacity_kg": 40,
+    "conventional_throw_m": 10,
+    "throwing_weapon_max_m": 20
+  },
+  "documented_inventory": [
+    {
+      "item": "Katana",
+      "quantity": 1,
+      "type": "Arma de filo",
+      "length_m": 1,
+      "hands": 2,
+      "simple_thrust_formula": "aptitud + 20",
+      "simple_cut_formula": "aptitud * 0.8 + 18",
+      "damage_when_effective_aptitude_is_60": { "thrust": 80, "cut": 66 },
+      "damage_scope": "Valores base de ataque, no dano infligido confirmado; aplicar reglas generales de armas y condiciones de la accion."
+    }
+  ],
+  "other_equipment_status": "NINGUNO_CONFIRMADO",
+  "explicitly_not_owned": [
+    "Kunai", "Shuriken", "Fuuma Shuriken", "Hilo metalico", "Sellos explosivos",
+    "Bombas de humo", "Bombas de luz", "Makibishi", "Bolsa de kunais estandar", "Bolsa de utensilios estandar"
+  ],
+  "student_exception": {
+    "status": "CONFIRMACION_STAFF_COMUNICADA_POR_USUARIO",
+    "source_section": "7. STUDENT TECHNIQUES",
+    "scope": "Conserva las tecnicas basicas Estudiante con Sacrificio; no consumen las tres elecciones Genin.",
+    "free_scope": "Adquisicion gratuita; siguen aplicandose los costes de chakra indicados.",
+    "original_staff_message": null
+  },
+  "learned_techniques_provenance": "Declaradas conocidas en la hoja actual aportada por el usuario.",
+  "technique_lookup_policy": "Los nombres siguientes son los descriptivos de la hoja, no IDs oficiales. Consultar siempre el apartado completo de la fuente y las reglas aplicables antes de una accion; aprendido no garantiza utilizable.",
+  "confirmed_learned_techniques": [
+    {
+      "name": "Transformation", "rank": "Estudiante", "official_id": null,
+      "source_section": "7. STUDENT TECHNIQUES / Transformation",
+      "chakra_cost": 10, "seals": null, "learned": true,
+      "effect": "Transformacion visual; no copia capacidades, atributos fisicos o psicologicos, conocimiento, voz ni color de chakra.",
+      "end_conditions": "Voluntariamente o al recibir mas de 10 de dano."
+    },
+    {
+      "name": "Illusory Clones", "rank": "Estudiante", "official_id": null,
+      "source_section": "7. STUDENT TECHNIQUES / Illusory Clones",
+      "chakra_cost_per_clone": 5, "max_clones": 5, "max_distance_m": 15,
+      "seals": null, "learned": true,
+      "effect": "No fisicos, sin sonido ni sombra; desaparecen tras un turno o al atravesarlos un objeto."
+    },
+    {
+      "name": "Substitution / Kawarimi", "rank": "Estudiante", "official_id": null,
+      "source_section": "7. STUDENT TECHNIQUES / Substitution / Kawarimi",
+      "chakra_cost": 20, "seals": null, "learned": true,
+      "preparation_turns_before": 1, "replacement_object_max_distance_m": 15,
+      "appearance_restrictions": "No aparecer a menos de 5 m del rival ni detras de el.",
+      "immediate_offensive_technique_opponent_evasion_bonus": 10,
+      "max_uses_per_combat": 2, "cooldown_turns": 3
+    },
+    {
+      "name": "Genjutsu Release / Kai", "rank": "Estudiante", "official_id": null,
+      "source_section": "7. STUDENT TECHNIQUES / Genjutsu Release / Kai",
+      "chakra_cost": 20, "seals": 1, "learned": true,
+      "rule_dependency": "Aplicar reglas oficiales de Genjutsu sobre Inteligencia frente a Dominio; no asumir liberacion automatica."
+    },
+    {
+      "name": "Vertical Surface Movement", "rank": "Estudiante", "official_id": null,
+      "source_section": "7. STUDENT TECHNIQUES / Vertical Surface Movement",
+      "chakra_cost": 0, "seals": 0, "learned": true,
+      "effect": "Movimiento fisico normal por superficies verticales mientras el chakra no este bloqueado."
+    },
+    {
+      "name": "Liquid Surface Movement", "rank": "Estudiante", "official_id": null,
+      "source_section": "7. STUDENT TECHNIQUES / Liquid Surface Movement",
+      "chakra_cost": 0, "seals": 0, "learned": true,
+      "effect": "Movimiento fisico normal por superficies liquidas mientras el chakra no este bloqueado."
+    },
+    {
+      "name": "Wire-guided projectile manipulation", "rank": "Genin", "official_id": null,
+      "source_section": "8. SELECTED GENIN BUKIJUTSU / Selection 1",
+      "branch": "Bukijutsu / Armas arrojadizas", "chakra_cost_per_object": 20,
+      "seals": 0, "learned": true, "max_trajectory_change_m": 1,
+      "total_range_m": null,
+      "required_equipment": ["Hilo metalico", "Armas arrojadizas"],
+      "current_equipment_status": "NO_UTILIZABLE_POR_FALTA_DE_EQUIPO"
+    },
+    {
+      "name": "Explosive tag wire attack", "rank": "Genin", "official_id": null,
+      "source_section": "8. SELECTED GENIN BUKIJUTSU / Selection 2",
+      "branch": "Bukijutsu", "chakra_cost": 35, "damage": 60,
+      "seals": 1, "learned": true, "range_m": null, "area": null,
+      "effect": "Sellos explosivos unidos a hilo metalico imbuido de chakra se impulsan por el antes de detonar.",
+      "required_equipment": ["Hilo metalico", "Sellos explosivos"],
+      "current_equipment_status": "NO_UTILIZABLE_POR_FALTA_DE_EQUIPO"
+    },
+    {
+      "name": "Kirigakure Fuuma Shuriken technique", "rank": "Genin", "official_id": null,
+      "source_section": "8. SELECTED GENIN BUKIJUTSU / Selection 3",
+      "branch": "Bukijutsu / Armas arrojadizas", "village": "Kirigakure",
+      "chakra_cost": 35, "seals": 1, "learned": true,
+      "weapon_base_damage_bonus": 20,
+      "clash_effect": "El dano combinado de arma y tecnica participa integramente en choques de tecnicas.",
+      "required_equipment": ["Fuuma Shuriken"],
+      "current_equipment_status": "NO_UTILIZABLE_POR_FALTA_DE_EQUIPO"
+    }
+  ],
+  "unique_techniques": [
+    { "selection": 1, "status": "PENDIENTE_DISENO", "learned": false, "requirement": "Base de su estilo personal, escalable hasta Jounin." },
+    { "selection": 2, "status": "PENDIENTE_DISENO", "learned": false, "requirement": "Rango Genin y relacion conceptual con la primera." }
+  ],
+  "dedicated_katana_bukijutsu_techniques": [],
+  "combat_style_source_section": "10. CURRENT COMBAT STYLE",
+  "scene_state": {
+    "topic_id": null, "pv_current": null, "chakra_current": null,
+    "effects": null, "position": null,
+    "note": "Sin escena importada. Crear snapshot por tema cuando haya fuente; no asumir recursos completos."
+  },
+  "progression_resources": { "ph": null, "pp": null, "ryo": null },
+  "pending": [
+    "IDs y textos originales completos de las nueve tecnicas; sellos no especificados de Transformation, Illusory Clones y Kawarimi; alcances/area ausentes cuando sean materiales.",
+    "Dos tecnicas unicas pendientes de diseno y aprobacion; no sumar automaticamente otro derecho por Sacrificio.",
+    "La fuente mantiene technique approvals como pendiente sin especificar alcance; conservarlo sin revocar el repertorio declarado conocido.",
+    "Regla textual original de Sacrificio y dictamen sobre bonos no invertidos si se pretende cambiar el criterio de chakra base.",
+    "Futuras compras, PH/PP/Ryo, arbol de habilidades, maestria y armas personalizadas: no concedidas por la hoja.",
+    "Historial y estado de cada combate: recursos restantes, preparaciones, usos, enfriamientos, posiciones y efectos."
+  ],
+  "history_imported": false
+}

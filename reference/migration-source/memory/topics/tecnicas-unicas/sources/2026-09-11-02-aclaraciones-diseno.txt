@@ -1,0 +1,171 @@
+Continúa la auditoría teniendo en cuenta estas aclaraciones.
+
+1. NO DETENGAS el diseño por la interacción Sacrificio / Sin Clan.
+
+Está confirmado que Nozomu, por ser Sin Clan, dispone de:
+
+- Creación gratuita Genin nº1:
+  fundamento del estilo, escalable hasta Jounin.
+
+- Creación gratuita Genin nº2:
+  técnica Genin relacionada con la primera.
+
+Lo que sigue pendiente de confirmación es únicamente si estas dos
+creaciones se acumulan además con cualquier creación gratuita otorgada
+por S. Sacrificio.
+
+Esa duda NO afecta a la legalidad de las dos creaciones Sin Clan.
+
+Registra:
+
+SIN CLAN CREATION 1 = CONFIRMED
+SIN CLAN CREATION 2 = CONFIRMED
+ADDITIONAL SACRIFICE CREATION = PENDING STAFF CONFIRMATION
+
+No diseñes ni concedas esa hipotética tercera técnica.
+
+2. SOBRE LA EFICIENCIA
+
+La documentación contiene:
+
+Genin:
+35 chakra / 60 daño / 10 m
+
+Chunin:
+50 chakra / 90 daño / 15 m
+
+Jounin:
+75 chakra / 135 daño / 20 m
+
+También contiene una referencia textual a:
+
+"gasto/potencia ≈ 1,8"
+
+La expresión matemática es inconsistente con los valores.
+
+NO corrijas la normativa.
+NO uses el cociente ambiguo como fórmula.
+
+Para este trabajo, utiliza los valores explícitos de coste, daño y
+alcance como baseline de balance.
+
+Marca la inconsistencia como DOCUMENTATION ISSUE, pero no como blocker.
+
+3. CATÁLOGO ARMAS DE FILO
+
+Usa el siguiente catálogo para comprobar solapamientos:
+
+CHUNIN
+
+Iaido
+50 chakra
+90 PV
++10 Aptitud
+desenvainar/cortar/envainar
+
+Suiryoku
+50 chakra
+100 PV
+hemorragia 10 × 3
+
+Zan-Gatana
+50 chakra
+80 PV
+si es bloqueada a ≤2 m: +40 daño residual
+
+JOUNIN
+
+Iaido
+75 chakra
+135 PV
+filo/corte de chakra de 2 m
+alcance 30 m
+
+Suiryoku
+75 chakra
+135 PV
+extensión del arma hasta 10 m
++10 Aptitud
+hemorragia 10 × 3
+
+Zan-Gatana
+75 chakra
+125 PV
+alcance 20 m
+bloqueada a ≤4 m: +60 residual
+
+JOUNIN ELITE
+
+Iaido
+100 chakra
+180 PV
++10 Aptitud
+efecto Muerte
+
+Suiryoku
+100 chakra
+160 PV
+extensión 15 m
++20 Aptitud
+hemorragia 20 × 3
+
+Zan-Gatana
+100 chakra
+170 PV
+alcance 30 m
+bloqueada a ≤6 m: +85 residual
+
+4. IDENTIDAD RESERVADA A ARMAS DE FILO
+
+Evita que las técnicas únicas iniciales de Nozomu tengan como identidad
+central:
+
+- Iaido;
+- desenvainado ultrarrápido con bono de Aptitud;
+- extensión sobrenatural de la hoja;
+- ondas o filos de chakra a distancia;
+- hemorragia como mecánica principal;
+- daño residual automático por bloquear;
+- ejecución/muerte mediante corte.
+
+Pueden coexistir narrativamente con espada y precisión, pero no deben
+recrear las mecánicas distintivas de esa maestría.
+
+5. ESTADO DE LA AUDITORÍA
+
+Los siguientes puntos dejan de ser blockers:
+
+- existencia de las dos técnicas Sin Clan;
+- catálogo de Armas de Filo;
+- inconsistencia del ratio de eficiencia.
+
+Sigue marcado como pendiente:
+
+ADDITIONAL SACRIFICE CREATION:
+REQUIERE CONFIRMACIÓN DE STAFF
+
+Pero NO detiene el diseño actual.
+
+6. CONTINÚA AHORA CON:
+
+FASE B — IDENTIDAD MECÁNICA
+
+y después:
+
+FASE C — TRES PROPUESTAS PARA TÉCNICA ÚNICA 1
+
+No redactes todavía una técnica definitiva.
+No diseñes Técnica Única 2 todavía.
+No actualices NOZOMU\_STATE.md como técnica aprendida.
+
+Devuelve:
+
+IDENTIDAD MECÁNICA
+
+PROPOSAL A
+PROPOSAL B
+PROPOSAL C
+
+RECOMMENDED CONCEPT
+
+RULE RISKS

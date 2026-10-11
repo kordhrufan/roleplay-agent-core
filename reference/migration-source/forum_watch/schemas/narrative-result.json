@@ -1,0 +1,153 @@
+{
+  "type": "object",
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": [
+        "DRAFT_READY",
+        "WAIT_FOR_TURN",
+        "NEEDS_HUMAN_REVIEW",
+        "COMBAT_REVIEW_REQUIRED",
+        "NO_RESPONSE_NEEDED"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "important_decisions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "maxItems": 20
+    },
+    "ic_facts_used": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "maxItems": 100
+    },
+    "uncertainties": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "maxItems": 30
+    },
+    "scene_assessment": {
+      "type": "array",
+      "maxItems": 150,
+      "items": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "source_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "OBSERVABLE_IC",
+              "OOC",
+              "PRIVATE_THOUGHT",
+              "PENDING_PROPOSAL",
+              "UNCONFIRMED_OUTCOME",
+              "COMBAT",
+              "UNCERTAIN"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "ref",
+          "source_ref",
+          "kind",
+          "summary"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "draft": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 20000
+    },
+    "memory_candidates": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "FACT",
+              "NOZOMU_IMPRESSION",
+              "PENDING_INTENTION",
+              "UNCONFIRMED_OUTCOME"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "maxItems": 100
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_HUMAN_REVIEW"
+            ]
+          }
+        },
+        "required": [
+          "category",
+          "text",
+          "source_refs",
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "decision",
+    "reason",
+    "important_decisions",
+    "ic_facts_used",
+    "uncertainties",
+    "scene_assessment",
+    "draft",
+    "memory_candidates"
+  ],
+  "additionalProperties": false
+}

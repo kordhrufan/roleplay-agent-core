@@ -1,0 +1,6 @@
+A unique technique is never part of Nozomu's canonical state merely
+because it exists as a draft in the repository.
+
+DRAFT != APPROVED
+APPROVED != LEARNED
+LEARNED != CURRENTLY USABLE

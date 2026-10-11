@@ -1,0 +1,294 @@
+Armas y Utensilios Ninja
+Información
+
+La distancia máxima, en metros, a la que pueden lanzarse las armas arrojadizas se rige por la siguiente fórmula: (0.5 x Fuerza) + 10.
+
+El daño, por su parte, varía según el arma en cuestión y del atributo de aptitud del usuario. También tiene que ver la cuestión narrativa, si el arma se clavó en el cuerpo del adversario o si realizó un corte en este.
+
+El daño de estas es acumulativo, por lo que sí importa el número que impacten.
+
+Es una cuchilla metálica de forma triangular de 25 centímetros de largo. Cuenta con un mango apenas lo suficientemente amplio que facilita su agarre y lo hace más sencillo de arrojar.
+
+Clavar: (Aptitud*0.3) + 15.
+
+Cortar: (Aptitud*0.2) + 12.
+
+Es una estrella metálica de 4 picos y de 10 centímetros de largo a largo.
+
+Clavar: (Aptitud*0.2) + 12.
+
+Cortar: (Aptitud*0.1) + 11.
+
+Es una versión más grande de la shuriken convencional, mide 50 centímetros de pico a pico.
+
+Clavar: (Aptitud*0.4) + 15.
+
+Cortar: (Aptitud*0.3) + 10.
+
+Se compone de cuatro cuchillas retráctiles de gran filo. Ya armada alcanza los 75 centímetros de pico a pico.
+
+Clavar: (Aptitud*0.8) + 15.
+
+Cortar: (Aptitud*0.4) + 15.
+
+Son agujas metálicas muy finas y resistentes. Miden 15 centímetros de largo.
+
+Daño: Cada unidad hace 5 puntos de daño fijo.
+
+Es un papel rectangular que cuenta con un grabado especial que lo hace explotar. Hay tres maneras de detonar un sello, y el usuario ha de especificar al momento de su preparación qué metodología seguirá.
+
+Tras hacer contacto con algo.
+
+Transcurrido determinado tiempo; puede ser, por ejemplo: al inicio del siguiente turno.
+
+Mediante la realización de un sello manual por parte del usuario; este es a una mano y no demanda gasto de chakra.
+
+El daño que ocasionen varía de la distancia de la víctima con la detonación. No puede acumularse los efectos de más de 2 sellos explosivos a la vez, a menos que alguna técnica esté de por medio y lo especifique en su descripción. No pueden colocarse sellos explosivos en objetos de cambio para el Kawarimi.
+
+Si explota a una distancia de 2 metros o menor, causa 50 puntos de daño fijos.
+
+Si explota a una distancia de 2 a 4 metros, causa 25 puntos de daño fijos.
+
+Información
+
+El alcance de estas está determinado por el mismo largo del arma.
+
+Algunas requerirán de 1 mano para ser manejadas mientras que otras requerirán de las dos.
+
+Si un arma de dos manos se maneja con una mano, solo hará 2/3 de su potencia final.
+
+Cada arma individual solo puede efectuar un daño por turno, a menos que se realicen con alguna técnica Bukijutsu.
+
+El daño que ocasionan está en función del atributo de Aptitud.
+
+Es un bastón de 1.80 metros de largo, mientras que su diámetro es apenas lo suficientemente grande como para ser sujetado cómodamente con las manos. Es un arma a dos manos.
+
+Impacto: (Aptitud*0.6) + 16.
+
+Es un báculo de hierro con la cabeza recubierta de picos aplanados. Su largo es de 1.20 metros y tiene un peso considerable. Es un arma a dos manos.
+
+Impacto: (Aptitud*0.8) + 16.
+
+Es un pequeño bastón de madera que consta de un agarre perpendicular al largo del arma, de modo que puede sujetarse con la mano y la parte larga del bastón cubre el antebrazo, actuando como medio de defensa y de ataque. Suele ir una en cada mano.
+
+Impacto: (Aptitud*0.5) + 10.
+
+Información
+
+El alcance de estas está determinado por el mismo largo del arma.
+
+Algunas requerirán de 1 mano para ser manejadas mientras que otras requerirán de las dos.
+
+Si un arma de dos manos se maneja con una mano, solo hará 2/3 de su potencia final.
+
+Cada arma individual solo puede efectuar un daño por turno, a menos que se realicen con alguna técnica Bukijutsu.
+
+El daño que ocasionan está en función del atributo de Aptitud.
+
+Son unas manoplas que cuentan con picos afilados y una cuchilla de 15 centímetros en el borde exterior. Actúan como par, de modo que solo se contabilizará el daño de una de ellas, aunque se ataque con ambas.
+
+Clavar: (Aptitud*0.7) + 17.
+
+Cortar: (Aptitud*0.4) + 14.
+
+Se trata de una espada corta; su hoja, de un solo filo, mide 45 centímetros y se usa con una sola mano.
+
+Clavar: (Aptitud*0.5) + 12.
+
+Cortar: (Aptitud*0.4) + 10.
+
+Es una espada delgada de hoja ligeramente curva y de un solo filo. Mide 1 metro de largo. Es un arma a 2 manos.
+
+Clavar: Aptitud + 20.
+
+Cortar: (Aptitud*0.8) + 18.
+
+Es una espada larga de hoja ligeramente curva y de un solo filo. Mide 1.2 metros de largo. Es un arma a 2 manos.
+
+Clavar: (Aptitud*1.2) + 27.
+
+Cortar: Aptitud + 10.
+
+Información
+
+Son instrumentos o artefactos de uso suplementario.
+
+Cada compra realizada es de manera unitaria.
+
+El número de compras unitarias variará dependiendo del utensilio.
+
+Es una pequeña esfera que, tras hacer contacto con la superficie, libera una cortina de humo oscuro que rápidamente se propaga para abarcar una zona de 5 metros de diámetro. Impide la visión en ambos sentidos. El efecto perdura 1 turno completo.
+
+Máximo de compras unitarias: 3.
+
+Es una pequeña esfera que, tras hacer contacto violento contra algo, libera un destello luminoso que causa ceguera fugaz en todos aquellos que estén de frente en un radio de 2 metros, aun cuando estos cerrasen los ojos. Para fines prácticos, los afectados verán disminuida su evasión 25 puntos de cara a una posible acción inmediata del contrincante.
+
+Máximo de compras unitarias: 3.
+
+Consiste en un rollo de 25 metros de un fino hilo metálico de alta resistencia y durabilidad. Se utiliza para diversos fines varios. Puede usarse su largo en su totalidad o cortar algunas secciones según sea el caso.
+
+Máximo de compras unitarias: 3.
+
+Son pequeños objetos metálicos de varias salientes puntiagudas que, al tirarse sobre una superficie, siempre dispondrán de un pico apuntando hacia arriba. Un conjunto de estos puede abarcar una zona de 1 metro cuadrado; si alguien los pisa recibirá 30 puntos de daño y -5 puntos en sus atributos de velocidad y evasión durante 2 turnos.
+
+Máximo de compras unitarias: 2.
+
+Es una medicina a base de hierbas naturales que brinda un aumento inmediato de 40 puntos a las reservas de chakra del usuario. No pueden consumirse más de una por turno y el máximo tolerable en un combate/tema es de tres; de exceder alguna de estas condiciones, el personaje caerá inconsciente en automático.
+
+Máximo de compras unitarias: 3.
+
+Se trata de un rollo de tela de aproximadamente medio metro de altura, que cuenta con un grabado especial en su zona central. Permite al usuario guardar gran cantidad de armas en su interior, para facilitar su transporte. Para liberar una o más armas, el usuario solo tendrá que hacer un sello especial con una sola mano y pensar en los objetos que quiere liberar. El pergamino, para su comodidad, suele ser llevado en la parte de atrás de la cintura, o dentro de las vestimentas.
+
+Máximo de compras unitarias: 1.
+
+Información
+
+Se trata de un conjunto estándar de armas.
+
+Consiste en una especie de bolsillo extra, generalmente sujeto a una de las piernas.
+
+Su uso se limita al rango del personaje.
+
+Aunque poseas varios, solo portarás el de mayor rango.
+
+6 kunais.
+
+12 shurikens.
+
+10 kunais.
+
+20 shurikens.
+
+15 kunais.
+
+25 shurikens.
+
+20 kunais.
+
+30 shurikens.
+
+Información
+
+Se trata de un conjunto estándar de armas.
+
+Consiste en un pequeño bolso, generalmente usado en la parte de atrás de la cintura.
+
+Su uso se limita al rango del personaje.
+
+Aunque poseas varios, solo portarás el de mayor rango.
+
+2 rollos de hilos metálicos.
+
+2 sellos explosivos.
+
+1 bomba de humo.
+
+1 bomba de luz.
+
+3 rollos de hilos metálicos.
+
+4 sellos explosivos.
+
+2 bomba de humo.
+
+2 bomba de luz.
+
+1 juego de makibishis.
+
+4 rollos de hilos metálicos.
+
+5 sellos explosivos.
+
+3 bomba de humo.
+
+3 bomba de luz.
+
+2 juego de makibishis.
+
+5 rollos de hilos metálicos.
+
+6 sellos explosivos.
+
+4 bomba de humo.
+
+4 bomba de luz.
+
+3 juego de makibishis.
+
+Información
+
+Sus beneficios dependen del rango del personaje.
+
+No son acumulables entre sí.
+
+Su uso demanda un turno completo.
+
+Restaura 20 puntos de vida.
+
+Atiende cortes menores.
+
+Restaura 30 puntos de vida.
+
+Atiende cortes de cuidado en áreas no vitales.
+
+Detiene sangrados menores (de 10 o menos PV por turno).
+
+Restaura 40 puntos de vida.
+
+Atiende cortes serios en áreas no vitales.
+
+Detiene sangrados de cuidado (de 15 o menos PV por turno).
+
+Restaura 50 puntos de vida.
+
+Atiende cortes graves.
+
+Detiene sangrados serios (de 20 o menos PV por turno).
+
+Información
+
+Se dividen por colores según sus efectos.
+
+Se clasifican por niveles. 1 corresponde a Genin; 2 a Chunin y así sucesivamente.
+
+Solo los niveles 1 y 2 están disponibles para comprar en tienda al público en general.
+
+Los niveles 3 y 4 son exclusivos para los maestros en veneno.
+
+Solo puedes llevar 1 frasco de cada color a un tema/combate.
+
+Cada frasco puede cubrir hasta 2 armas (4 para los maestros en veneno).
+
+En caso de impactar dos armas a la vez, o mientras los efectos de una aún persisten, no se acumulan.
+
+Debe entrar, vía corte, en el cuerpo del adversario. Una vez dentro, hace efecto de daño inmediato y tiene una duración de tres turnos.
+
+Nivel 1: Causa daño pasivo de 10 de vida por turno.
+
+Nivel 2: Causa daño pasivo de 20 de vida por turno.
+
+Nivel 3: Causa daño pasivo de 30 de vida por turno.
+
+Nivel 4: Causa daño pasivo de 40 de vida por turno.
+
+Debe entrar, vía corte, en el cuerpo del adversario. Una vez dentro, hace efecto debuff de inmediato y tiene una duración de dos turnos completos.
+
+Nivel 1: Disminuye un atributo en -5 puntos.
+
+Nivel 2: Disminuye un atributo en -10 puntos.
+
+Nivel 3: Disminuye un atributo en -15 puntos.
+
+Nivel 4: Disminuye dos atributos en -15 puntos.
+
+El usuario elegirá cuál o cuáles atributos debilitará del rival.
+
+Debe entrar, vía corte, en el cuerpo del adversario. Una vez dentro, hace efecto de estado de inmediato y tiene una duración de un turno completo.
+
+Nivel 1: Causa aturdimiento en el rival e interrumpe sus acciones. Si no está realizando alguna, interrumpe su siguiente acción ofensiva.
+
+Nivel 2: Incapacita la extremidad donde se impactó. Si impacta en el tronco, el usuario decide qué extremidad incapacitar.
+
+Nivel 3: Somete a la víctima a un estado de inmovilización.
+
+Nivel 4: Induce el estado de congelamiento en el afectado

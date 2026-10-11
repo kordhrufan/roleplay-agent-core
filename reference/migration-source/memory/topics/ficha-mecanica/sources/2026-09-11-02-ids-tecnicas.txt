@@ -1,0 +1,84 @@
+Pequeña actualización de las técnicas:&#x20;
+
+## STUDENT TECHNIQUES
+
+All are free and confirmed compatible with Sacrifice.
+
+- [051] Henge no Jutsu
+- [052] Bunshin no Jutsu
+- [053] Kawarimi no Jutsu
+- [054] Kai
+- [055] Kinobori no Waza
+- [056] Suimen Hoko no Gyou
+
+## SELECTED GENIN TECHNIQUES
+
+### [088] Ayatsuito no Jutsu
+
+Branch:
+Bukijutsu / Throwing Weapons
+
+Cost:
+20 Chakra per object
+
+Requirement:
+Throwing weapon + metallic wire
+
+Effect:
+Allows the trajectory of a thrown weapon to be altered by up to 1 metre.
+
+Current usability:
+NO
+
+Reason:
+Nozomu currently owns neither throwing weapons nor metallic wire.
+
+### [089] Hairo no Tsubaki
+
+Branch:
+Bukijutsu
+
+Cost:
+35 Chakra
+
+Damage:
+60 PV
+
+Seals:
+One
+
+Requirements:
+Metallic wire + explosive tags
+
+Current usability:
+NO
+
+Reason:
+Nozomu currently owns neither metallic wire nor explosive tags.
+
+### [426] Fuuma Shuriken: Zoufukuki
+
+Source:
+Kirigakure
+
+Branch:
+Bukijutsu / Throwing Weapons
+
+Cost:
+35 Chakra
+
+Seals:
+One
+
+Requirement:
+Fuuma Shuriken
+
+Effect:
+Adds +20 damage to the base damage of the weapon.
+The resulting combined damage counts at 100% in technique clashes.
+
+Current usability:
+NO
+
+Reason:
+Nozomu currently does not own a Fuuma Shuriken.

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "origin": "SYNTHETIC",
+  "capture_id": "demo-initial",
+  "captured_at": "2026-09-13T08:00:00Z",
+  "complete": true,
+  "topic": {"host": "narutorol.jcink.net", "topic_id": 275},
+  "messages": [
+    {
+      "message_id": "synthetic-001",
+      "author_id": 59,
+      "content": "Texto de prueba inicial. No representa un mensaje real de Nozomu.",
+      "metadata": {"display_name": "Cuenta esperada, muestra sintética", "counter": 1}
+    }
+  ],
+  "metadata": {"notice": "MUESTRA SINTÉTICA: no procede del foro", "page_label": "1"}
+}

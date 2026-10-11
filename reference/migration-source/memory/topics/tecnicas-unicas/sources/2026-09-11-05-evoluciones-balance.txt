@@ -1,0 +1,96 @@
+ACTUALIZACIÓN DE DISEÑO — SISTEMA DE EVOLUCIONES
+
+Se han aportado ejemplos de técnicas aceptadas que muestran el patrón:
+
+GENIN
+Low Back
+35 Chakra / 60 PV
+
+→ CHUNIN
+Low Back/Chest
+50 Chakra / 90 PV
+Descrita expresamente como "Evolución de Low Back".
+
+→ JOUNIN
+Vortex
+75 Chakra / 135 PV
+Descrita expresamente como "Evolución de Low Back/Chest".
+
+Por tanto, cambia la interpretación de "escalable hasta Jounin".
+
+NO redactaremos Guardia abierta como una única técnica que incluya
+estadísticas Genin/Chunin/Jounin.
+
+La estructura será:
+
+TECHNIQUE 1A — GENIN
+Guardia abierta
+
+TECHNIQUE 1B — CHUNIN
+Evolución futura de Guardia abierta
+
+TECHNIQUE 1C — JOUNIN
+Evolución futura de 1B
+
+Actualmente solo se debe diseñar y solicitar aprobación para 1A.
+
+Las evoluciones futuras deben permanecer como CONCEPTO, sin
+estadísticas ni efectos definitivos hasta que Nozomu alcance esos rangos.
+
+\==================================================
+NUEVO EJEMPLO DE BALANCE
+========================
+
+También existe la siguiente técnica aceptada:
+
+Rifle
+Taijutsu · Genin
+Sellos: No
+Coste: 35
+Daño: 50 PV
+Bonificación: +5 velocidad
+Efecto extra: Empuje
+Desplaza al rival hasta 10 metros.
+
+Este ejemplo NO establece equivalencia matemática entre efectos.
+
+NO asumas que:
+-5 EVA = +5 velocidad + Empuje.
+
+Pero demuestra que existe al menos un precedente de técnica Genin
+35 Chakra / 50 PV con efectos adicionales.
+
+Por ello, reabre para Guardia abierta la posibilidad:
+
+35 Chakra
+50 PV
+Desproteger -5 EVA
+
+como candidata principal de balance.
+
+Debe seguir marcada como PROPUESTA y pendiente de Staff.
+
+\==================================================
+NUEVO OBJETIVO
+==============
+
+Reformula exclusivamente la versión GENIN de Guardia abierta.
+
+No incluyas estadísticas Chunin/Jounin en la ficha.
+
+Añade solamente una nota externa:
+
+"Concebida como técnica base de una línea evolutiva hasta Jounin."
+
+Compara ahora específicamente:
+
+A)
+35 Chakra / 40 PV / -5 EVA
+
+B)
+35 Chakra / 50 PV / -5 EVA
+
+usando las técnicas oficiales/aceptadas disponibles como referencias,
+sin convertirlas en una fórmula universal.
+
+Recomienda cuál presentar al Staff y explica por qué.

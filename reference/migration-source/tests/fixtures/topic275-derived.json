@@ -1,0 +1,29 @@
+{
+  "fixture_notice": "Minimal sanitized DOM projection derived from topic 275 on 2026-09-13. Names, IDs, dates and post text substituted. Never authentication evidence.",
+  "session": {
+    "panel_count": 1,
+    "label": "Logged in as:",
+    "profiles": ["index.php?showuser=59"],
+    "logout_count": 1
+  },
+  "topic": {
+    "topic_count": 1,
+    "title": "Tema de prueba sustituido",
+    "nav": [[], []],
+    "open_control_count": 1,
+    "posts": [{
+      "author_count": 1,
+      "container_count": 1,
+      "body_count": 1,
+      "author_url": "index.php?showuser=59",
+      "author_name": "Autor de prueba",
+      "pid": "pid_101",
+      "entries": ["entry101"],
+      "date_count": 1,
+      "date_visible": "\n - Sep 01 2026, 10:00 PM\n",
+      "edit_indicator": null,
+      "body": ["Primer párrafo.", {"tag": "br", "attrs": {}, "children": []}, {"tag": "span", "attrs": {}, "children": ["—Diálogo de prueba."]}],
+      "excluded_siblings_for_test": ["br", "img", {"tag": "div", "class": "signature", "text": "Firma fuera de postcolor; no se captura."}]
+    }]
+  }
+}

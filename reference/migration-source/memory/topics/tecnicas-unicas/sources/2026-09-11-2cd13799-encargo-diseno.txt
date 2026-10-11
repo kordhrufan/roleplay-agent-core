@@ -1,0 +1,416 @@
+TASK: Diseñar las técnicas únicas iniciales de Nozomu Yamamoto conforme a la normativa de Naruto Rol.
+
+IMPORTANTE:
+No implementes ni registres ninguna técnica como aprendida todavía.
+Estamos en fase de DISEÑO.
+Primero debes consultar y validar las reglas existentes en el proyecto.
+
+==================================================
+1. FUENTES DE VERDAD
+==================================================
+
+Antes de diseñar nada, localiza y lee las fuentes del proyecto relativas a:
+
+- creación de técnicas únicas;
+- técnicas de rango Genin;
+- Bukijutsu;
+- Sistema de Sacrificio;
+- personajes Sin Clan;
+- armas y Bukijutsu con katana;
+- combate, Aptitud y Evasión;
+- restricciones sobre efectos especiales;
+- progresión de técnicas entre rangos.
+
+Prioridad de fuentes:
+
+1. Normativa oficial almacenada en el proyecto.
+2. NOZOMU_STATE.md o equivalente para el estado actual.
+3. Documentación específica del Combat & Build Agent.
+4. Notas de diseño del proyecto.
+
+Nunca uses Naruto canon para completar huecos normativos.
+
+Si las fuentes se contradicen:
+STOP
+y devuelve:
+
+REQUIERE REVISIÓN DE REGLAS
+
+Si una mecánica necesaria no está documentada:
+STOP
+y devuelve:
+
+REQUIERE CONFIRMACIÓN DE STAFF
+
+No elijas nunca automáticamente la interpretación más favorable a Nozomu.
+
+==================================================
+2. ESTADO ACTUAL DE NOZOMU
+==================================================
+
+Personaje:
+Nozomu Yamamoto
+
+Rango:
+Genin
+
+Nivel:
+1
+
+Aldea:
+Kirigakure
+
+Clan:
+Sin Clan
+
+Sistema:
+S. Sacrificio
+
+Disciplina:
+Bukijutsu
+
+Arquetipo:
+Duelista evasivo con katana.
+
+PA:
+
+CON 20
+INT 20
+DOM 20
+VEL 50
+APT 50
+FUE 20
+RES 50
+EVA 50
+
+PA gastados:
+280
+
+Bonificación de Sacrificio:
++10 Aptitud permanente cuando corresponda según normativa.
+
+No confundir:
+APT base = 50
+APT efectiva potencial = 60
+
+PV:
+240
+
+Chakra:
+310
+
+Arma actual:
+Katana estándar ×1
+
+Nozomu NO posee actualmente:
+
+- kunai;
+- shuriken;
+- Fuuma Shuriken;
+- hilo metálico;
+- sellos explosivos;
+- bombas;
+- equipamiento adicional.
+
+==================================================
+3. TÉCNICAS YA CONOCIDAS
+==================================================
+
+Estudiante:
+
+[051] Henge no Jutsu
+[052] Bunshin no Jutsu
+[053] Kawarimi no Jutsu
+[054] Kai
+[055] Kinobori no Waza
+[056] Suimen Hoko no Gyou
+
+Genin seleccionadas:
+
+[088] Ayatsuito no Jutsu
+[089] Hairo no Tsubaki
+[426] Fuuma Shuriken: Zoufukuki
+
+IMPORTANTE:
+
+088, 089 y 426 están aprendidas pero actualmente bloqueadas por equipamiento.
+
+No diseñes las técnicas únicas suponiendo que Nozomu posee esos objetos.
+
+==================================================
+4. DERECHO A TÉCNICAS ÚNICAS
+==================================================
+
+Nozomu es Sin Clan.
+
+Debes verificar en la normativa exacta el sistema de creaciones gratuitas para personajes Sin Clan.
+
+Según el estado actual del proyecto, esperamos encontrar una estructura equivalente a:
+
+- Técnica Única 1:
+  técnica fundamental del estilo personal de Nozomu;
+  debe poder progresar/escalar hasta Jounin.
+
+- Técnica Única 2:
+  técnica de rango Genin;
+  debe estar relacionada conceptual o mecánicamente con la Técnica 1.
+
+NO asumas que esta interpretación es correcta:
+confírmala contra la normativa antes de diseñar.
+
+También comprueba si existe cualquier interacción adicional con
+S. Sacrificio y técnicas únicas.
+
+Si no está explícitamente resuelta, márcala como:
+
+REQUIERE CONFIRMACIÓN DE STAFF
+
+==================================================
+5. IDENTIDAD DEL ESTILO
+==================================================
+
+Las técnicas deben construir un estilo reconocible para Nozomu.
+
+Concepto:
+
+Duelista de katana orientado a:
+
+- precisión;
+- lectura del rival;
+- movimiento;
+- evasión;
+- creación y explotación de aperturas;
+- ataques breves y deliberados;
+- eficiencia sobre fuerza bruta.
+
+Nozomu NO debe sentirse como:
+
+- tanque;
+- berserker;
+- usuario de fuerza bruta;
+- lanzador de proyectiles como estilo principal;
+- pseudo-ninjutsu elemental;
+- personaje que gana por efectos automáticos.
+
+La katana es su herramienta principal.
+
+Su lateralidad zurda puede utilizarse como FLAVOR narrativo,
+pero no debe conceder una ventaja mecánica gratuita.
+
+==================================================
+6. FUTURO DEL PERSONAJE
+==================================================
+
+Está previsto que Nozomu avance hacia:
+
+Bukijutsu
+→ Armas de Filo
+→ duelista especializado en katana.
+
+Las técnicas únicas deben ser compatibles con esa evolución.
+
+PERO:
+
+No copies ni recrees anticipadamente técnicas exclusivas de la futura
+Maestría Armas de Filo.
+
+En particular, revisa las técnicas oficiales de dicha Maestría antes de
+proponer nada para evitar duplicar:
+
+- Iaido;
+- extensiones de arma;
+- ondas/cortes de chakra;
+- efectos propios de las técnicas oficiales;
+- cualquier otra identidad mecánica reservada a la Maestría.
+
+Una técnica única debe COMPLEMENTAR la futura Maestría,
+no sustituirla.
+
+==================================================
+7. RESTRICCIONES DE DISEÑO
+==================================================
+
+Cumple estrictamente la guía oficial de creación.
+
+Verifica, entre otras cosas:
+
+- coste estándar de Chakra por rango;
+- daño estándar por rango;
+- alcance estándar;
+- relación entre daño, alcance y efectos;
+- sellos;
+- requisitos;
+- condiciones;
+- enfriamientos;
+- estados alterados;
+- restricciones de creación;
+- técnicas o conceptos prohibidos.
+
+No crear:
+
+- pasivas disfrazadas de técnicas;
+- mejoras permanentes de estadísticas;
+- efectos automáticos sin interacción;
+- técnicas que garanticen impactos;
+- teletransportación si no está permitida;
+- espacio-tiempo;
+- gravedad;
+- manipulación molecular;
+- dojutsu;
+- armaduras prohibidas;
+- efectos equivalentes a habilidades de ramas que Nozomu no posee.
+
+No conceder propiedades especiales a la katana estándar.
+
+==================================================
+8. PRINCIPIO DE BALANCE
+==================================================
+
+La prioridad es:
+
+LEGALIDAD
+>
+COHERENCIA
+>
+SINERGIA
+>
+EFICIENCIA
+
+No diseñes para maximizar la probabilidad de victoria a cualquier coste.
+
+Una técnica puede ser fuerte si la normativa lo permite,
+pero debe tener contrajuego.
+
+Evita especialmente:
+
+- “si el rival hace X, recibe daño inevitable”;
+- bonificaciones enormes de Aptitud;
+- evasiones automáticas;
+- múltiples efectos fuertes por el coste estándar;
+- daño estándar completo + estado fuerte + gran alcance + bono ofensivo;
+- mecánicas que ignoren el sistema de Evasión.
+
+==================================================
+9. PROCESO DE TRABAJO
+==================================================
+
+FASE A — AUDITORÍA
+
+Antes de crear técnicas, responde con:
+
+RULE AUDIT
+
+- Reglas Sin Clan encontradas.
+- Reglas de creación Genin encontradas.
+- Valores base de coste/daño/alcance.
+- Restricciones relevantes.
+- Interacción conocida con Sacrificio.
+- Posibles conflictos con Armas de Filo.
+- Ambigüedades encontradas.
+
+No pases a diseño si existe una ambigüedad normativa crítica.
+
+FASE B — IDENTIDAD MECÁNICA
+
+Define en pocas líneas:
+
+- qué problema resuelve Técnica 1;
+- qué comportamiento de combate fomenta;
+- cómo puede evolucionar hasta Jounin;
+- cómo Técnica 2 complementa a Técnica 1;
+- cómo ambas conviven con Armas de Filo.
+
+FASE C — PROPUESTAS
+
+Propón 3 conceptos distintos para la Técnica Única 1.
+
+Todavía NO redactes la técnica definitiva.
+
+Para cada concepto indica:
+
+NOMBRE PROVISIONAL
+IDEA
+ROL EN COMBATE
+MECÁNICA CENTRAL
+FORTALEZA
+CONTRAJUEGO
+ESCALADO GENIN → CHUNIN → JOUNIN
+RIESGO NORMATIVO
+SINERGIA CON NOZOMU
+
+Después recomienda uno.
+
+FASE D — DISEÑO DETALLADO
+
+Solo después de que el usuario elija un concepto, redacta la técnica
+con el formato:
+
+NOMBRE:
+RAMA:
+RANGO:
+REQUISITO:
+SELLOS:
+COSTE:
+DAÑO:
+ALCANCE:
+EFECTO:
+DESCRIPCIÓN:
+CONDICIONES:
+LIMITACIONES:
+CONTRAJUEGO:
+ESCALADO FUTURO:
+JUSTIFICACIÓN DE BALANCE:
+POSIBLES CONFLICTOS:
+ESTADO:
+
+ESTADO deberá ser:
+
+BORRADOR — PENDIENTE DE APROBACIÓN
+
+FASE E — SEGUNDA TÉCNICA
+
+Solo después de fijar la Técnica 1,
+diseña la Técnica 2.
+
+Debe relacionarse claramente con la primera
+sin ser simplemente una versión inferior/superior de ella.
+
+==================================================
+10. ACTUALIZACIÓN DE ARCHIVOS
+==================================================
+
+Durante el diseño:
+
+NO marques ninguna técnica como aprendida.
+NO cambies CURRENTLY USABLE.
+NO modifiques inventario.
+NO alteres estadísticas.
+
+Puedes crear, si resulta útil:
+
+docs/techniques/nozomu-technique-01-draft.md
+docs/techniques/nozomu-technique-02-draft.md
+
+o equivalente según la estructura real del proyecto.
+
+NO actualices NOZOMU_STATE.md como técnica conocida hasta que el usuario
+confirme que Staff la ha aprobado.
+
+Cuando haya aprobación oficial, entonces podrá registrarse:
+
+status: APPROVED / LEARNED
+
+==================================================
+11. RESULTADO DE ESTA EJECUCIÓN
+==================================================
+
+En esta ejecución quiero únicamente:
+
+1. Auditoría normativa.
+2. Identidad mecánica recomendada.
+3. Tres conceptos para Técnica Única 1.
+4. Recomendación técnica de cuál continuar.
+
+NO diseñes todavía Técnica Única 2.
+NO declares ninguna técnica aprobada.
+NO hagas cambios irreversibles.

@@ -1,0 +1,121 @@
+- Genin:Empezando desde el grado más bajo, este se obtiene tan pronto como la ficha es aceptada. El personaje tendrá muchas restricciones en cuanto a libertad de movimiento, puesto que, por ejemplo, no podrá salir de los límites de la aldea a menos que se trate de alguna misión oficial o solicite algún permiso especial.
+- 
+
+- Chunin: Corresponde a los ninjas de grado intermedio. Para alcanzar este rango es necesario aprobar los exámenes chunin u obtenerlo tras recibir una valoración destacada en algún evento global. De manera extraoficial puede ser solicitada una prueba especial, en compañía de otros dos genin, si es que ha pasado mucho tiempo desde el último examen/evento. A partir de este rango puedes salir con libertad de tu respectiva aldea siempre y cuando sigas los respectivos lineamientos.
+- 
+
+- Jounin: Son los ninjas de grado alto y la fuerza militar más importante, por cantidad y calidad, con los que cuenta la aldea. Para aspirar al rango es necesario haber completado al menos dos misiones avanzadas siendo chunin. Una vez cumplido lo anterior, podrás solicitar una prueba especial al Staff, misma que se realizará en compañía de otros dos chunin que también sean aspirantes al rango. También puedes obtener el rango si cumples con el requisito de las misiones y consigues una valoración muy destacada en algún evento global.
+- 
+
+- Jounin Élite: Son aquellos ninjas que han demostrado su valía y sus habilidades, los más destacados aún entre los miembros más fuertes. Su poder es un factor decisivo en los enfrentamientos bélicos, pudiendo inclinar a favor fácilmente la balanza. Este rango tiene una similitud de fuerza/habilidades con los rangos Sanin y Kage, ya que al ostentarlo también desbloquearás el nivel 10 y podrás aprender las técnicas más poderosas del foro. Para aspirar al rango deberás haber realizado al menos dos misiones avanzadas siendo jounin normal. Una vez cumplido lo anterior, podrás solicitar una prueba especial al Staff, misma que se realizará de manera individual y tendrá la dificultad más alta. También puedes conseguir el rango si resultas ser el MVP en algún evento de carácter global en el que participes siendo jounin.
+- 
+
+- Sanin: Es un rango de carácter especial y de alto honor, aunque para fines prácticos es igual a un jounin élite en cuestión de estadísticas, puesto que también habilita el nivel 10. Para obtener el rango es necesario haber logrado ser el “MVP” en al menos dos eventos globales. El Kage de otra aldea también puede nombrarte como tal si lo derrotas en un enfrentamiento oficial. Los requisitos anteriores serán válidos únicamente si el personaje contaba con al menos el rango jounin de antemano. Podrá entrar y salir libremente de su propia aldea omitiendo cualquier detalle protocolario y podrá estar fuera el tiempo que desee, salvo que sea requerido de urgencia por su Kage. No obstante, aún deberá hacer el respectivo post en las puertas como un dejo de constancia. Además, los sanin podrán participar en reuniones diplomáticas como embajadores de su respectiva aldea. Solamente podrá haber, como máximo, tres ninjas que ostenten este rango por cada villa. En caso de que un cuarto cumpla con los requisitos y el cupo ya esté completo, podrá optar por retar a cualquiera de ellos en un enfrentamiento oficial para despojarlo del título.
+- 
+
+- Kage: El grado más alto al que puede aspirar un shinobi. Son los líderes de sus aldeas y la máxima autoridad dentro de la misma. Las decisiones políticas, las cuestiones bélicas, la inversión de recursos y el rumbo de la aldea en general, será determinado por el kage y el honorable consejo. Para aspirar a contender por este título, es necesario ostentar al menos el rango jounin élite y lograr ser el “MVP” en algún evento global bajo dicho rango. Tras esto, desbloquearás la posibilidad de realizar una trama especial y única, que culminará en un desafío contra el kage en cuestión con el título como premio para el vencedor. Para fines prácticos, este rango es similar a jounin élite y a sanin, en cuestión de estadísticas.
+
+
+— El rango Anbu, a pesar de ser canónico en el anime/manga original, no está habilitado como disponible para los personajes jugables. Esto debido a que es un grupo que responde directamente a las órdenes del kage de la aldea y vería muy limitado sus movimientos y libertad de acciones.
+— El concepto de líder de clan tampoco está habilitado, puesto que, en teoría, son la voz y autoridad de su respectivo clan, lo que limitaría el accionar y marcaría una tendencia general en los integrantes, situación que no deseamos.
+Estos se encuentran estrechamente relacionados con el rango del ninja. A medida que el shinobi vaya ascendiendo en su escala militar y complete logros, aumentará la cantidad de puntos de atributo que puede repartir entre sus estadísticas. En el nivel inicial contará con 280 PA para dividir según sea su consideración; posteriormente, cada nivel extra que vaya alcanzando le otorgará 40 PA adicionales que le ayudarán a seguir mejorando. A continuación detallaremos los requisitos específicos necesarios para desbloquear cada nivel.
+- Nivel 1: Te encuentras en esta etapa tan pronto tu ficha sea aceptada. Cuentas con 280 PA para repartir entre tus estadísticas; el valor numérico mínimo para estas será de 20, mientras que el máximo no debe exceder los 50.
+- 
+
+- Nivel 2: Se puede solicitar tras dos semanas de que tu ficha haya sido aprobada y canjeando 10 PP. Se te añaden 40 PA más para repartir entre tus estadísticas, alcanzando los 320 totales. El valor numérico mínimo para estas será de 25, mientras que el máximo no debe exceder los 55.
+- 
+
+- Nivel 3: Se puede solicitar tras dos semanas de haber alcanzado el nivel 2 y canjeando 14 PP. Se te añaden 40 PA más para repartir entre tus estadísticas, alcanzando los 360 totales. El valor numérico mínimo para estas será de 30, mientras que el máximo no debe exceder los 60.
+- 
+
+- Nivel 4: Se obtiene tras haber alcanzado el rango chunin. Se te añaden 40 PA más para repartir entre tus estadísticas, alcanzando los 400 totales. El valor numérico mínimo para estas será de 35, mientras que el máximo no debe exceder los 65.
+- 
+
+- Nivel 5: Se puede solicitar tras cuatro semanas de haber alcanzado el rango chunin y canjeando 20 PP. Se te añaden 40 PA más para repartir entre tus estadísticas, alcanzando los 440 totales. El valor numérico mínimo para estas será de 40, mientras que el máximo no debe exceder los 70.
+- 
+
+- Nivel 6: Se puede solicitar tras cuatro semanas de haber alcanzado el nivel 5 y canjeando 24 PP. Se te añaden 40 PA más para repartir entre tus estadísticas, alcanzando los 480 totales. El valor numérico mínimo para estas será de 45, mientras que el máximo no debe exceder los 75.
+- 
+
+- Nivel 7: Se obtiene tras haber alcanzado el rango jounin. Se te añaden 40 PA más para repartir entre tus estadísticas, alcanzando los 520 totales. El valor numérico mínimo para estas será de 50, mientras que el máximo no debe exceder los 80.
+- 
+
+- Nivel 8: Se puede solicitar tras seis semanas de haber alcanzado el nivel 7 y canjeando 30 PP. Se te añaden 40 PA más para repartir entre tus estadísticas, alcanzando los 560 totales. El valor numérico mínimo para estas será de 55, mientras que el máximo no debe exceder los 85.
+- 
+
+- Nivel 9: Se puede solicitar tras seis semanas de haber alcanzado el nivel 8 y canjeando 50 PP. Se te añaden 40 PA más para repartir entre tus estadísticas, alcanzando los 600 totales. El valor numérico mínimo para estas será de 60, mientras que el máximo no debe exceder los 90.
+- 
+
+- Nivel 10: Se obtiene tras haber alcanzado el rango jounin élite, sanin o kage. Se te añaden 80 PA más para repartir entre tus estadísticas, alcanzando los 680 totales. El valor numérico mínimo para estas será de 70, mientras que el máximo no debe exceder los 100.
+- 
+
+- Control: Es la capacidad de moldear el chakra y utilizarlo para ejecutar técnicas de ninjutsu. La velocidad con la que estas son realizadas y su velocidad de avance están directamente relacionadas con este atributo. También participa en el cálculo final de los Puntos de Chakra.
+- 
+
+- Inteligencia: Determina la capacidad máxima a la que se puede expandir chakra con la finalidad de atrapar a un adversario dentro de un genjutsu. También participa en el cálculo final de los Puntos de Chakra.
+- 
+
+- Dominio: Este atributo cuenta con dos finalidades. La primera de ellas es que rige las técnicas ninjutsu que se encargan de restringir al adversario. Su segundo uso es participar en la comparativa contra la inteligencia de otro usuario para percibir el hecho de estar atrapado en una técnica ilusoria. También participa en el cálculo final de los Puntos de Chakra.
+- 
+
+- Velocidad: Es la velocidad máxima que puede recorrer/avanzar un personaje en determinado tiempo. La ejecución de las técnicas de taijutsu se rige mediante este atributo. También participa en el cálculo final de los Puntos de Chakra.
+- 
+
+- Aptitud: Se refiere a la habilidad de emplear armas y herramientas para usos diversos, siendo el enfoque ofensivo la principal característica. Para fines prácticos, cuando el adversario se encuentra en el rango de acción de la técnica armada, será la velocidad del ataque con dicha arma. También participa en el cálculo final de los Puntos de Chakra.
+- 
+
+- Fuerza: Rige aspectos físicos puntuales, como la altura y longitud de los saltos, el peso máximo que un personaje puede cargar por sí mismo y la distancia a la que puede arrojar un objeto (incluyendo armas arrojadizas). Además, los taijutsu que impliquen la restricción del adversario emplearán este atributo en la comparativa. También participa en el cálculo final de los Puntos de Vida.
+- 
+
+- Resistencia: Esta estadística es meramente defensiva. Se utiliza en contra de las técnicas de restricción (ya sean ninjutsu o taijutsu) para determinar el momento en el que el personaje será liberado de aquello que intente retenerlo. También participa en el cálculo final de los Puntos de Vida.
+- 
+
+- Evasión: Se trata de la capacidad física que posee el personaje para percibir la ofensiva enemiga y reaccionar a ella, ya sea con alguna técnica que la contrarreste o evadiéndola con algún desplazamiento, según sea la comparativa. También participa en el cálculo final de los Puntos de Vida.
+- 
+
+- Control: Cada PA invertido brinda 3 puntos de chakra.
+- 
+
+- Dominio: Cada PA invertido brinda 2.5 puntos de chakra.
+- 
+
+- Inteligencia: Cada PA invertido brinda 2.5 puntos de chakra.
+- 
+
+- Velocidad: Cada PA invertido brinda 1.5 puntos de chakra.
+- 
+
+- Aptitud: Cada PA invertido brinda 1.5 puntos de chakra.
+- 
+
+- Resistencia: Cada PA invertido brinda 3 puntos de vida.
+- 
+
+- Fuerza: Cada PA invertido brinda 2 puntos de vida.
+- 
+
+- Evasión: Cada PA invertido brinda 1 punto de vida.
+- 
+
+Según sea la cantidad de puntos de atributo invertidos en cada parámetro, el personaje podrá realizar hazañas físicas más importantes. A continuación detallaremos cómo influye la repartición estadística en estos.
+- 1. Velocidad: Los metros por segundo que puede recorrer un personaje están dictados por el valor numérico de su atributo de velocidad, dividido entre diez.
+- 
+
+- 2. Fuerza:
+  - Saltos verticales: Cada 10 puntos invertidos corresponde a 1 metro de altura.
+  - 
+
+  - Saltos horizontales: Cada 10 puntos invertidos corresponde a 2 metros de longitud.
+  - 
+
+  - Peso de carga: Cada punto invertido corresponde a 2 kg en su capacidad de cargar un peso para poder moverse libremente.
+  - 
+
+  - Lanzamiento: Por cada dos puntos invertidos corresponde a 1 metro de distancia en su capacidad de arrojar objetos convencionales.
+  - 
+
+- 
+
+- 3. Resistencia: Contener respiración: Cada 20 puntos invertidos corresponde a 1 turno de contener la respiración sin sufrir daños adversos. Esto aplica solamente para situaciones convencionales; si alguna técnica presenta información más específica para su caso en particular, prevalecerá esa descripción.
+
+  

@@ -1,0 +1,1207 @@
+Árbol de Habilidades
+La construcción de un personaje se determina por las elecciones que se realizan para su personalización. El foro cuenta con diversas opciones para que cada build intente ser diferente del resto y tenga su toque característico. Algunas de estas elecciones se realizarán tan pronto como la ficha sea aprobada y no habrá restricción alguna, pero otras más se irán desbloqueando a medida que el personaje avance, tanto en su nivel como en su rango. Empezando desde lo más básico, abordaremos las distintas ramas del árbol de habilidades.
+
+Es el nivel más general para categorizar las distintas ramas ninjas. Determina el enfoque principal que tendrá tu personaje, así que deberás estar seguro de tu decisión, puesto que no es posible realizar cambios en la misma. Además, algunas ramas subsecuentes requieren de una especialización en específico para poder optar por ellas, así que mejor termina de leer este tutorial antes de realizar tu elección.
+
+Rama 1 · Especialización
+Genin+
+Tipo
+Especialización
+Requiere
+Ficha aceptada
+Permanente
+Sí
+Nivel
+Genin+
+Todas las técnicas de Ninjutsu convencionales entran en esta categoría; generales, elementales, de clan, de aldea, creadas.
+Aumenta la potencia de las técnicas ninjutsu en 10 puntos. (Si es una técnica de proyectiles, se dividirán los 10 puntos entre todos los proyectiles.)
+Reduce, en 5 puntos de chakra, el coste de las técnicas de ninjutsu.
+Rama 1 · Especialización
+Genin+
+Tipo
+Especialización
+Requiere
+Ficha aceptada
+Permanente
+Sí
+Nivel
+Genin+
+Todas las técnicas de Taijutsu convencionales entran en esta categoría; generales, de clan, de aldea, creadas.
+Aumenta la potencia de las técnicas taijutsu en 10 puntos.
+Reduce, en 5 puntos de chakra, el coste de las técnicas taijutsu.
+Rama 1 · Especialización
+Genin+
+Tipo
+Especialización
+Requiere
+Ficha aceptada
+Permanente
+Sí
+Nivel
+Genin+
+Todas las técnicas de Genjutsu convencionales entran en esta categoría; generales, de clan, de aldea, creadas.
+Los especialistas podrán moverse libremente durante la fase de expansión de chakra.
+Reduce, en 5 puntos de chakra, el coste de las técnicas genjutsu.
+Rama 1 · Especialización
+Genin+
+Tipo
+Especialización
+Requiere
+Ficha aceptada
+Permanente
+Sí
+Nivel
+Genin+
+Todas las técnicas de Bukijutsu convencionales entran en esta categoría; maestrías, de clan, de aldea, creadas.
+Aumenta, en 50%, el número de armas y utensilios que el ninja porta (no aplica para objetos de los que solo tenga una unidad).
+Reduce, en 5 puntos de chakra, el coste de las técnicas bukijutsu.
+Esta rama profundiza los conocimientos de las ramas más generales, de modo que la elección de alguna de estas dependerá de lo que hayas escogido previamente. Cada especialización contará con tres subespecializaciones, de la cual deberás escoger una para continuar con la personalización de tu personaje.
+
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Ninjutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Son aquellos ninjutsu que se rigen con el atributo de control.
+Al momento de realizar algún ninjutsu a distancia, aumenta en +5 puntos el atributo de control.
+Aumenta en 10 puntos la potencia de estas técnicas.
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Ninjutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Son aquellos ninjutsu que se rigen con la fórmula: (0.5)(control + velocidad).
+Al momento de realizar algún ninjutsu cuerpo a cuerpo, aumenta en +5 puntos al resultado final de la fórmula.
+Aumenta en 10 puntos la potencia de estas técnicas.
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Ninjutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Son aquellos ninjutsu que se rigen con el atributo de dominio.
+Al momento de realizar algún ninjutsu de restricción, aumenta en +5 puntos el atributo de dominio.
+Reduce, en 5 puntos de chakra, el coste de estas técnicas.
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Taijutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Esta rama se centra en mejorar la velocidad de los especialistas.
+Al momento de realizar alguna técnica taijutsu, aumenta en +5 puntos el atributo de velocidad.
+Reduce, en 5 puntos de chakra, el coste de las técnicas taijutsu.
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Taijutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Esta rama se centra en mejorar la capacidad de tanquear ofensivas.
+Aumenta, en +5 puntos, la resistencia de los especialistas de manera pasiva.
+Cada vez que el personaje recibe daño, reduce un 10% del valor final.
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Taijutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Esta rama se centra en mejorar la potencia física de los especialistas.
+Aumenta, en +5 puntos, la fuerza de los especialistas de manera pasiva.
+Aumenta en 10 puntos la potencia de las técnicas taijutsu.
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Genjutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Son aquellos genjutsu que alteran la percepción y los sentidos.
+Al momento de realizar algún genjutsu realista, aumenta en +5 puntos el atributo de inteligencia.
+Disminuye, en 5 puntos, el gasto de chakra por turno.
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Genjutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Son aquellos genjutsu que implican el uso del miedo y los traumas en el adversario.
+Al momento de realizar algún genjutsu terrorífico, aumenta en +5 puntos el atributo de inteligencia.
+Aumenta, en 10 puntos, el daño asociado a estas técnicas.
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Genjutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Sin especializarse en alguna de las ramas, prefieren el equilibrio general y la versatilidad.
+Aumentan, en 5 metros, el alcance máximo al que pueden expandir chakra.
+Puede atrapar a una segunda persona en un genjutsu, aun cuando tenga uno activo en otro adversario, sin que entren en conflicto.
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Bukijutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Se especializan en ocasionar más daño y en atacar más rápido.
+Al momento de realizar cualquier Bukijutsu, aumenta en +5 puntos el atributo de Aptitud.
+Aumenta en 10 puntos la potencia de las técnicas de Bukijutsu.
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Bukijutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Se especializan en manejar una mayor cantidad de armas.
+Aumenta en otro 50% el volumen de su inventario base. Ahora los objetos unitarios también pasan a duplicarse.
+Reduce, en 5 puntos, el chakra requerido para efectuar técnicas de bukijutsu.
+Rama 2 · Subespecialización
+Nivel 3+
+Tipo
+Sub-especialización
+Rama
+Bukijutsu
+Restricción
+—
+Nivel
+Nivel 3+
+Se especializan en el uso de ataques simples usando armas y utensilios, ignorando parcialmente las restricciones de estos.
+Cada turno pueden realizar una acción de ataque simple armado y considerar el 50% del daño como si fuese un ataque con chakra.
+Acumula el daño de hasta 4 sellos explosivos, en lugar de los 2 convencionales.
+Básicamente son estas las que mayor peso tienen en el estilo característico de tu personaje, pues marcarán el rumbo específico que recorrerá. El aprendizaje de las maestrías supone una nueva gama de técnicas especiales por aprender y de beneficios exclusivos. Algunas de estas requieren que hayas aprendido cierta especialización en concreto, pero la mayoría no suponen esta restricción, de modo que habrá gran cantidad de combinaciones posibles.
+
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Esp. Ninjutsu
+Restricción
+—
+Rango
+Chunin+
+Desbloqueas un tercer elemento a elección.
+Desarrollas un sub elemento avanzado, producto de la combinación de dos o tres elementos que conozcas.
+Aumenta en 10 puntos la potencia de todos los ninjutsu elementales.
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Esp. Taijutsu
+Restricción
+Ver desc.
+Rango
+Chunin+
+Desbloqueas la sección de técnicas "Puertas Celestiales" para su aprendizaje.
+Esta maestría no supone ninguna habilidad pasiva extra, puesto que todas sus técnicas utilizan bonificaciones y son consideradas de carácter extraoficial, siendo las de rango alto, técnicas que rompen el balance del foro. Por el contrario, existirán algunas restricciones en su uso.
+Mientras se mantenga una puerta activa, solamente se podrá hacer uso de técnicas taijutsu, incluido el nintaijutsu.
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Esp. Genjutsu
+Restricción
+—
+Rango
+Chunin+
+Desbloqueas la sección de técnicas "Manifestación de Ilusiones" para su aprendizaje.
+Al momento de realizar algún genjutsu, aumenta en +5 puntos el atributo de inteligencia.
+Aumenta en 10 metros la distancia máxima a la cual puede expandir chakra para su genjutsu.
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Esp. Bukijutsu
+Restricción
+—
+Rango
+Chunin+
+Desbloqueas la sección de técnicas "Armas de Filo" para su aprendizaje.
+Puedes crear gratis un arma de filo personalizada de nivel 3.
+Al momento de realizar algún bukijutsu con arma de filo, aumenta en +5 puntos el atributo de Aptitud.
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Esp. Bukijutsu
+Restricción
+—
+Rango
+Chunin+
+Desbloqueas la sección de técnicas "Armas Contundentes" para su aprendizaje.
+Puedes crear gratis un arma contundente personalizada de nivel 3.
+Al momento de realizar algún bukijutsu con arma contundente, aumenta en +5 puntos el atributo de Aptitud.
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Esp. Bukijutsu
+Restricción
+—
+Rango
+Chunin+
+Desbloqueas la sección de técnicas "Armas Arrojadizas" para su aprendizaje.
+Puedes crear gratis un arma arrojadiza personalizada de nivel 3.
+Al momento de realizar algún bukijutsu con arma arrojadiza, aumenta en +5 puntos el atributo de Aptitud.
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Ninguna
+Restricción
+—
+Rango
+Chunin+
+Desbloqueas la sección de técnicas "Técnicas Médicas" para su aprendizaje.
+Duplica los efectos de los botiquines médicos y su aplicación es equivalente al tiempo de una tanda de sellos manuales.
+Es capaz de realizar cirugías que incluyen colocación de prótesis, trasplantes y suturas.
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Ninguna
+Restricción
+—
+Rango
+Chunin+
+Desbloqueas la sección de técnicas "Técnicas Sensoriales" para su aprendizaje.
+Es capaz de detectar presencias, de manera pasiva, en un radio de 10 metros, siempre y cuando gane en una comparativa directa entre dominios.
+Es capaz de discernir verdades de mentiras, en una conversación cercana (máx 5 metros), siempre y cuando gane en una comparativa directa entre inteligencias.
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Ninguna
+Restricción
+—
+Rango
+Chunin+
+Desbloqueas la sección de técnicas "Técnicas de Venenos" para su aprendizaje.
+El usuario contará con una mascarilla filtradora especial que le cubre nariz y boca pues, de no tenerla puesta, dejará escapar vapores tóxicos mientras respira. Estos vapores cubren un área de 3 metros a la redonda del usuario; el contacto ajeno con ellos supone un envenenamiento de primer grado, que se traduce en una pérdida de 15 puntos de vida por turno. Cada turno en que alguna persona se exponga a estos vapores, supondrá tres turnos de sufrir los efectos de la intoxicación. El usuario es inmune a sus propios venenos pero no a los de otras personas.
+De manera poco ortodoxa, y como un experto en toxicología, es capaz de suprimir cualquier efecto adverso (excepto inconsciencia o muerte) que lo estuviese afectando. Para esto exudará una toxina especial que le permitirá recuperarse de inmediato a cambio de una cuarta parte de los puntos de vida que tenga en ese momento. Solo puede usarse una vez por combate.
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Ninguna
+Restricción
+—
+Rango
+Chunin+
+Desbloqueas la sección de técnicas "Técnicas de Sellado" para su aprendizaje.
+Adquieres tres pergaminos especiales. El primero tiene forma de muñequera y va situado en alguna de tus manos; tiene la capacidad de almacenar hasta 10 armas arrojadizas o instrumentos pequeños y liberarlos con un pensamiento tras pasar la mano por encima. El segundo tiene la capacidad de sellar en su interior algún cuerpo inanimado y detener el paso del tiempo dentro, de modo que se preservará en óptimas condiciones. El tercero puede sellar algún ninjutsu a distancia que sea usado en contra del usuario y que realice hasta 100 puntos de daño base (ignora bonificaciones).
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Ninguna
+Restricción
+—
+Rango
+Chunin+
+Puedes firmar un pacto de invocación con alguna criatura y hacerla tu invocación personal.
+Obtienes acceso al aprendizaje de las técnicas únicas de dicho pacto de invocación.
+Puedes crear gratis una técnica única de rango jounin para realizar en sincronía con tu invocación.
+Rama 3 · Maestría
+Chunin+
+Tipo
+Maestría
+Requisito
+Ninguna
+Restricción
+—
+Rango
+Chunin+
+Desbloqueas la sección de técnicas "Técnicas de Barrera" para su aprendizaje.
+Si como respuesta a una ofensiva enemiga intentas realizar algún jutsu de barrera, adquieres +10 puntos en evasión para el cálculo estadístico.
+Aumenta el tamaño de los escudos o técnicas de barrera, lo suficiente como para proteger a una persona extra que se encuentre en las cercanías del usuario.
+Además de las ramas anteriores, que constituyen la esencia básica del aprendizaje de los ninjas, tenemos a disposición ramas especiales que suponen la adquisición de ciertas habilidades pasivas o efectos extra en las técnicas del personaje. Estas pueden obtenerse mediante el canje de los PH y se dividen en rangos según sea la funcionalidad de las mismas.
+
+Requiere rango chunin. Cada una cuesta 60 PH.
+
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Katon primario
+Restricción
+—
+Coste
+60 PH
+Los jutsus de naturaleza Katon aumentan su daño base en 10 puntos. Este incremento ignora los límites restrictivos. Además, añade el efecto secundario de "Quemadura débil" a la técnica en cuestión, ocasionando un daño pasivo de 5 puntos de salud durante tres turnos.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Suiton primario
+Restricción
+—
+Coste
+60 PH
+Las técnicas que demanden alguna fuente de agua para su ejecución requerirán solo la mitad de lo establecido según sea el caso para cada jutsu en cuestión.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Raiton primario
+Restricción
+—
+Coste
+60 PH
+Los jutsus de naturaleza Raiton adquieren el efecto secundario de "Ralentizado débil". El atributo de evasión del adversario disminuye en 5 puntos durante sus siguientes dos turnos.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Fuuton primario
+Restricción
+—
+Coste
+60 PH
+Los jutsus de naturaleza Fuuton se vuelven más incisivos. Ahora basta con ejercer el 25% del daño asociado a la técnica para propiciar el efecto "Corte punzante", mismo que genera un corte en la piel del adversario del cual brotará un sangrado que le hace perder 5 puntos de vida durante sus siguientes tres turnos. Si el jutsu usado cuenta con algún otro efecto en su descripción base, este sí requerirá el daño estándar para activarse.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Doton primario
+Restricción
+—
+Coste
+60 PH
+Los jutsus de naturaleza Doton que surjan desde la superficie aumentan en 5 metros su alcance efectivo. Además, si el usuario se encuentra bajo tierra podrá desplazarse hasta 1/2 de su velocidad total.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Subexp. Ninjutsu dist.
+Restricción
+Incomp. Inc. Radial
+Coste
+60 PH
+Aumenta el alcance efectivo de todos los ninjutsu que se efectúen a distancia. El aumento dependerá del alcance original de la técnica.
+— De 3 a 4.99 m: +2 metros.
+— De 5 a 9.99 m: +5 metros.
+— De 10 a 19.99 m: +10 metros.
+— De 20 a 39.99 m: +20 metros.
+— De 40 m en adelante: +30 metros.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Subexp. Ninjutsu dist.
+Restricción
+Incomp. Inc. Lineal
+Coste
+60 PH
+Aumenta el radio de efecto de todos los ninjutsu de área. El aumento dependerá del alcance original de la técnica.
+— De 3 a 4.99 m: +1 metro.
+— De 5 a 9.99 m: +3 metros.
+— De 10 a 19.99 m: +5 metros.
+— De 20 a 39.99 m: +10 metros.
+— De 40 m en adelante: +15 metros.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Subexp. Ninjutsu CaC
+Restricción
+—
+Coste
+60 PH
+Si efectúas un ninjutsu cuerpo a cuerpo en contra de un ninjutsu a distancia, una barrera o una creación de ninjutsu que posea resistencia, incrementa el daño en +20 puntos al momento del choque.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Subexp. Ninjutsu sup.
+Restricción
+—
+Coste
+60 PH
+Aquellas técnicas ninjutsu especificadas como supresoras aumentan en 10 metros su rango de alcance siempre y cuando surjan desde la posición del ejecutor.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Taijutsu
+Restricción
+—
+Coste
+60 PH
+Cada vez que un mismo Taijutsu se efectúa en turnos consecutivos, aumenta en 5 puntos su potencia base, ignorando las restricciones de limitación.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Taijutsu
+Restricción
+—
+Coste
+60 PH
+Si al momento de efectuar un taijutsu en contra del adversario el usuario también recibe daño de alguna manera, incrementa en 15% la potencia base de la técnica efectuada. Este incremento ignora las restricciones de limitación.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Taijutsu
+Restricción
+—
+Coste
+60 PH
+Si por segundo turno consecutivo has logrado estar, en algún momento, a menos de 3 metros de distancia de tu adversario, ganarás 5 puntos en tu atributo de velocidad de cara a tu siguiente ofensiva. Este incremento es temporal y, tras efectuar el ataque, se regresará a la estadística normal.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Genjutsu
+Restricción
+—
+Coste
+60 PH
+El daño requerido para que el afectado se libere de alguna técnica ilusoria, vía pérdida de vida, incrementa en 15 puntos.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Genjutsu
+Restricción
+—
+Coste
+60 PH
+Si te encuentras atrapando a un objetivo en una técnica ilusoria y te ocasionan daño a tus puntos de vida, requerirán de 20 puntos más de lo establecido para que el genjutsu se rompa.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Genjutsu
+Restricción
+—
+Coste
+60 PH
+Aumenta en 10 metros la distancia final a la cual puedes expandir tu chakra.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Bukijutsu
+Restricción
+—
+Coste
+60 PH
+Pueden comprar y poseer un segundo porta utensilios y porta kunais del rango correspondiente.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Bukijutsu
+Restricción
+—
+Coste
+60 PH
+Aumenta en 10 metros la distancia a la cual pueden ser lanzadas las armas arrojadizas.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Bukijutsu
+Restricción
+—
+Coste
+60 PH
+Al usar un arma contundente o de filo por segundo turno consecutivo para efectuar un jutsu cualquiera, aumenta en 5 puntos el atributo de Aptitud y en 10 de daño la potencia final. Tras efectuar el ataque, el contador se reinicia.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+60 PH
+Si renuncias a toda posibilidad de mitigar un ataque o realizar un choque de técnicas y, en su defecto, centras tus esfuerzos en resistirlo, disminuyes en un 10% el daño final que fueras a recibir.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+60 PH
+Aumenta en 5 puntos el atributo de resistencia una vez que ha sido atrapado por los efectos de una técnica de supresión. Este incremento desaparece cuando la técnica deja de ejercer su efecto.
+Rama Amarilla · Habilidad pasiva
+Chunin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+60 PH
+Puedes canjear de manera gratuita una técnica por encima de tu nivel actual (considerando que seas chunin). Si asciendes de nivel, podrás hacer lo mismo nuevamente. Si vuelves a ascender de nivel, prácticamente la pasiva no te supone ningún beneficio, así que podrás crear una técnica de rango jounin que ignore el CD.
+Requiere rango jounin. Cada una cuesta 120 PH.
+
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+Incomp. Capitán, Titanazo, Soldado
+Coste
+120 PH
+Cuando el personaje que posea esta habilidad es asignado como responsable de distribuir las fuerzas militares en el sistema de conquista, podrá hacer un movimiento extra temporal en la distribución de sus tropas, enviándolo a otra zona de su elección y obteniendo una ventaja estratégica.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+Incomp. Comandante, Titanazo, Soldado
+Coste
+120 PH
+Aun cuando haya varios personajes que posean esta habilidad, solo podrá estar activa en una persona por zona. Es el encargado de liderar a su escuadra regional en el sistema de conquista. Al inicio del combate, tanto él como su escuadrón ganan 20 puntos de vida extra aplicables solo durante la duración del evento. Además, mientras él se encuentre de pie, los miembros de su escuadrón aumentan en 10 puntos la potencia de todas sus técnicas.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+Incomp. Comandante, Titanazo, Capitán
+Coste
+120 PH
+Durante los enfrentamientos en el sistema de conquista, los personajes con esta habilidad ganarán un incremento de 5 puntos en algún atributo de su elección siempre y cuando haya algún capitán en su zona. Además, si la salud disminuye por debajo del 50% del valor total con el que iniciaron el evento, ese atributo pasará a incrementar otros 5 puntos, ignorando cualquier restricción de bonificación.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+Incomp. Comandante, Capitán, Soldado
+Coste
+120 PH
+El ejército de un solo hombre. Aplica solamente cuando el ninja con esta habilidad es enviado a una zona bélica sin compañía alguna, durante el sistema de conquista. Aumenta todos sus atributos en +10 puntos, ignorando los límites restrictivos, durante el transcurso de su tema.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+Ver descripción
+Restricción
+—
+Coste
+120 PH
+Esta pasiva se puede canjear al mismo tiempo en que realizas tu post de traición. Si durante el sistema de conquista, alguna defensa de aldea, evento, misión avanzada o misión de tablón, realizas una traición a tu aldea y asesinas a un compatriota tuyo (debe ser personaje jugable) ganarás de manera definitiva un incremento en cualquier atributo de tu elección. Si el ninja era de un rango menor al tuyo, será de +5 puntos; si es del mismo rango será de +10 puntos y si era de rango superior, será de +15 puntos. Este incremento ignora la limitación restrictiva.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+120 PH
+Obtienes los beneficios de una segunda subespecialización correspondiente a tu área de dominio.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+120 PH
+Aumenta en 10 puntos el atributo de resistencia una vez que ha sido atrapado por los efectos de una técnica de supresión. Este incremento desaparece cuando la técnica deja de ejercer su efecto.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+120 PH
+Puedes aprender una técnica un nivel por encima de tu restricción de área de especialización.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+120 PH
+Aumenta en 33% las recompensas que ofrecen los libros bingos por encargo completado.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+120 PH
+Disminuye en 10% el CD de espera para la creación de técnicas. Si existen decimales, se redondea a favor del usuario.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+120 PH
+Si tu vida o tu chakra disminuye por debajo del 50% de su valor original, aumenta 5 puntos un atributo a elección propia. Además, si ese mismo recurso decrece al 25% o menos, el incremento será de otros 5 puntos sobre el mismo atributo. Por último, si tanto la vida como el chakra se encuentran en 25% o menos, serán dos los atributos que reciban el incremento total de 10 puntos.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+120 PH
+Reduces a la mitad el alcance de alguna técnica para aumentar su potencia en 30 puntos de daño. Este incremento ignora los límites restrictivos y el efecto puede o no aplicarse según la voluntad del ejecutor, aunque debe especificarse al momento de efectuar la técnica.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+120 PH
+El usuario aumenta de manera pasiva todos sus alcances asociados a los parámetros físicos. Aumenta +5 metros al resultado final de la fórmula de velocidad (atributo de velocidad / 10). Aumenta +3 metros a sus saltos verticales. Aumenta +5 metros a sus saltos horizontales. Aumenta +20 kg a su peso de carga. Aumenta +10 metros a su capacidad de lanzamiento. Aumenta +1 turno a su capacidad para contener la respiración.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+120 PH
+Cada turno en que realizas una evasión totalmente efectiva sin hacer uso de gasto de chakra, ganarás +5 puntos en el atributo de evasión. Esta bonificación puede acumularse tantas veces como número de veces repitas el actuar y tu limitante restrictivo te lo permita. Una vez acabado el tema, se resetea a su valor original.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+Ver descripción
+Restricción
+—
+Coste
+120 PH
+Requiere el cuerpo sin vida de un personaje jugable o un NPC de evento, autorizado por el staff. Se realiza una autopsia sobre el cuerpo del objetivo para extraer la información referente a un jutsu que el ninja hubiese aprendido en vida. El usuario puede aprender esa técnica o venderla al mejor postor, pero solo podrá aplicarse para un beneficiado.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+120 PH
+Puedes colocar hojas de búsqueda en el mercado negro, solicitando la captura de personajes jugables. Para esto has de ofrecer una recompensa adecuada y si alguien logra concretar la caza y llevar al objetivo al mercado negro, pagarás lo correspondiente y recibirás el cuerpo. Todo esto desde el anonimato y la confidencialidad absoluta.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Ninjutsu
+Restricción
+—
+Coste
+120 PH
+Cada vez que ejecutas un mismo Ninjutsu de manera consecutiva, aumentarás en 10 puntos su potencia base y en 5 puntos el atributo de control. El ninjutsu usado deberá contar con una potencia asociada para ser válido el efecto. Además, si realizas otro jutsu de por medio el efecto se pierde. El beneficio del incremento del atributo control no será aplicable si se desea usar otra técnica; se perderá en automático.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Taijutsu
+Restricción
+—
+Coste
+120 PH
+Una vez que efectúas al menos el 50% del daño final de alguno de tus Taijutsu en contra de un objetivo, podrás realizar un segundo golpe en cadena, de manera subsecuente y que no podrá ser esquivado o mitigado de ninguna manera. Este segundo golpe efectuará un daño fijo de 30 puntos a la vida del contrincante.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Genjutsu
+Restricción
+—
+Coste
+120 PH
+Puedes realizar el procedimiento para ejecutar otro genjutsu aun cuando estés manteniendo los efectos de uno, con la única condición de que no sea sobre el mismo objetivo.
+Rama Azul · Habilidad pasiva
+Jounin+
+Tipo
+Habilidad pasiva
+Requisito
+Esp. Bukijutsu
+Restricción
+—
+Coste
+120 PH
+Si tu adversario esquivó o bloqueó totalmente el daño de una técnica Bukijutsu, la siguiente ofensiva Bukijutsu se efectuará con un +5 puntos en el atributo de Aptitud. Si nuevamente pasa lo mismo, ahora el incremento total será de +10 puntos de cara a una nueva ofensiva. Estos incrementos ignoran los límites restrictivos. Para que esta pasiva se aplique es necesario que las técnicas subsecuentes sean del mismo rango o superior a la técnica previamente ejecutada.
+Requiere rango jounin élite. Cada una cuesta 150 PH.
+
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría elemental + Katon + Ascuas
+Restricción
+Incomp. Soberano Elemental
+Coste
+150 PH
+Los efectos de Ascuas se pierden y prevalecen los siguientes. Los jutsus de naturaleza Katon aumentan su daño base en 20 puntos. Este incremento ignora los límites restrictivos. Además, añade el efecto secundario de "Quemadura seria" a la técnica en cuestión, ocasionando un daño pasivo de 10 puntos de salud durante tres turnos.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría elemental + Suiton + Borbotón
+Restricción
+Incomp. Soberano Elemental
+Coste
+150 PH
+Los efectos de Borbotón se pierden y prevalecen los siguientes. Las técnicas que demanden alguna fuente de agua de 2 metros de profundidad o menos para su ejecución podrán realizarse sin inconveniente alguno aun cuando el terreno sea árido.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría elemental + Raiton + Chispazo
+Restricción
+Incomp. Soberano Elemental
+Coste
+150 PH
+Los efectos de Chispazo se pierden y prevalecen los siguientes. Los jutsus de naturaleza Raiton adquieren el efecto secundario de "Ralentizado serio". El atributo de evasión del adversario disminuye en 10 puntos durante sus siguientes tres turnos.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría elemental + Fuuton + Aire afilado
+Restricción
+Incomp. Soberano Elemental
+Coste
+150 PH
+Los efectos de Aire afilado se pierden y prevalecen los siguientes. Los jutsus de naturaleza Fuuton se vuelven más incisivos. Ahora basta con ejercer el 10% del daño asociado a la técnica para propiciar el efecto "Corte serio", mismo que genera un corte en la piel del adversario del cual brotará un sangrado que le hace perder 15 puntos de vida durante sus siguientes tres turnos. Si el jutsu usado cuenta con algún otro efecto en su descripción base, este sí requerirá el daño estándar para activarse.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría elemental + Doton + Terra activa
+Restricción
+Incomp. Soberano Elemental
+Coste
+150 PH
+Los efectos de Terra activa se pierden y prevalecen los siguientes. Los jutsus de naturaleza Doton que surjan desde la superficie aumentan en 10 metros su alcance efectivo. Además, si el usuario se encuentra bajo tierra podrá desplazarse a su velocidad máxima si así lo desea.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría elemental
+Restricción
+Incomp. Maestro Elemental
+Coste
+150 PH
+Tu elemento primario pierde su desventaja natural y, además, ahora su ventaja elemental tiene multiplicador de x2.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Puertas Celestiales
+Restricción
+Incomp. Nuevo horizonte
+Coste
+150 PH
+Una vez que los beneficios de la octava puerta celestial desaparezcan, el usuario prolongará tres turnos más su vida. De modo que ahora contará con un total de 5 turnos para recibir la asistencia médica necesaria antes de fallecer.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Puertas Celestiales
+Restricción
+Incomp. Vida prolongada
+Coste
+150 PH
+El usuario ahora puede usar técnicas de otras ramas, de hasta rango genin, mientras se encuentra con los efectos de las puertas celestiales.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Manifestación de Ilusiones
+Restricción
+Incomp. Mundo de pesadillas
+Coste
+150 PH
+Las técnicas de esta maestría ocasionan 15 puntos más de daño en el plano ilusorio. Además, en el plano real, las ilusiones manifestadas adquieren 15 puntos más de resistencia y ocasionan 10 puntos de daño extra por ataque.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Manifestación de Ilusiones
+Restricción
+Incomp. Pesadilla atroz
+Coste
+150 PH
+Las ilusiones manifestadas adquieren +5 puntos en sus estadísticas (si es que las tienen). Además, aquellas que causen un debuff en el adversario aumentarán en 5 puntos el efecto sobre el o los atributos mencionados.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Armas de Filo
+Restricción
+Incomp. Cuchilla afilada
+Coste
+150 PH
+Todas tus armas de filo básicas se vuelven de nivel dos. Si has logrado asestar al menos el 10% del daño total de alguno de tus Bukijutsu de filo, crearás un corte en el adversario que le ocasionará un sangrado que le hará perder 15 puntos de vida durante tres turnos.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Armas de Filo
+Restricción
+Incomp. Cuchilla residual
+Coste
+150 PH
+Todas tus armas de filo básicas se vuelven de nivel dos. Aumentas la potencia de todos tus Bukijutsu de filo en 25 puntos. Este incremento ignora los límites restrictivos.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Armas Contundentes
+Restricción
+Incomp. Maza de potencia
+Coste
+150 PH
+Todas tus armas contundentes básicas se vuelven de nivel dos. Añade el efecto "Incapacitar" a todos los Bukijutsu que se efectúan con armas contundentes.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Armas Contundentes
+Restricción
+Incomp. Maza aturdidora
+Coste
+150 PH
+Todas tus armas contundentes básicas se vuelven de nivel dos. Aumentas la potencia de todos tus Bukijutsu contundentes en 25 puntos. Este incremento ignora los límites restrictivos.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Armas Arrojadizas
+Restricción
+Incomp. Arsenal mortífero
+Coste
+150 PH
+Todas tus armas arrojadizas básicas se vuelven de nivel dos. Duplica la cantidad total de armas arrojadizas que cargas al momento de iniciar un tema. Aumenta la distancia máxima a la que puedes arrojarlas con precisión en 10 metros. Aumenta la potencia de los Bukijutsu de armas arrojadizas en 25 puntos, ignorando los límites restrictivos.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Armas Arrojadizas
+Restricción
+Incomp. Arsenal completo
+Coste
+150 PH
+Todas tus armas arrojadizas básicas se vuelven de nivel dos. La activación de los efectos asociados a las técnicas de Bukijutsu de armas arrojadizas ahora podrán activarse si el jutsu impacta con el 40% o más de su potencia final.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Técnicas Médicas
+Restricción
+Incomp. Médico de laboratorio
+Coste
+150 PH
+El efecto de los botiquines ahora se triplica y su aplicación es equivalente al tiempo que demora un sello de mano. Los jutsus médicos que impliquen restaurar la salud ahora demandarán 10 puntos de chakra menos. El jutsu médico "Ninpō: Sōzō Saisei" ahora gastará 80 de chakra por turno.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Téc. Médicas + Autopsia efectiva
+Restricción
+Incomp. Médico de batalla
+Coste
+150 PH
+Ahora puedes extraer hasta 3 técnicas del cuerpo de un personaje jugable o un NPC de evento, autorizado por el staff. El usuario puede aprender esas técnicas o venderlas al mejor postor, pero solo podrá aplicarse para un beneficiado por técnica. Además, también puedes ocupar un mismo cadáver para que dos personajes se beneficien del trasplante de ADN.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Técnicas Sensoriales
+Restricción
+Incomp. Estratega
+Coste
+150 PH
+Los efectos de los jutsus "Kagura Shingan" y "Sekai Kara no Setsudan" se extienden durante un turno más. Además, en una comparativa directa entre dominios con otro sensor o método sensorial, el usuario ganará 10 puntos en su atributo únicamente durante el cálculo comparativo.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Técnicas Sensoriales
+Restricción
+Incomp. Radar humano
+Coste
+150 PH
+El usuario es capaz de conocer la distribución exacta de las tropas aliadas y enemigas en el sistema de conquista. Si el usuario es el Comandante o se encuentra en el mismo tema que él, puede realizar un traslado de un personaje de un tema cualquiera a otro, aun cuando los temas ya hubiesen comenzado. Tendrá un máximo de tres turnos iniciado el tema en cuestión para realizar dicho movimiento. También puede aplicar para defensas de aldea o eventos si las condiciones lo permiten.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Técnicas Venenosas
+Restricción
+Incomp. Productor de toxinas
+Coste
+150 PH
+Ya no es necesario que el usuario porte la máscara antigases; podrá controlar a placer si desea, o no, exudar el veneno. Si el usuario se ve expuesto por venenos de otras personas, reduce su efectividad en un 50%. Puedes llevar 2 frascos de veneno de la tienda, del mismo color, siempre y cuando no sean del mismo nivel.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Técnicas Venenosas
+Restricción
+Incomp. Producción de anticuerpos
+Coste
+150 PH
+Ya no es necesario que el usuario porte la máscara antigases; podrá controlar a placer si desea, o no, exudar el veneno. Los venenos de la tienda se vuelven acumulables y puedes llevar hasta 2 frascos del mismo color siempre y cuando no sean del mismo nivel. Aplica un multiplicador de x1.5 a los venenos verdes (de la tienda). Aplica en un turno los efectos del veneno azul (de la tienda). El veneno puede cubrir hasta 5 armas por frasco.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Técnicas de Sellado
+Restricción
+Incomp. Domador de bestias
+Coste
+150 PH
+Duplica la cantidad de pergaminos de sellado que ofrece la maestría. Además, el pergamino que sella ataques ahora puede aplicarse a técnicas de hasta 135 puntos de daño base.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Técnicas de Sellado
+Restricción
+Incomp. Señor de los papiros
+Coste
+150 PH
+Puede realizar el jutsu "Hakke no Fūin Shiki" en un solo turno. Además, si se utiliza para sellar a una bestia con cola, reduce su gasto de chakra a la mitad.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Técnicas de Invocación
+Restricción
+Incomp. Manada feroz
+Coste
+150 PH
+Tu compañero animal gigante se beneficiará de lo siguiente: Su invocación demandará 20 puntos menos de chakra. Puede aprender una técnica extra por cada rango. Conoce las 3 habilidades propias de su pacto.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Técnicas de Invocación
+Restricción
+Incomp. Compañero colosal
+Coste
+150 PH
+Tu manada de compañeros animales se beneficiará de lo siguiente: Su invocación demandará 20 puntos menos de chakra. El grupo puede aprender una técnica extra por cada rango (un mismo miembro puede aprender las tres, o se pueden repartir una cada uno). Conocen las 3 habilidades propias de su pacto.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Técnicas de Barrera
+Restricción
+Incomp. Catenaccio
+Coste
+150 PH
+Aumenta el tamaño de los escudos o técnicas de barrera, lo suficiente como para proteger a una persona extra que se encuentre en las cercanías del usuario. Además, todas las técnicas de barrera que realices ganan 20 puntos extra de resistencia.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+Maestría Técnicas de Barrera
+Restricción
+Incomp. Gran muralla
+Coste
+150 PH
+Si como respuesta a una ofensiva enemiga intentas realizar algún jutsu de barrera, adquieres +10 puntos en evasión para el cálculo estadístico. Este incremento ignora los límites restrictivos. Además, todas las técnicas de barrera que realices demandan 20 puntos menos de chakra.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+150 PH
+Desbloqueas el octavo slot para su uso.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+150 PH
+Aumentas en 100 puntos tus reservas de vida de manera permanente.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+150 PH
+Aumentas en 100 puntos tus reservas de chakra de manera permanente.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+150 PH
+Si tu vida ha llegado a 0 producto de alguna ofensiva adversaria, recuperarás el 10% del chakra que poseías antes de recibir el daño y continuarás en batalla. Por otro lado, si fuiste noqueado producto de algún efecto secundario, ese se anulará pero te dejará con el 10% del chakra que tenías en ese momento. Cualquiera que sea el caso, solo podrás activar esta habilidad una vez por tema/evento.
+Rama Roja · Habilidad pasiva
+Jounin Élite+
+Tipo
+Habilidad pasiva
+Requisito
+—
+Restricción
+—
+Coste
+150 PH
+Cada vez que matas a un personaje jugable de nivel 7 o superior, puedes incrementar permanentemente un atributo a elección en 5 puntos. Si son personajes de nivel 4 a 6, necesitarás matar a dos para que aplique la bonificación.
+Requiere rango jounin élite y gasto de 2 Slots. Cada una cuesta 200 PH.
+
+— Contenido próximamente 
