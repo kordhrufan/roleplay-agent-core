@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "package_type": "system",
+  "package_id": "example-system",
+  "display_name": "Example System",
+  "version": "1.0.0",
+  "requires": []
+}

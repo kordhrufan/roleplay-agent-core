@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "package_type": "character",
+  "package_id": "nozomu",
+  "display_name": "Nozomu",
+  "version": "0.1.0",
+  "requires": [
+    {"package_type": "world", "package_id": "naruto-rol", "version": "0.1.0"},
+    {"package_type": "system", "package_id": "naruto-rol", "version": "0.1.0"}
+  ]
+}

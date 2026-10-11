@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "package_type": "character",
+  "package_id": "example-character",
+  "display_name": "Example Character",
+  "version": "1.0.0",
+  "requires": [
+    {"package_type": "world", "package_id": "example-world", "version": "1.0.0"},
+    {"package_type": "system", "package_id": "example-system", "version": "1.0.0"}
+  ]
+}
