@@ -6,10 +6,10 @@ Generalizar Nozomu Agent como `roleplay-agent-core`: un núcleo reutilizable par
 foro de rol, configurable por personaje, mundo, sistema, plataforma e instancia. Este documento
 define la extracción y un plan para Claude; no implementa código ni altera el legado.
 
-Versión base del detalle del sub-incremento 4b: commit `91289a7` a 2026-10-12, rama
-`feature/incremento-4-rebanada-vertical`, con 4a aprobado e implementado y sin cambios al iniciar
-este análisis. `main` permanece en `96eca81`; los incrementos 1–3 siguen en ramas apiladas sin
-fusionar.
+Versión base del detalle del sub-incremento 4c: commit `91205fc` a 2026-10-12, rama
+`feature/incremento-4-rebanada-vertical`, con 4a–4b aprobados e implementados y sin cambios al
+iniciar este análisis. `main` permanece en `96eca81`; los incrementos 1–3 siguen en ramas apiladas
+sin fusionar.
 `reference/migration-source/` es la copia inmutable inspeccionada. La auditoría anterior se trata
 como hipótesis histórica porque declara que su fuente estaba vacía; no se usa como prueba de la
 implementación actual.
@@ -78,7 +78,7 @@ implementación actual.
   TTY, muestran ID, versión, hash y decisión, generan un nonce mediante `secrets` y exigen que el
   usuario teclee la frase completa. El nonce no se admite por argumento, archivo ni variable de
   entorno; `AGENTS.md` y `CLAUDE.md` ordenarán al agente mostrar el comando y pedir al usuario que
-  lo ejecute. Se implementa en 4c. Reduce la automatización accidental, pero no garantiza humanidad
+  lo ejecute. Se implementa en 4c1. Reduce la automatización accidental, pero no garantiza humanidad
   frente a un agente hostil capaz de crear y manejar una pseudo-TTY con el mismo usuario del SO.
 
 ## Contexto del código
@@ -99,13 +99,15 @@ implementación actual.
 - `core/review/models.py` — incremento 1 aprobado: borrador, revisión, vigencia y publicación como
   ejes ortogonales; sus transiciones exigen versión/evidencia y no crean canon.
 - `core/runtime/assimilation.py` y `core/runtime/templates/` — incremento 3 aprobado: expediente
-  Markdown cerrado, modelos inmutables, fuentes literales/hash y diagnósticos; aún no persiste,
-  crea candidatos ni decide revisiones.
+  Markdown cerrado, modelos inmutables, fuentes literales/hash y diagnósticos.
 - `core/runtime/{persistence,workspace,cli}.py` y `adapters/manual.py` — incremento 4a aprobado:
   workspace externo íntegro, sobre de estado atómico, importación manual y CLI init/status; el
-  corpus nace vacío y todavía no valida registros de candidato.
-- Las ocho suites actuales suman 203 pruebas descubiertas en este checkout que los incrementos
-  siguientes deben conservar.
+  corpus nace vacío.
+- `core/runtime/{assimilation,workspace,cli}.py` — incremento 4b aprobado: candidatos manuales
+  inmutables, citas resueltas desde `quote`, historial/versionado, validación completa del estado y
+  comandos source/candidate; decisiones y cierre siguen prohibidos.
+- Las diez suites actuales suman 252 pruebas aprobadas que los incrementos siguientes deben
+  conservar.
 
 ### Hallazgos de contraste
 
@@ -396,7 +398,7 @@ reutiliza para otro foro o versión.
   CLAUDE.md                        # generado, no estado
   instance.json                    # schema, forum_id, core_root y paquetes/versiones
   dossier/                         # copia literal del expediente y sus fuentes
-  corpus/state.json                # desde 4b: candidatos y decisiones, con historial
+  corpus/state.json                # desde 4c1: candidatos, decisiones y cierre, con historial
   characters/<character_id>/
     concept.md                     # entrada editable del usuario; no es estado hasta importarla
     state.json                     # desde 4d: versiones del concepto y propuestas/decisiones
@@ -506,7 +508,7 @@ permisos de escritura puede recalcularlos o modificar el core. No deben presenta
 seguridad ni como prueba de intervención humana. `concept.md` es deliberadamente entrada del
 usuario y puede editarse; solo una importación por CLI crea una versión gestionada con su hash.
 
-#### Candidatos manuales y citas exactas (incrementos 4b–4c)
+#### Candidatos manuales, decisiones y citas exactas (incrementos 4b–4c1)
 
 En este flujo el agente, trabajando sobre el workspace previo, prepara un JSON de candidato y
 ejecuta `assimilation candidate add --workspace <ruta> --input <archivo>`; el usuario también puede
@@ -531,23 +533,26 @@ seis secciones de dominio y `Material suelto` no genera candidatos aunque declar
 su clasificación queda para el incremento 5.
 
 Una decisión conserva `candidate_id`, versión y SHA-256 del candidato exacto, `ReviewStatus`
-(`APPROVED` o `REJECTED`) y un recibo del mecanismo humano. El recibo se serializa canónicamente,
-se guarda en el historial y origina un `SourceRef` con locator
+(`APPROVED` o `REJECTED`) y un recibo `TTY_NONCE_V1`. El recibo guarda el SHA-256 de la frase
+aceptada, no el nonce ni la frase en claro: permite ligar el registro al reto efímero ejecutado sin
+presentarlo como autenticación independiente. El payload del recibo se serializa canónicamente y
+origina un `SourceRef` con locator
 `assimilation://<forum_id>/human-decisions/<decision_id>` y su SHA-256; no se inventan
 `observed_at` ni fecha IC. Su `source_id` es `human-decision:<decision_id>` y
 `section_or_passage` identifica `candidate:<candidate_id>:v<version>` o `assimilation-closure`.
-Repetir la misma decisión devuelve el registro existente; una decisión opuesta o sobre otro hash
-requiere una versión nueva, no reescribe la anterior.
+Repetir la misma decisión devuelve el registro existente sin nuevo reto; una decisión opuesta o
+sobre otro hash exige una versión nueva del candidato, no reescribe la anterior.
 
 El cierre de asimilación es otra decisión humana, no una inferencia de la CLI. Solo se ofrece cuando
 no queda pendiente ninguna versión vigente —la mayor de cada ID— y cada sección de dominio
 `PROVIDED` tiene al menos un `LITERAL` vigente aprobado con cita en esa sección; las versiones
 sustituidas siguen auditables y `Material suelto` no bloquea. La CLI muestra por separado
 rechazos e `UNCERTAINTY` y el humano confirma el snapshot. El recibo guarda el SHA-256 canónico del
-objeto `{candidates, decisions}` —excluye `closure` para evitar circularidad—. Añadir/cambiar una
-versión o decisión altera ese digest e invalida el cierre; `instance init` exige que el recibo siga
-coincidiendo. Cerrar no convierte una incertidumbre, interpretación o propuesta en literal ni
-aprueba entradas pendientes.
+objeto `{candidates, decisions}` —excluye `closure` para evitar circularidad—. Tras cerrar, las API
+de alta y decisión rechazan nuevas mutaciones; una edición directa que altere el digest invalida la
+recarga y `instance init` exige que el recibo siga coincidiendo. Para corregir un snapshot cerrado
+se crea otro workspace; no se sobrescribe el recibo terminal. Cerrar no convierte una
+incertidumbre, interpretación o propuesta en literal ni aprueba entradas pendientes.
 
 #### CLI mínimo de la rebanada
 
@@ -561,7 +566,7 @@ inseguro o conflicto de versión/identidad y `5` error de E/S. No se captura `Ke
 
 Subcomandos acumulados: 4a añade `assimilation init --dossier RUTA --workspace RUTA` y
 `assimilation status --workspace RUTA`; 4b añade `assimilation source list/show` y `assimilation
-candidate add/list/show`; 4c añade las decisiones/cierre humanos e
+candidate add/list/show`; 4c1 añade decisiones/cierre humanos y 4c2,
 `instance init --workspace RUTA --output RUTA`/`instance status`; 4d añade `character concept
 import`, `character proposal add/list/show` y su decisión humana; 4e añade `character draft create`
 y `character staff record`. `--workspace` y `--output` son siempre explícitos, sin defaults ni
@@ -1227,7 +1232,7 @@ Criterios de aceptación de 4a:
 - El expediente neutro se importa a un workspace externo con bytes/hashes reproducibles; inline
   sigue embebido y un archivo no referenciado no cruza.
 - No existe todavía una carpeta de instancia ni `AGENTS.md`/`CLAUDE.md`: 4a no permite eludir la
-  aprobación que habilitará 4c.
+  aprobación y cierre que habilitarán 4c2.
 - Falta de `--workspace`, destino inseguro/conflictivo o fallo previo al rename no deja workspace
   parcial; retry idéntico no escribe y cambiar una entrada falla cerrado.
 - `assimilation status` detecta ediciones simples de gestionados/estado, sin afirmar autenticidad
@@ -1359,7 +1364,7 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
     10. `decode_candidate_state` exige las tres claves de 4a, `closure is None`, `decisions == []`,
         candidatos en orden de inserción y claves `(candidate_id, version)` únicas. Para cada ID,
         las versiones empiezan en 1, son contiguas y aparecen en orden ascendente; la versión mayor
-        es la vigente, sin borrar las anteriores. Esto prepara 4c para decidir solo versiones
+        es la vigente, sin borrar las anteriores. Esto prepara 4c1 para decidir solo versiones
         vigentes y conservar las sustituidas como historial.
     11. `add_candidate` vuelve a cargar el sobre y exige `revision == expected_revision`; valida el
         historial antes de añadir. Una clave nueva debe ser versión 1 o exactamente la siguiente de
@@ -1463,28 +1468,245 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
     workspace temporal externo creado por 4a, usa una copia temporal del JSON de entrada y elimina
     ambos al terminar; no se usa un workspace real.
 
-4c. [ ] **Decisiones, cierre de asimilación e instancia generada.** Alcance:
-    `core/runtime/{assimilation,persistence,instance,cli,__init__}.py`,
-    `core/runtime/templates/{instance.template.json,instance-policy.template.md,
-    AGENTS.template.md, CLAUDE.template.md}` y
-    `tests/test_{assimilation_decisions,instance,instance_cli,instance_templates}.py`. Aplicar la
-    barrera humana TTY de la opción A a decisiones exactas y a `assimilation close`, cuyo recibo
-    fija el digest canónico de `{candidates, decisions}`; el nonce se genera dentro del comando y
-    nunca entra por argumento, archivo o entorno. Las instrucciones generadas muestran el comando
-    y exigen que lo ejecute el usuario. Decidir solo la versión vigente (la mayor) de cada ID; las
-    versiones sustituidas y sus posibles decisiones siguen auditables, pero no bloquean el cierre.
-    Añadir `instance init --workspace --output`, que solo acepta un cierre vigente y copia el
-    snapshot cerrado. Criterio: pendiente/rechazado no es corpus usable, cambiar/añadir una versión
-    vigente invalida el cierre, no se materializa antes de cerrarlo, `--output` es
-    obligatorio/idempotente/externo y los bloques invariantes de `AGENTS.md`/`CLAUDE.md` son
-    idénticos byte a byte. La barrera reduce automatización accidental; no se presenta como prueba
-    criptográfica de humanidad ante un agente hostil con pseudo-TTY.
+4c1. [x] **Decisiones y cierre con barrera humana (detallado).** Objetivo: registrar decisiones
+     definitivas sobre candidatos vigentes y cerrar un snapshot exacto, sin crear todavía la
+     instancia ni plantillas.
+
+     Alcance exacto: modificar `core/runtime/{assimilation,workspace,cli,__init__}.py`; crear
+     `tests/test_assimilation_decisions.py` y `tests/test_assimilation_decision_cli.py`.
+     `persistence.py`, `core/review/models.py`, `core/memory/provenance.py`, adaptadores, plantillas,
+     paquetes y `reference/` no cambian: se reutilizan `ReviewStatus`, `SourceRef` y las primitivas
+     de estado atómico ya aprobadas.
+
+     1. Añadir en `assimilation.py`, todos inmutables (`frozen=True, slots=True`):
+        - `HumanConfirmationReceipt(method: str, confirmation_sha256: str)`, donde el único método
+          admitido es `TTY_NONCE_V1` y el hash son 64 hex minúsculas.
+        - `AssimilationDecision(decision_id: str, candidate_id: str, candidate_version: int,
+          candidate_sha256: str, review_status: ReviewStatus,
+          receipt: HumanConfirmationReceipt, evidence: SourceRef)`; solo `APPROVED` o `REJECTED`.
+        - `AssimilationClosure(closure_id: str, base_revision: int, snapshot_sha256: str,
+          receipt: HumanConfirmationReceipt, evidence: SourceRef)`, con ID exacta
+          `assimilation-closure`.
+        - `AssimilationState(candidates: tuple[AssimilationCandidate, ...],
+          decisions: tuple[AssimilationDecision, ...], closure: AssimilationClosure | None)`,
+          `DecisionResult(decision, created, corpus_revision)` y
+          `ClosureResult(closure, created, corpus_revision)`.
+        - `Terminal(Protocol)` con firmas `is_interactive() -> bool`, `write(text: str) -> None` y
+          `read_line() -> str | None`. `None` significa EOF. No incluye método para aportar nonce.
+     2. `decode_candidate_state` pasa a
+        `decode_candidate_state(content: object, *, dossier: LoadedForumDossier, revision: int)
+        -> AssimilationState`. Conserva todas las comprobaciones 4b y además decodifica decisiones
+        y cierre con claves exactas, reconstruye `SourceRef`, recalcula todos los hashes y verifica
+        referencias. `workspace._load_workspace` le pasa la revisión del sobre; `LoadedWorkspace`
+        añade `decisions` y `closure` sin eliminar `candidates`.
+     3. Cada decisión usa `decision_id="candidate:<candidate_id>:v<version>"`, único y derivable.
+        Debe apuntar a una versión existente y al SHA exacto. Puede permanecer sobre una versión
+        luego sustituida, pero una decisión nueva solo se admite para la versión mayor de ese ID.
+        Hay como máximo una decisión por versión: repetir mismo estado/hash es idempotente; el
+        opuesto o un hash distinto es `CONFLICT` y exige crear otra versión del candidato.
+     4. Forma persistida exacta de cada elemento de `content.decisions`:
+
+        ```json
+        {
+          "candidate_id": "convivencia-respeto",
+          "candidate_sha256": "<hash del candidato>",
+          "candidate_version": 1,
+          "decision_id": "candidate:convivencia-respeto:v1",
+          "evidence": {"locator": "assimilation://foro-neutral/human-decisions/candidate%3Aconvivencia-respeto%3Av1", "section_or_passage": "candidate:convivencia-respeto:v1", "sha256": "<hash del payload del recibo>", "source_id": "human-decision:candidate:convivencia-respeto:v1"},
+          "receipt": {"confirmation_sha256": "<hash de la frase aceptada>", "method": "TTY_NONCE_V1"},
+          "review_status": "APPROVED"
+        }
+        ```
+
+        El SHA de `evidence` se calcula sobre JSON compacto canónico del registro excluyendo
+        `evidence`; el locator codifica `decision_id` con percent-encoding y `safe=""`. No se
+        guardan `observed_at`, fecha IC, usuario, hora, nonce ni frase en claro.
+     5. El reto usa `secrets.choice` ocho veces sobre el alfabeto exacto
+        `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`: 32 símbolos sin `I`, `O`, `0` ni `1`, 40 bits de
+        espacio y lectura razonable. No existe parámetro, archivo, variable de entorno, semilla ni
+        callback para sustituir el nonce en producción; los tests pueden parchear `secrets.choice`
+        dentro del módulo, nunca mediante la CLI.
+     6. Firmas públicas exactas:
+        `record_candidate_decision(state_path: Path, *, dossier: LoadedForumDossier,
+        expected_revision: int, candidate_id: str, version: int,
+        review_status: ReviewStatus, terminal: Terminal) -> DecisionResult` y
+        `close_assimilation(state_path: Path, *, dossier: LoadedForumDossier,
+        expected_revision: int, terminal: Terminal) -> ClosureResult`. Reexportar los modelos,
+        protocolo y funciones; helpers de reto, hash y forma JSON quedan privados.
+     7. La API exige primero `terminal.is_interactive()`, comprueba precondiciones e idempotencia y
+        solo crea el nonce para una mutación nueva. Para una decisión nueva muestra por
+        `terminal.write`, exactamente y con LF:
+
+        ```text
+        DECISIÓN HUMANA REQUERIDA
+        Candidato: <candidate_id>
+        Versión: <version>
+        SHA-256: <candidate_sha256>
+        Decisión: APROBAR|RECHAZAR
+        Escribe exactamente: APROBAR|RECHAZAR <candidate_id> v<version> <nonce>
+        >␠
+        ```
+
+        `␠` representa un espacio ASCII: la última salida son los dos bytes `> `, sin LF. Las
+        frases exactas son
+        `APROBAR <id> v<n> <nonce>` y `RECHAZAR <id> v<n> <nonce>`; ID y versión son ASCII por el
+        contrato 4b. Se permite un solo intento. Al leer, quitar únicamente un terminador LF y el
+        CR inmediatamente anterior; no hacer `strip`, case-fold ni normalización Unicode.
+     8. En la CLI real, una clase privada `_SystemTerminal` devuelve exactamente
+        `sys.stdin.isatty() and sys.stdout.isatty()`, escribe siempre mediante `_write_exact` y lee
+        con `sys.stdin.readline()` (`""` → `None`). No se exige TTY a stderr: redirigir solo errores
+        no permite responder al reto y evita romper usos legítimos. La terminal integrada de
+        VS Code en Windows es una consola real y satisface ambas comprobaciones; PowerShell con
+        stdout o stdin redirigido falla antes de generar nonce o leer entrada y no escribe estado.
+     9. Respuesta distinta consume el único intento y produce `INVALID_STATE`/salida 3 sin escribir.
+        EOF hace lo mismo con mensaje de cancelación. `KeyboardInterrupt`/Ctrl+C no se captura,
+        conserva el contrato actual y no escribe porque la confirmación precede a la mutación; si
+        interrumpe durante la sustitución se aplican las garantías atómicas ya documentadas.
+     10. Tras recibir la frase exacta, volver a cargar el estado y exigir la misma revisión y el
+         mismo sujeto antes de escribir; un cambio concurrente es `CONFLICT`. Después se calcula
+         `confirmation_sha256=SHA256(frase UTF-8 sin terminador)`, se crea el recibo/evidencia y se
+         añade la decisión al final del historial con revisión +1 y `atomic_write_bytes`. El nonce
+         no se guarda en claro porque deja de tener uso al aceptar la frase; el hash de la frase
+         registra el reto aceptado sin autenticar al actor ni convertirse en secreto.
+     11. `add_candidate` decodifica el estado ampliado, conserva `decisions` en vez de reiniciarlas
+         y sigue permitiendo una versión nueva antes del cierre. Si `closure` existe, rechaza toda
+         alta nueva con `CONFLICT`; el cierre es terminal y una corrección requiere otro workspace.
+         Un retry exacto de candidato o decisión ya existente sigue sin reto, escritura ni cambio
+         de mtime/revisión.
+     12. Para cerrar, todas las versiones vigentes —máxima por ID— deben tener una decisión exacta;
+         las sustituidas pendientes no bloquean. Cada sección `PROVIDED` debe estar cubierta por al
+         menos un `LITERAL` vigente `APPROVED` que la cite. `MISSING`, `NOT_APPLICABLE` y material
+         suelto no exigen cobertura. Un `REJECTED` no es utilizable; un `UNCERTAINTY`, incluso
+         aprobado, continúa como `REQUIERE CONFIRMACIÓN` y no satisface cobertura literal.
+     13. `snapshot_sha256` es SHA-256 del JSON compacto canónico exacto
+         `{"candidates":[...],"decisions":[...]}` reconstruido desde los modelos, sin `closure`.
+         El prompt de cierre enumera además IDs/versiones rechazadas e incertidumbres vigentes, en
+         el orden de los candidatos vigentes y separados por `, `, y muestra exactamente:
+
+         ```text
+         CIERRE HUMANO REQUERIDO
+         Foro: <forum_id>
+         Revisión del corpus: <revision>
+         Snapshot SHA-256: <snapshot_sha256>
+         Vigentes: <total>; aprobados: <n>; rechazados: <n>
+         Rechazados: <id vN, ...>|ninguno
+         Incertidumbres: <id vN, ...>|ninguna
+         Escribe exactamente: CERRAR <forum_id> r<revision> <nonce>
+         >␠
+         ```
+
+         La frase es `CERRAR <forum_id> r<revision> <nonce>`, con las mismas reglas, único intento y
+         segunda lectura del estado. El cierre se escribe con revisión +1.
+     14. Forma exacta de `content.closure`:
+
+         ```json
+         {
+           "base_revision": 7,
+           "closure_id": "assimilation-closure",
+           "evidence": {"locator": "assimilation://foro-neutral/human-decisions/assimilation-closure", "section_or_passage": "assimilation-closure", "sha256": "<hash del payload del recibo>", "source_id": "human-decision:assimilation-closure"},
+           "receipt": {"confirmation_sha256": "<hash de la frase aceptada>", "method": "TTY_NONCE_V1"},
+           "snapshot_sha256": "<hash canónico de candidates+decisions>"
+         }
+         ```
+
+         Al cargar, exigir `base_revision + 1 == revision`, digest vigente, evidencia recalculada y
+         todas las precondiciones de cierre. Alterar candidato, decisión, cierre, revisión o hash —
+         incluso recalculando solo el sobre— falla cerrado. Repetir un cierre íntegro devuelve el
+         existente sin reto ni escritura.
+     15. Añadir comandos exactos:
+         - `assimilation candidate approve --workspace RUTA --candidate-id ID --version N`;
+         - `assimilation candidate reject --workspace RUTA --candidate-id ID --version N`;
+         - `assimilation decision list --workspace RUTA` (solo lectura);
+         - `assimilation close --workspace RUTA`.
+         La versión es siempre obligatoria en decisiones. No admitir `--yes`, `--force`,
+         `--nonce`, `--confirmation`, `--input`, stdin no TTY ni equivalentes. Los tres comandos
+         humanos rechazan el flag global `--json` con `INVALID_STATE`/3 antes del reto: no hay modo
+         de éxito automatizable ni se mezclan prompt y JSON. `decision list` sí conserva texto/JSON
+         normal. En texto imprime por decisión
+         `<id> v<n> | APPROVED|REJECTED | sha256=<candidate_sha256> | evidencia=<evidence_sha256>`.
+         En JSON usa exactamente las claves de raíz `ok`,
+         `action="assimilation.decision.list"`, `decisions`, `corpus_revision`, `workspace`; cada
+         resumen contiene `candidate_id`, `candidate_sha256`, `candidate_version`, `decision_id`,
+         `evidence_sha256` y `review_status`.
+     16. Tras éxito interactivo, el texto exacto final es
+         `Decisión registrada: <id> v<n> | APPROVED|REJECTED | sha256=<candidate_sha256>` o
+         `Asimilación cerrada: <forum_id> | revisión base <n> | snapshot sha256=<hash>`, seguido de
+         `Revisión del corpus: <n>.`; el retry cambia «registrada/cerrada» por «ya existente/ya
+         cerrada». Todo pasa por `_write_exact`. Mantener errores JSON exactos para comandos no
+         interactivos y códigos 0/2/3/4/5 existentes.
+     17. La costura `Terminal` se usa para éxitos **solo en tests de la API Python**. La CLI siempre
+         construye `_SystemTerminal` sin fábrica inyectable. Un agente hostil puede importar el
+         módulo y pasar un terminal falso, o manejar una pseudo-TTY/modificar el core: es el límite
+         aceptado de la opción A, no una garantía criptográfica y debe constar en docstrings y
+         mensajes sin presentarse como seguridad fuerte.
+     18. `tests/test_assimilation_decisions.py`: modelos/forma/hash/evidencia; referencias y estado
+         manipulado; decisión vigente, sustitución e idempotencia; estados opuestos; preservación al
+         añadir v2; cobertura por sección; pendientes/rechazos/incertidumbres; digest y cierre
+         terminal; retry/mtime; fake `Terminal` para TTY/no TTY, prompts/frases exactos, alfabeto y
+         longitud, un intento, CRLF, espacios/case, EOF, Ctrl+C y cambio entre prompt/escritura;
+         fallo de replace conserva los bytes anteriores; el JSON persistido no contiene nonce.
+     19. `tests/test_assimilation_decision_cli.py`: parser y comandos exactos; versión requerida;
+         `decision list` texto/JSON; stdout o stdin no TTY, `--json` y ausencia de cualquier bypass;
+         errores/códigos/salidas por `_write_exact`; subprocess con stdout redirigido que falla sin
+         mutar. No simular una TTY para éxito CLI: esos éxitos se cubren por la API y se comprueban
+         manualmente una vez en terminal integrada.
+
+     Criterios: ninguna mutación humana ocurre sin frase exacta en stdin+stdout TTY; cada decisión
+     y cierre se recarga y verifica contra candidato/snapshot exactos; solo aprobados vigentes
+     pueden cubrir el corpus; cierre terminal e idempotencia no pierden historial; no hay instancia,
+     plantilla, modelo, red, publicación, SQLite ni secretos.
+
+     Verificación exacta de 4c1 desde PowerShell:
+
+     ```powershell
+     py -3.11 -B -m unittest tests.test_assimilation_decisions tests.test_assimilation_decision_cli -v
+     py -3.11 -B -m unittest discover -s tests -v
+     py -3.11 -B -m core.runtime.cli assimilation candidate approve --workspace <RUTA_TEMP_EXTERNA> --candidate-id <ID> --version 1
+     py -3.11 -B -m core.runtime.cli assimilation close --workspace <RUTA_TEMP_EXTERNA>
+     rg -n "Nozomu|Naruto|Jcink|narutorol|account 59|275" core/runtime tests/test_assimilation_decisions.py tests/test_assimilation_decision_cli.py
+     git diff --check
+     git diff --name-only 91205fc -- reference
+     git status --short
+     ```
+
+     Los dos comandos interactivos se ejecutan manualmente en una terminal integrada real sobre un
+     workspace temporal; se prueba además que redirigir stdout los bloquea. El `rg` y el diff de
+     `reference/` terminan sin salida.
+
+4c2. [ ] **Instancia cerrada e instrucciones generadas (detalle posterior).** Objetivo: consumir el
+     cierre terminal de 4c1 y materializar una instancia externa, sin añadir personajes todavía.
+     Alcance previsto: `core/runtime/{instance,workspace,cli,__init__}.py`,
+     `core/runtime/templates/{instance.template.json,instance-policy.template.md,
+     AGENTS.template.md,CLAUDE.template.md}` y
+     `tests/test_{instance,instance_cli,instance_templates}.py`; `persistence.py` se reutiliza.
+     Comandos: `instance init --workspace RUTA --output RUTA` e
+     `instance status --instance RUTA`. Criterio: cierre y digest se revalidan; copia atómica e
+     idempotente de expediente/corpus; `--output` externo obligatorio; integridad cubre estáticos y
+     snapshot; no se materializa con pendientes ni cierre inválido.
+
+     El contenido invariante exacto que ambas plantillas deben incluir byte a byte entre los
+     marcadores existentes queda fijado ahora; 4c2 detallará el renderizado y solo podrá añadir
+     contenido fuera del bloque:
+
+     ```text
+     ## Invariantes obligatorias
+
+     - No ejecutes nunca comandos de decisión humana, incluidos `assimilation candidate approve`, `assimilation candidate reject`, `assimilation close` y sus equivalentes futuros. Muestra al usuario el comando exacto y pídele que lo ejecute personalmente en una terminal interactiva.
+     - Usa únicamente versiones vigentes del corpus con decisión APPROVED y pertenecientes al snapshot cerrado válido. PENDING_HUMAN_REVIEW, REJECTED, versiones sustituidas y material no clasificado no son utilizables.
+     - BORRADOR, APROBADO, PUBLICADO y CANON son estados distintos. Ninguno implica automáticamente otro; una aprobación tampoco implica aprendizaje ni utilizabilidad.
+     - No publiques, envíes ni conviertas propuestas, incertidumbres, borradores o resultados pendientes en hechos. No existe comando de publicación en este alcance.
+     - No edites directamente estados JSON gestionados ni recalcules sus hashes. Usa los comandos del core y conserva procedencia, citas y versiones exactas.
+     ```
+
+     `AGENTS.md` y `CLAUDE.md` pueden diferir solo fuera del bloque común para explicar su mecanismo
+     de alcance; una prueba extrae los marcadores y compara el interior byte a byte. El patrón de
+     comando que muestren lleva rutas PowerShell renderizadas, nunca nonce ni confirmación.
 4d. [ ] **Concepto aportado y propuestas de ajuste.** Alcance:
     `core/character/{__init__,models}.py`, `core/runtime/{persistence,cli}.py`,
     `core/runtime/templates/instance-policy.template.md` y
     `tests/test_{character_models,character_cli}.py`. Importar/hash/versionar `concept.md`; permitir
     al agente crear propuestas citadas solo contra candidatos aprobados y al humano aceptar o
-    rechazar cada versión mediante la misma barrera, sin reescribir el concepto original.
+    rechazar cada versión mediante la barrera de 4c1, sin reescribir el concepto original.
     Criterio: sin concepto del usuario no hay personaje; una propuesta pendiente/rechazada no
     cambia la versión efectiva y aceptar una crea una nueva composición auditable, no aprobación de
     staff.
@@ -1493,7 +1715,7 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
     `tests/test_{character_draft,staff_review_cli}.py`.
     Crear desde contenido manual del agente un `DraftVersion` cuyos `SourceRef` enlacen concepto y
     fuentes tras candidatos aprobados; persistirlo en `profile.json` y permitir registrar una
-    respuesta de staff con evidencia y versión exacta, bajo la barrera humana. Criterio: la ficha
+    respuesta de staff con evidencia y versión exacta, bajo la barrera de 4c1. Criterio: la ficha
     inicial queda `ACTIVE` + `PENDING_HUMAN_REVIEW` + `NOT_CONFIRMED`; decidir staff no publica,
     canoniza, enseña ni vuelve utilizable nada, y no existe comando de publicación.
 4f. [ ] **Recorrido vertical y contrato integrado.** Alcance:
@@ -1554,10 +1776,11 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
 
 ## Riesgos y dudas abiertas
 
-No hay dudas que bloqueen 4b ni 4c: la barrera humana ya está decidida como opción A. Su límite
-conocido permanece: no demuestra humanidad frente a un agente hostil con permisos equivalentes y
-capacidad de manejar una pseudo-TTY; una garantía fuerte exigiría una credencial o un proceso fuera
-de su alcance, que no forma parte de esta rebanada.
+No hay dudas que bloqueen 4c1 ni 4c2: la barrera humana ya está decidida como opción A, se exige TTY
+solo en stdin/stdout y el cierre es terminal. Su límite conocido permanece: no demuestra humanidad
+frente a un agente hostil que importe la API con un `Terminal` falso, maneje una pseudo-TTY o
+modifique el core con permisos equivalentes. Una garantía fuerte exigiría una credencial o proceso
+fuera de su alcance, que no forma parte de esta rebanada.
 
 1. **Antes del incremento 14: ¿cuándo y cómo elegir el segundo caso de generalidad?**
    - A: mantener la elección aplazada y, al llegar al incremento 14, escoger un foro real no Naruto
@@ -1850,3 +2073,77 @@ de su alcance, que no forma parte de esta rebanada.
   - Retrabajo: una ronda de correcciones (2 hallazgos); un heredoc de shell fallido sin
     efectos; un retorno de carro colado en estas notas y corregido; un caso de test mal
     planteado corregido antes de la revisión.
+
+### Incremento 4c1 — decisiones y cierre con barrera humana
+- Rama: `feature/incremento-4-rebanada-vertical` (base `91205fc`); incluye el detalle de 4c1/4c2
+  escrito por Codex en el hilo de análisis de 4b.
+- Cambios hechos: en `core/runtime/assimilation.py`, modelos `HumanConfirmationReceipt`,
+  `AssimilationDecision`, `AssimilationClosure`, `AssimilationState`, `DecisionResult`,
+  `ClosureResult`, protocolo `Terminal`, `record_candidate_decision`, `close_assimilation` y
+  `decode_candidate_state` ampliado (decisiones, cierre y revisión); `add_candidate` conserva
+  las decisiones y rechaza altas tras el cierre. `LoadedWorkspace` añade `decisions` y
+  `closure`. CLI: `assimilation candidate approve|reject`, `assimilation decision list` y
+  `assimilation close`, con `_SystemTerminal` (stdin y stdout TTY). Exports. Tests nuevos
+  `tests/test_assimilation_{decisions,decision_cli}.py`; ajustados el test de decodificación
+  de 4b (nueva firma) y el test de comandos inexistentes de 4b (approve/reject/close ya
+  existen).
+- Resultado de los tests: suites de 4c1 → 31 OK; suite completa → 283 OK en `py -3.11` y
+  `py -3.14`, sin omitidos. Prueba de API con terminal simulado: cinco aprobaciones, cierre en
+  la revisión 11 (base 10), recarga íntegra y sin el código en el estado. Por subproceso sin TTY,
+  `approve` y `close` salen con código 3 sin escribir. `rg` sin coincidencias; `reference/` sin
+  cambios desde `91205fc`; `git diff --check` limpio.
+- Revisión de Codex: «no aprobado» (REV4C1-01 alta, REV4C1-02 media, REV4C1-03 baja como
+  sugerencia); corregidos juntos:
+  - REV4C1-01: cerrojo de archivo `corpus/state.json.lock` creado con `O_CREAT|O_EXCL`. Toda
+    mutación del corpus (`add_candidate` entera; en decisión y cierre, desde la segunda lectura
+    hasta la escritura) ocurre bajo el cerrojo, así que una mutación concurrente da `CONFLICT`
+    en vez de perderse. No se mantiene durante la espera de la frase. Un cerrojo huérfano tras
+    una caída bloquea con `CONFLICT` y un mensaje que nombra el archivo a borrar; decisión y
+    cierre lo comprueban antes de pedir la frase. Es la solución provisional hasta los locks del
+    incremento 9.
+  - REV4C1-02: el límite de la barrera A (frena la automatización, no autentica a la persona;
+    un `Terminal` falso, una pseudo-TTY o un core modificado la eluden) consta en los docstrings
+    de `Terminal`, `record_candidate_decision` y `close_assimilation`, y en la ayuda de
+    `approve`, `reject` y `close`.
+  - REV4C1-03: `candidate list` añade ` | decisión=APPROVED|REJECTED` en texto y la clave
+    `decision` (`null` o estado) en JSON; `candidate show` añade la línea `Decisión: pendiente`
+    o `Decisión: <estado> (evidencia=<sha>)` y la clave JSON `decision` (`null` o resumen). Es
+    un cambio de contrato de salida de 4b: los tests de 4b se ajustaron a las claves nuevas.
+  - REV4C1-04 (nuevo en la verificación): un fallo al borrar el cerrojo ya no se silencia. Tras
+    una escritura correcta se informa `IO` con «el cambio se guardó, pero no se pudo borrar el
+    cerrojo <ruta>»; tras un error, se conserva su código y se añade «no se guardó ningún cambio,
+    pero no se pudo borrar el cerrojo <ruta>», con el error original como causa. Si falla el
+    cierre del descriptor se intenta borrar el cerrojo y se informa si queda.
+  - Resultado tras las correcciones: 43 tests de 4c1 y 295 en total, OK en `py -3.11` y
+    `py -3.14`, sin omitidos.
+- Validación funcional pendiente: ejecutar `candidate approve` y `close` en una terminal
+  integrada real tecleando la frase. La shell de Claude no es interactiva, así que no puede
+  hacerlo: lo hace el usuario sobre un workspace temporal.
+- Decisiones de detalle que el plan no fijaba:
+  - Orden en `record_candidate_decision`: terminal interactivo → estado pedido válido → carga
+    con revisión esperada → candidato existente → decisión existente (idempotente u opuesta) →
+    cierre → versión vigente. Un reintento idéntico tras el cierre devuelve la decisión
+    existente sin reto.
+  - `AssimilationState.current_versions()` y `.decision_for()` como auxiliares públicos del
+    modelo.
+  - `decision list` vacío imprime `No hay decisiones.`.
+  - `candidate list/show` muestran la decisión efectiva junto al estado inmutable del registro
+    (ver REV4C1-03).
+  - `tests/test_assimilation_decision_cli.py` reutiliza `FakeTerminal` y los datos de
+    `tests/test_assimilation_decisions.py`.
+- Revisión archivada en `docs/analisis/incremento-4c1-revision.md` (veredicto final: aprobado
+  tras dos verificaciones; la segunda encontró REV4C1-04, introducido por el cerrojo).
+- Métricas por agente (solo telemetría verificable; ausente = NO DISPONIBLE):
+  - Codex (`gpt-5.6-sol`, high), contadores de `~/.codex/sessions`:
+    - Análisis `01a12fb4-…` (1 encargo: detalle de 4c1/4c2); incremento respecto a la medición
+      de 4b: entrada 3.695.304 (caché leída 3.623.680), salida 23.940 (razonamiento 13.822).
+    - Revisión `01a12fdd-7db9-75a1-b075-83635b559645` (3 encargos: revisión + 2 verificaciones):
+      entrada 5.149.814 (caché leída 5.002.624), salida 26.351 (razonamiento 13.675).
+    - Incidencia: la llamada MCP de la segunda verificación se abortó en el lado de Claude tras
+      4.575 s sin respuesta del servidor; Codex terminó el turno y escribió `REVISION.md`, que
+      se leyó del disco. Escritura de caché 0; coste o cuota NO DISPONIBLE.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde el segundo «Sigue con él»; 50
+    respuestas de API): entrada 104, salida 79.055, caché leída 32.246.027, caché escrita
+    784.886. Coste NO DISPONIBLE.
+  - Retrabajo: dos rondas de corrección (3 hallazgos + 1 nuevo); dos tests mal planteados
+    corregidos antes de la revisión; una espera con señal errónea (mtime en Windows) relanzada.

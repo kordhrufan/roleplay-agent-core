@@ -9,11 +9,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import secrets
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum
 from pathlib import Path
+from typing import Protocol
 from urllib.parse import quote
 
 from core.memory.provenance import SourceRef
@@ -1024,13 +1028,11 @@ def parse_candidate_input(value: object, *, dossier: LoadedForumDossier) -> Assi
 
 
 def decode_candidate_state(
-    content: object, *, dossier: LoadedForumDossier
-) -> tuple[AssimilationCandidate, ...]:
-    """Rebuild and re-verify every persisted candidate against the copied dossier."""
+    content: object, *, dossier: LoadedForumDossier, revision: int
+) -> AssimilationState:
+    """Rebuild and re-verify candidates, decisions and closure against the copied dossier."""
     if not isinstance(content, dict) or set(content) != _CORPUS_KEYS:
         _invalid_candidate("el corpus debe tener exactamente candidates, closure y decisions")
-    if content["closure"] is not None or content["decisions"] != []:
-        _invalid_candidate("el corpus todavía no admite decisiones ni cierre")
     records = content["candidates"]
     if not isinstance(records, list):
         _invalid_candidate("candidates debe ser una lista")
@@ -1045,29 +1047,60 @@ def decode_candidate_state(
                                f"{expected - 1} a la {candidate.version}")
         latest[candidate.candidate_id] = candidate.version
         candidates.append(candidate)
-    return tuple(candidates)
+
+    forum_id = dossier.dossier.forum_id
+    by_key = {c.key: c for c in candidates}
+    decision_records = content["decisions"]
+    if not isinstance(decision_records, list):
+        _invalid_candidate("decisions debe ser una lista")
+    decisions: list[AssimilationDecision] = []
+    for position, record in enumerate(decision_records, start=1):
+        decision = _decode_decision(position, record, forum_id)
+        candidate = by_key.get((decision.candidate_id, decision.candidate_version))
+        if candidate is None or candidate.candidate_sha256 != decision.candidate_sha256:
+            _invalid_candidate(f"la decisión {decision.decision_id} no corresponde a ningún "
+                               "candidato exacto")
+        if any(d.decision_id == decision.decision_id for d in decisions):
+            _invalid_candidate(f"la decisión {decision.decision_id} está repetida")
+        decisions.append(decision)
+
+    state = AssimilationState(tuple(candidates), tuple(decisions), None)
+    if content["closure"] is None:
+        return state
+    closure = _decode_closure(content["closure"], forum_id)
+    if type(revision) is not int or closure.base_revision + 1 != revision:
+        _invalid_candidate("el cierre no corresponde a la revisión del corpus")
+    if closure.snapshot_sha256 != _snapshot_sha256(state):
+        _invalid_candidate("el cierre no corresponde al contenido actual del corpus")
+    blockers = _closure_blockers(state, dossier)
+    if blockers:
+        _invalid_candidate(f"el cierre no cumple sus condiciones: {'; '.join(blockers)}")
+    return AssimilationState(state.candidates, state.decisions, closure)
 
 
 def add_candidate(
     state_path: Path, *, dossier: LoadedForumDossier, expected_revision: int, value: object
 ) -> CandidateAddResult:
     """Append a new pending candidate version, or return the identical existing one."""
-    try:
-        revision, content = load_state(state_path)
-    except PersistenceError as exc:
-        raise AssimilationError(exc.code, exc.reason) from exc
-    if revision != expected_revision:
-        raise AssimilationError("CONFLICT", f"el corpus cambió (revisión {revision}, se esperaba "
-                                            f"{expected_revision}); vuelve a intentarlo")
-    existing = decode_candidate_state(content, dossier=dossier)
+    with _corpus_lock(state_path):
+        return _add_candidate_locked(state_path, dossier, expected_revision, value)
+
+
+def _add_candidate_locked(
+    state_path: Path, dossier: LoadedForumDossier, expected_revision: int, value: object
+) -> CandidateAddResult:
+    revision, content, state = _load_corpus(state_path, dossier, expected_revision)
     candidate = parse_candidate_input(value, dossier=dossier)
-    by_key = {c.key: c for c in existing}
+    by_key = {c.key: c for c in state.candidates}
     if candidate.key in by_key:
         if by_key[candidate.key].candidate_sha256 == candidate.candidate_sha256:
             return CandidateAddResult(by_key[candidate.key], False, revision)
         raise AssimilationError("CONFLICT", f"{candidate.candidate_id} v{candidate.version} ya "
                                             "existe con otro contenido; usa una versión nueva")
-    versions = [c for c in existing if c.candidate_id == candidate.candidate_id]
+    if state.closure is not None:
+        raise AssimilationError("CONFLICT", "la asimilación está cerrada; una corrección requiere "
+                                            "otro workspace")
+    versions = [c for c in state.candidates if c.candidate_id == candidate.candidate_id]
     expected_version = len(versions) + 1
     if candidate.version != expected_version:
         raise AssimilationError("CONFLICT", f"la siguiente versión de {candidate.candidate_id} es "
@@ -1076,16 +1109,502 @@ def add_candidate(
         raise AssimilationError("CONFLICT", f"la versión {candidate.version} de "
                                             f"{candidate.candidate_id} no cambia nada respecto a "
                                             "la anterior")
-    new_content = {
-        "candidates": [*content["candidates"], _candidate_record(candidate, include_hash=True)],
-        "closure": None,
-        "decisions": [],
+    new_content = dict(content)
+    new_content["candidates"] = [*content["candidates"],
+                                 _candidate_record(candidate, include_hash=True)]
+    _write_corpus(state_path, new_content, revision + 1)
+    return CandidateAddResult(candidate, True, revision + 1)
+
+
+# --- Human decisions and closure (4c1) --------------------------------------------------------
+# Decisions and the closure are only recorded after someone types, in an interactive terminal,
+# a phrase containing a one-time code (barrier A, chosen by the user). LIMIT: this blocks an
+# agent's normal, automated command path, but it does not authenticate a person and is not a
+# cryptographic guarantee: code that imports this module and passes a fake Terminal, a pseudo
+# terminal, or an edited core can bypass it.
+
+HUMAN_CONFIRMATION_METHOD = "TTY_NONCE_V1"
+NONCE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+NONCE_LENGTH = 8
+CLOSURE_ID = "assimilation-closure"
+
+_DECISION_STATUSES = (ReviewStatus.APPROVED, ReviewStatus.REJECTED)
+_PHRASE_VERB = {ReviewStatus.APPROVED: "APROBAR", ReviewStatus.REJECTED: "RECHAZAR"}
+_RECEIPT_KEYS = frozenset({"confirmation_sha256", "method"})
+_EVIDENCE_KEYS = frozenset({"locator", "section_or_passage", "sha256", "source_id"})
+_DECISION_KEYS = frozenset({"candidate_id", "candidate_sha256", "candidate_version",
+                            "decision_id", "evidence", "receipt", "review_status"})
+_CLOSURE_KEYS = frozenset({"base_revision", "closure_id", "evidence", "receipt",
+                           "snapshot_sha256"})
+
+
+class Terminal(Protocol):
+    """Where the confirmation is answered.
+
+    The CLI only uses the real terminal and offers no way to supply the one-time code. Passing
+    any other implementation (as tests do) bypasses barrier A: it does not authenticate a person.
+    """
+
+    def is_interactive(self) -> bool: ...
+
+    def write(self, text: str) -> None: ...
+
+    def read_line(self) -> str | None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class HumanConfirmationReceipt:
+    method: str
+    confirmation_sha256: str
+
+    def __post_init__(self) -> None:
+        if self.method != HUMAN_CONFIRMATION_METHOD:
+            _invalid_candidate(f"método de confirmación desconocido: {self.method!r}")
+        _require_sha256("confirmation_sha256", self.confirmation_sha256)
+
+
+@dataclass(frozen=True, slots=True)
+class AssimilationDecision:
+    decision_id: str
+    candidate_id: str
+    candidate_version: int
+    candidate_sha256: str
+    review_status: ReviewStatus
+    receipt: HumanConfirmationReceipt
+    evidence: SourceRef
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.candidate_id, str) or not _CANDIDATE_ID.fullmatch(self.candidate_id):
+            _invalid_candidate("candidate_id inválido en una decisión")
+        if type(self.candidate_version) is not int or self.candidate_version < 1:
+            _invalid_candidate("candidate_version debe ser un entero positivo")
+        if self.decision_id != _decision_id(self.candidate_id, self.candidate_version):
+            _invalid_candidate("decision_id no corresponde al candidato y su versión")
+        _require_sha256("candidate_sha256", self.candidate_sha256)
+        if self.review_status not in _DECISION_STATUSES:
+            _invalid_candidate("una decisión solo puede ser APPROVED o REJECTED")
+        if not isinstance(self.receipt, HumanConfirmationReceipt):
+            _invalid_candidate("la decisión necesita un recibo de confirmación humana")
+        if not isinstance(self.evidence, SourceRef):
+            _invalid_candidate("la decisión necesita evidencia SourceRef")
+
+    @property
+    def candidate_key(self) -> tuple[str, int]:
+        return (self.candidate_id, self.candidate_version)
+
+
+@dataclass(frozen=True, slots=True)
+class AssimilationClosure:
+    closure_id: str
+    base_revision: int
+    snapshot_sha256: str
+    receipt: HumanConfirmationReceipt
+    evidence: SourceRef
+
+    def __post_init__(self) -> None:
+        if self.closure_id != CLOSURE_ID:
+            _invalid_candidate(f"closure_id debe ser {CLOSURE_ID}")
+        if type(self.base_revision) is not int or self.base_revision < 0:
+            _invalid_candidate("base_revision debe ser un entero no negativo")
+        _require_sha256("snapshot_sha256", self.snapshot_sha256)
+        if not isinstance(self.receipt, HumanConfirmationReceipt):
+            _invalid_candidate("el cierre necesita un recibo de confirmación humana")
+        if not isinstance(self.evidence, SourceRef):
+            _invalid_candidate("el cierre necesita evidencia SourceRef")
+
+
+@dataclass(frozen=True, slots=True)
+class AssimilationState:
+    candidates: tuple[AssimilationCandidate, ...]
+    decisions: tuple[AssimilationDecision, ...]
+    closure: AssimilationClosure | None
+
+    def current_versions(self) -> tuple[AssimilationCandidate, ...]:
+        """The highest version of each candidate id, in first-appearance order."""
+        latest: dict[str, AssimilationCandidate] = {}
+        for candidate in self.candidates:
+            latest[candidate.candidate_id] = candidate
+        return tuple(latest.values())
+
+    def decision_for(self, candidate: AssimilationCandidate) -> AssimilationDecision | None:
+        for decision in self.decisions:
+            if decision.candidate_key == candidate.key:
+                return decision
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionResult:
+    decision: AssimilationDecision
+    created: bool
+    corpus_revision: int
+
+
+@dataclass(frozen=True, slots=True)
+class ClosureResult:
+    closure: AssimilationClosure
+    created: bool
+    corpus_revision: int
+
+
+def record_candidate_decision(
+    state_path: Path, *, dossier: LoadedForumDossier, expected_revision: int, candidate_id: str,
+    version: int, review_status: ReviewStatus, terminal: Terminal,
+) -> DecisionResult:
+    """Record APPROVED/REJECTED for exactly one current candidate version.
+
+    Requires the exact phrase typed in `terminal`. Barrier A blocks the automated command path
+    but does not authenticate a person: a fake terminal or pseudo terminal bypasses it.
+    """
+    _require_interactive(terminal)
+    if review_status not in _DECISION_STATUSES:
+        _invalid_candidate("la decisión debe ser APPROVED o REJECTED")
+    revision, content, state = _load_corpus(state_path, dossier, expected_revision)
+    candidate = _decidable_candidate(state, candidate_id, version)
+    existing = state.decision_for(candidate)
+    if existing is not None:
+        if existing.review_status is review_status:
+            return DecisionResult(existing, False, revision)
+        raise AssimilationError("CONFLICT", f"{candidate_id} v{version} ya tiene la decisión "
+                                            f"{existing.review_status.value}; para cambiarla crea "
+                                            "una versión nueva del candidato")
+    if state.closure is not None:
+        raise AssimilationError("CONFLICT", "la asimilación está cerrada")
+    if candidate.version != _latest_version(state, candidate_id):
+        raise AssimilationError("CONFLICT", f"{candidate_id} v{version} ya no es la versión "
+                                            "vigente; decide sobre la última")
+    _require_unlocked(state_path)
+    verb = _PHRASE_VERB[review_status]
+    nonce = _nonce()
+    phrase = f"{verb} {candidate_id} v{version} {nonce}"
+    _confirm(terminal, phrase, [
+        "DECISIÓN HUMANA REQUERIDA",
+        f"Candidato: {candidate_id}",
+        f"Versión: {version}",
+        f"SHA-256: {candidate.candidate_sha256}",
+        f"Decisión: {verb}",
+    ])
+    receipt = HumanConfirmationReceipt(HUMAN_CONFIRMATION_METHOD, _sha256_text(phrase))
+    decision_id = _decision_id(candidate_id, version)
+    payload = {
+        "candidate_id": candidate_id,
+        "candidate_sha256": candidate.candidate_sha256,
+        "candidate_version": version,
+        "decision_id": decision_id,
+        "receipt": _receipt_record(receipt),
+        "review_status": review_status.value,
     }
+    decision = AssimilationDecision(decision_id, candidate_id, version,
+                                    candidate.candidate_sha256, review_status, receipt,
+                                    _evidence(dossier.dossier.forum_id, decision_id, payload))
+    with _corpus_lock(state_path):
+        revision_again, content, state = _load_corpus(state_path, dossier, None)
+        if (revision_again != revision or state.closure is not None
+                or _decidable_candidate(state, candidate_id, version) != candidate
+                or state.decision_for(candidate) is not None):
+            raise AssimilationError("CONFLICT", "el corpus cambió mientras se confirmaba; repite")
+        new_content = dict(content)
+        new_content["decisions"] = [*content["decisions"], _decision_record(decision)]
+        _write_corpus(state_path, new_content, revision + 1)
+    return DecisionResult(decision, True, revision + 1)
+
+
+def close_assimilation(
+    state_path: Path, *, dossier: LoadedForumDossier, expected_revision: int, terminal: Terminal
+) -> ClosureResult:
+    """Close the corpus snapshot after the exact phrase is typed. Closing is terminal.
+
+    Barrier A blocks the automated command path but does not authenticate a person: a fake
+    terminal or pseudo terminal bypasses it.
+    """
+    _require_interactive(terminal)
+    revision, content, state = _load_corpus(state_path, dossier, expected_revision)
+    if state.closure is not None:
+        return ClosureResult(state.closure, False, revision)
+    blockers = _closure_blockers(state, dossier)
+    if blockers:
+        _invalid_candidate(f"todavía no se puede cerrar: {'; '.join(blockers)}")
+    forum_id = dossier.dossier.forum_id
+    snapshot = _snapshot_sha256(state)
+    current = state.current_versions()
+    statuses = [state.decision_for(c).review_status for c in current]
+    rejected = [c for c, s in zip(current, statuses) if s is ReviewStatus.REJECTED]
+    uncertain = [c for c in current if c.requires_confirmation]
+    _require_unlocked(state_path)
+    nonce = _nonce()
+    phrase = f"CERRAR {forum_id} r{revision} {nonce}"
+    _confirm(terminal, phrase, [
+        "CIERRE HUMANO REQUERIDO",
+        f"Foro: {forum_id}",
+        f"Revisión del corpus: {revision}",
+        f"Snapshot SHA-256: {snapshot}",
+        f"Vigentes: {len(current)}; aprobados: {statuses.count(ReviewStatus.APPROVED)}; "
+        f"rechazados: {len(rejected)}",
+        f"Rechazados: {_candidate_names(rejected) or 'ninguno'}",
+        f"Incertidumbres: {_candidate_names(uncertain) or 'ninguna'}",
+    ])
+    receipt = HumanConfirmationReceipt(HUMAN_CONFIRMATION_METHOD, _sha256_text(phrase))
+    payload = {
+        "base_revision": revision,
+        "closure_id": CLOSURE_ID,
+        "receipt": _receipt_record(receipt),
+        "snapshot_sha256": snapshot,
+    }
+    closure = AssimilationClosure(CLOSURE_ID, revision, snapshot, receipt,
+                                  _evidence(forum_id, CLOSURE_ID, payload))
+    with _corpus_lock(state_path):
+        revision_again, content, state_again = _load_corpus(state_path, dossier, None)
+        if (revision_again != revision or state_again.closure is not None
+                or _snapshot_sha256(state_again) != snapshot):
+            raise AssimilationError("CONFLICT", "el corpus cambió mientras se confirmaba; repite")
+        new_content = dict(content)
+        new_content["closure"] = _closure_record(closure)
+        _write_corpus(state_path, new_content, revision + 1)
+    return ClosureResult(closure, True, revision + 1)
+
+
+def _load_corpus(
+    state_path: Path, dossier: LoadedForumDossier, expected_revision: int | None
+) -> tuple[int, dict, AssimilationState]:
     try:
-        atomic_write_bytes(Path(state_path), encode_state(new_content, revision=revision + 1))
+        revision, content = load_state(state_path)
     except PersistenceError as exc:
         raise AssimilationError(exc.code, exc.reason) from exc
-    return CandidateAddResult(candidate, True, revision + 1)
+    if expected_revision is not None and revision != expected_revision:
+        raise AssimilationError("CONFLICT", f"el corpus cambió (revisión {revision}, se esperaba "
+                                            f"{expected_revision}); vuelve a intentarlo")
+    state = decode_candidate_state(content, dossier=dossier, revision=revision)
+    return revision, content, state
+
+
+def _lock_path(state_path: Path) -> Path:
+    return Path(state_path).with_name(Path(state_path).name + ".lock")
+
+
+def _require_unlocked(state_path: Path) -> None:
+    """Courtesy check before asking for a phrase; the lock itself is taken again to write."""
+    if os.path.lexists(_lock_path(state_path)):
+        raise AssimilationError("CONFLICT", f"otro proceso está modificando el corpus "
+                                            f"({_lock_path(state_path)}); espera a que termine o, "
+                                            "si no hay ninguno en marcha, borra ese archivo")
+
+
+@contextmanager
+def _corpus_lock(state_path: Path):
+    """Serialize every corpus mutation between processes: re-read, validate and write under it.
+
+    The lock is a file created exclusively next to the state. If a process dies holding it, or
+    the file cannot be removed, it stays and later mutations fail with CONFLICT until a person
+    removes it; failing to remove it is always reported, never silenced.
+    """
+    lock = _lock_path(state_path)
+    try:
+        handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError as exc:
+        raise AssimilationError("CONFLICT", f"otro proceso está modificando el corpus ({lock}); "
+                                            "espera a que termine o, si no hay ninguno en "
+                                            "marcha, borra ese archivo") from exc
+    except OSError as exc:
+        raise AssimilationError("IO", f"no se puede bloquear el corpus: {exc}") from exc
+    try:
+        os.close(handle)
+    except OSError as exc:
+        note = "" if _release_lock(lock) else f"; además no se pudo borrar {lock}: bórralo a mano"
+        raise AssimilationError("IO", f"no se pudo preparar el cerrojo del corpus: {exc}{note}"
+                                ) from exc
+    try:
+        yield
+    except AssimilationError as exc:
+        if _release_lock(lock):
+            raise
+        raise AssimilationError(exc.code, f"{exc.reason}; no se guardó ningún cambio, pero no se "
+                                          f"pudo borrar el cerrojo {lock}: bórralo a mano antes "
+                                          "de seguir") from exc
+    except BaseException:
+        _release_lock(lock)
+        raise
+    if not _release_lock(lock):
+        raise AssimilationError("IO", f"el cambio se guardó, pero no se pudo borrar el cerrojo "
+                                      f"{lock}: bórralo a mano antes de seguir")
+
+
+def _release_lock(lock: Path) -> bool:
+    """Remove the lock file; return False if it is still there."""
+    try:
+        os.unlink(lock)
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _write_corpus(state_path: Path, content: dict, revision: int) -> None:
+    try:
+        atomic_write_bytes(Path(state_path), encode_state(content, revision=revision))
+    except PersistenceError as exc:
+        raise AssimilationError(exc.code, exc.reason) from exc
+
+
+def _require_interactive(terminal: Terminal) -> None:
+    if not terminal.is_interactive():
+        _invalid_candidate("esta decisión exige una terminal interactiva: ejecuta el comando tú "
+                           "mismo en la terminal, sin redirigir la entrada ni la salida")
+
+
+def _decidable_candidate(state: AssimilationState, candidate_id: str,
+                         version: int) -> AssimilationCandidate:
+    for candidate in state.candidates:
+        if candidate.key == (candidate_id, version):
+            return candidate
+    _invalid_candidate(f"no existe el candidato {candidate_id} v{version}")
+
+
+def _latest_version(state: AssimilationState, candidate_id: str) -> int:
+    return max(c.version for c in state.candidates if c.candidate_id == candidate_id)
+
+
+def _nonce() -> str:
+    return "".join(secrets.choice(NONCE_ALPHABET) for _ in range(NONCE_LENGTH))
+
+
+def _confirm(terminal: Terminal, phrase: str, lines: list[str]) -> None:
+    """Show the request, read one answer and require the exact phrase. One attempt only."""
+    terminal.write("".join(f"{line}\n" for line in lines)
+                   + f"Escribe exactamente: {phrase}\n> ")
+    answer = terminal.read_line()
+    if answer is None:
+        _invalid_candidate("confirmación cancelada (fin de la entrada); no se ha guardado nada")
+    if answer.endswith("\n"):
+        answer = answer[:-1]
+        if answer.endswith("\r"):
+            answer = answer[:-1]
+    if answer != phrase:
+        _invalid_candidate("la frase no coincide; no se ha guardado nada. Repite el comando para "
+                           "obtener un código nuevo")
+
+
+def _closure_blockers(state: AssimilationState, dossier: LoadedForumDossier) -> list[str]:
+    blockers = []
+    current = state.current_versions()
+    pending = [c for c in current if state.decision_for(c) is None]
+    if pending:
+        blockers.append(f"faltan decisiones sobre {_candidate_names(pending)}")
+    approved_literals = [c for c in current if c.candidate_class is CandidateClass.LITERAL
+                         and (d := state.decision_for(c)) is not None
+                         and d.review_status is ReviewStatus.APPROVED]
+    covered = {citation.dossier_section for c in approved_literals for citation in c.citations}
+    for section in dossier.dossier.sections:
+        if section.status is DossierSectionStatus.PROVIDED and section.section not in covered:
+            blockers.append(f"«{_HEADINGS[section.section]}» no tiene ningún LITERAL aprobado")
+    return blockers
+
+
+def _snapshot_sha256(state: AssimilationState) -> str:
+    snapshot = {
+        "candidates": [_candidate_record(c, include_hash=True) for c in state.candidates],
+        "decisions": [_decision_record(d) for d in state.decisions],
+    }
+    return hashlib.sha256(canonical_json_bytes(snapshot, pretty=False)).hexdigest()
+
+
+def _candidate_names(candidates) -> str:
+    return ", ".join(f"{c.candidate_id} v{c.version}" for c in candidates)
+
+
+def _decision_id(candidate_id: str, version: int) -> str:
+    return f"candidate:{candidate_id}:v{version}"
+
+
+def _evidence(forum_id: str, subject_id: str, payload: dict) -> SourceRef:
+    return SourceRef(
+        source_id=f"human-decision:{subject_id}",
+        locator=f"assimilation://{forum_id}/human-decisions/{quote(subject_id, safe='')}",
+        sha256=hashlib.sha256(canonical_json_bytes(payload, pretty=False)).hexdigest(),
+        section_or_passage=subject_id,
+    )
+
+
+def _receipt_record(receipt: HumanConfirmationReceipt) -> dict:
+    return {"confirmation_sha256": receipt.confirmation_sha256, "method": receipt.method}
+
+
+def _evidence_record(evidence: SourceRef) -> dict:
+    return {"locator": evidence.locator, "section_or_passage": evidence.section_or_passage,
+            "sha256": evidence.sha256, "source_id": evidence.source_id}
+
+
+def _decision_record(decision: AssimilationDecision) -> dict:
+    return {
+        "candidate_id": decision.candidate_id,
+        "candidate_sha256": decision.candidate_sha256,
+        "candidate_version": decision.candidate_version,
+        "decision_id": decision.decision_id,
+        "evidence": _evidence_record(decision.evidence),
+        "receipt": _receipt_record(decision.receipt),
+        "review_status": decision.review_status.value,
+    }
+
+
+def _closure_record(closure: AssimilationClosure) -> dict:
+    return {
+        "base_revision": closure.base_revision,
+        "closure_id": closure.closure_id,
+        "evidence": _evidence_record(closure.evidence),
+        "receipt": _receipt_record(closure.receipt),
+        "snapshot_sha256": closure.snapshot_sha256,
+    }
+
+
+def _decode_receipt(value: object, where: str) -> HumanConfirmationReceipt:
+    if not isinstance(value, dict) or set(value) != _RECEIPT_KEYS:
+        _invalid_candidate(f"{where}: recibo con claves inesperadas")
+    return HumanConfirmationReceipt(value["method"], value["confirmation_sha256"])
+
+
+def _check_evidence(value: object, expected: SourceRef, where: str) -> SourceRef:
+    if not isinstance(value, dict) or set(value) != _EVIDENCE_KEYS:
+        _invalid_candidate(f"{where}: evidencia con claves inesperadas")
+    if value != _evidence_record(expected):
+        _invalid_candidate(f"{where}: la evidencia no corresponde al registro (modificado fuera "
+                           "del core)")
+    return expected
+
+
+def _decode_decision(position: int, record: object, forum_id: str) -> AssimilationDecision:
+    where = f"decisión {position} del corpus"
+    if not isinstance(record, dict) or set(record) != _DECISION_KEYS:
+        _invalid_candidate(f"{where}: claves inesperadas")
+    receipt = _decode_receipt(record["receipt"], where)
+    status = _enum_value(ReviewStatus, record["review_status"], f"{where}: review_status")
+    payload = {key: record[key] for key in _DECISION_KEYS - {"evidence"}}
+    if not isinstance(record["decision_id"], str):
+        _invalid_candidate(f"{where}: decision_id inválido")
+    evidence = _check_evidence(record["evidence"],
+                               _evidence(forum_id, record["decision_id"], payload), where)
+    return AssimilationDecision(record["decision_id"], record["candidate_id"],
+                                record["candidate_version"], record["candidate_sha256"], status,
+                                receipt, evidence)
+
+
+def _decode_closure(record: object, forum_id: str) -> AssimilationClosure:
+    where = "cierre del corpus"
+    if not isinstance(record, dict) or set(record) != _CLOSURE_KEYS:
+        _invalid_candidate(f"{where}: claves inesperadas")
+    receipt = _decode_receipt(record["receipt"], where)
+    payload = {key: record[key] for key in _CLOSURE_KEYS - {"evidence"}}
+    evidence = _check_evidence(record["evidence"], _evidence(forum_id, CLOSURE_ID, payload), where)
+    return AssimilationClosure(record["closure_id"], record["base_revision"],
+                               record["snapshot_sha256"], receipt, evidence)
+
+
+def _require_sha256(name: str, value: object) -> None:
+    if not isinstance(value, str) or not _SHA256_HEX.fullmatch(value):
+        _invalid_candidate(f"{name} debe ser un SHA-256 en minúsculas")
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)

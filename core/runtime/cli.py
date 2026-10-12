@@ -13,14 +13,18 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from adapters.manual import ManualAdapterError, load_manual_dossier
+from core.review.models import ReviewStatus
 from core.runtime.assimilation import (
     AssimilationCandidate,
+    AssimilationDecision,
     AssimilationError,
     DossierSection,
     _candidate_record,
     _source_declarations,
     _SourceDeclaration,
     add_candidate,
+    close_assimilation,
+    record_candidate_decision,
 )
 from core.runtime.persistence import PersistenceError, load_strict_json
 from core.runtime.workspace import (
@@ -113,6 +117,27 @@ def _build_parser() -> argparse.ArgumentParser:
     show.add_argument("--candidate-id", required=True)
     show.add_argument("--version", type=int, help="versión concreta (por defecto, la última)")
     show.set_defaults(handler=_candidate_show, action_name="assimilation.candidate.show")
+    for name, status, help_text in (
+        ("approve", ReviewStatus.APPROVED, "aprueba una versión; pide teclear una frase con un código en tu terminal; frena la automatización pero no autentica a la persona"),
+        ("reject", ReviewStatus.REJECTED, "rechaza una versión; pide teclear una frase con un código en tu terminal; frena la automatización pero no autentica a la persona"),
+    ):
+        decide = candidate_actions.add_parser(name, help=help_text)
+        _workspace_argument(decide)
+        decide.add_argument("--candidate-id", required=True)
+        decide.add_argument("--version", required=True, type=int)
+        decide.set_defaults(handler=_candidate_decide, review_status=status,
+                            action_name=f"assimilation.candidate.{name}")
+
+    decision = groups.add_parser("decision", help="decisiones humanas registradas")
+    decision_actions = decision.add_subparsers(dest="decision_action", required=True,
+                                               metavar="acción")
+    decision_list = decision_actions.add_parser("list", help="lista las decisiones")
+    _workspace_argument(decision_list)
+    decision_list.set_defaults(handler=_decision_list, action_name="assimilation.decision.list")
+
+    close = groups.add_parser("close", help="cierra la asimilación; pide teclear una frase con un código en tu terminal; frena la automatización pero no autentica a la persona")
+    _workspace_argument(close)
+    close.set_defaults(handler=_assimilation_close, action_name="assimilation.close")
     return parser
 
 
@@ -267,14 +292,14 @@ def _candidate_list(args: argparse.Namespace) -> int:
     candidates = workspace.candidates
     if args.json:
         _emit({"ok": True, "action": args.action_name,
-               "candidates": [_candidate_summary(c) for c in candidates],
+               "candidates": [_candidate_summary(c, workspace) for c in candidates],
                "corpus_revision": workspace.corpus_revision,
                "workspace": str(workspace.workspace_root)})
     elif not candidates:
         _line("No hay candidatos.")
     else:
         for candidate in candidates:
-            _line(_candidate_line(candidate))
+            _line(_candidate_line(candidate, workspace))
     return EXIT_OK
 
 
@@ -288,12 +313,17 @@ def _candidate_show(args: argparse.Namespace) -> int:
         raise AssimilationError("INVALID_STATE", f"no existe el candidato {wanted}")
     candidate = versions[-1]
     if args.json:
+        decision = _decision_of(candidate, workspace)
         _emit({"ok": True, "action": args.action_name,
                "candidate": _candidate_record(candidate, include_hash=True),
                "corpus_revision": workspace.corpus_revision,
+               "decision": None if decision is None else _decision_summary(decision),
                "workspace": str(workspace.workspace_root)})
         return EXIT_OK
-    _line(_candidate_line(candidate))
+    _line(_candidate_line(candidate, workspace))
+    decision = _decision_of(candidate, workspace)
+    _line("Decisión: pendiente" if decision is None else
+          f"Decisión: {decision.review_status.value} (evidencia={decision.evidence.sha256})")
     for citation in candidate.citations:
         passage = "null" if citation.declared_passage is None else citation.declared_passage
         _line(f"Cita: {citation.dossier_section.value} | {citation.source_id} | "
@@ -307,22 +337,122 @@ def _candidate_show(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _candidate_summary(candidate: AssimilationCandidate) -> dict[str, object]:
+def _decision_of(candidate: AssimilationCandidate,
+                 workspace: LoadedWorkspace | None) -> AssimilationDecision | None:
+    if workspace is None:
+        return None
+    for decision in workspace.decisions:
+        if decision.candidate_key == candidate.key:
+            return decision
+    return None
+
+
+def _candidate_summary(candidate: AssimilationCandidate,
+                       workspace: LoadedWorkspace | None = None) -> dict[str, object]:
+    """`review_status` is the immutable state of the record; `decision` is the effective one."""
+    decision = _decision_of(candidate, workspace)
     return {
         "candidate_id": candidate.candidate_id,
         "candidate_sha256": candidate.candidate_sha256,
         "class": candidate.candidate_class.value,
+        "decision": None if decision is None else decision.review_status.value,
         "domain": candidate.domain.value,
         "review_status": candidate.review_status.value,
         "version": candidate.version,
     }
 
 
-def _candidate_line(candidate: AssimilationCandidate) -> str:
+def _candidate_line(candidate: AssimilationCandidate,
+                    workspace: LoadedWorkspace | None = None) -> str:
     line = (f"{candidate.candidate_id} v{candidate.version} | {candidate.candidate_class.value} | "
             f"{candidate.domain.value} | {candidate.review_status.value} | "
             f"sha256={candidate.candidate_sha256}")
+    decision = _decision_of(candidate, workspace)
+    if decision is not None:
+        line += f" | decisión={decision.review_status.value}"
     return f"{line} | REQUIERE CONFIRMACIÓN" if candidate.requires_confirmation else line
+
+
+# --- human decisions and closure --------------------------------------------------------------
+
+
+class _SystemTerminal:
+    """The real terminal. The CLI offers no flag, variable or file that replaces it."""
+
+    def is_interactive(self) -> bool:
+        return sys.stdin.isatty() and sys.stdout.isatty()
+
+    def write(self, text: str) -> None:
+        _write_exact(text)
+
+    def read_line(self) -> str | None:
+        line = sys.stdin.readline()
+        return None if line == "" else line
+
+
+def _reject_json(args: argparse.Namespace) -> None:
+    if args.json:
+        raise AssimilationError("INVALID_STATE", "las decisiones humanas no admiten --json: "
+                                                 "ejecuta el comando en tu terminal y responde "
+                                                 "a la confirmación")
+
+
+def _candidate_decide(args: argparse.Namespace) -> int:
+    _reject_json(args)
+    workspace = _load(args)
+    result = record_candidate_decision(
+        workspace.workspace_root / CORPUS_STATE, dossier=workspace.dossier,
+        expected_revision=workspace.corpus_revision, candidate_id=args.candidate_id,
+        version=args.version, review_status=args.review_status, terminal=_SystemTerminal())
+    decision = result.decision
+    prefix = "Decisión registrada" if result.created else "Decisión ya existente"
+    _line(f"{prefix}: {decision.candidate_id} v{decision.candidate_version} | "
+          f"{decision.review_status.value} | sha256={decision.candidate_sha256}")
+    _line(f"Revisión del corpus: {result.corpus_revision}.")
+    return EXIT_OK
+
+
+def _assimilation_close(args: argparse.Namespace) -> int:
+    _reject_json(args)
+    workspace = _load(args)
+    result = close_assimilation(
+        workspace.workspace_root / CORPUS_STATE, dossier=workspace.dossier,
+        expected_revision=workspace.corpus_revision, terminal=_SystemTerminal())
+    closure = result.closure
+    prefix = "Asimilación cerrada" if result.created else "Asimilación ya cerrada"
+    _line(f"{prefix}: {workspace.config.forum_id} | revisión base {closure.base_revision} | "
+          f"snapshot sha256={closure.snapshot_sha256}")
+    _line(f"Revisión del corpus: {result.corpus_revision}.")
+    return EXIT_OK
+
+
+def _decision_list(args: argparse.Namespace) -> int:
+    workspace = _load(args)
+    decisions = workspace.decisions
+    if args.json:
+        _emit({"ok": True, "action": args.action_name,
+               "decisions": [_decision_summary(d) for d in decisions],
+               "corpus_revision": workspace.corpus_revision,
+               "workspace": str(workspace.workspace_root)})
+    elif not decisions:
+        _line("No hay decisiones.")
+    else:
+        for decision in decisions:
+            _line(f"{decision.candidate_id} v{decision.candidate_version} | "
+                  f"{decision.review_status.value} | sha256={decision.candidate_sha256} | "
+                  f"evidencia={decision.evidence.sha256}")
+    return EXIT_OK
+
+
+def _decision_summary(decision: AssimilationDecision) -> dict[str, object]:
+    return {
+        "candidate_id": decision.candidate_id,
+        "candidate_sha256": decision.candidate_sha256,
+        "candidate_version": decision.candidate_version,
+        "decision_id": decision.decision_id,
+        "evidence_sha256": decision.evidence.sha256,
+        "review_status": decision.review_status.value,
+    }
 
 
 # --- output -----------------------------------------------------------------------------------

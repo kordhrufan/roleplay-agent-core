@@ -368,13 +368,14 @@ class StoreTest(DossierCase):
     def test_decode_requires_contiguous_ascending_versions(self):
         first = _candidate_record(self.parse(), include_hash=True)
         second = _candidate_record(self.parse(version=2, scope="fichas"), include_hash=True)
-        decode_candidate_state({"candidates": [first, second], "closure": None, "decisions": []},
-                               dossier=self.dossier)
+        state = decode_candidate_state({"candidates": [first, second], "closure": None,
+                                        "decisions": []}, dossier=self.dossier, revision=2)
+        self.assertEqual([c.version for c in state.candidates], [1, 2])
         for records in ([second], [second, first], [first, first]):
             with self.subTest(order=[r["version"] for r in records]):
                 with self.assertRaises(AssimilationError):
                     decode_candidate_state({"candidates": records, "closure": None,
-                                            "decisions": []}, dossier=self.dossier)
+                                            "decisions": []}, dossier=self.dossier, revision=2)
 
 
 if __name__ == "__main__":

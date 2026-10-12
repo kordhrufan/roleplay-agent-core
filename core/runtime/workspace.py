@@ -21,6 +21,8 @@ from pathlib import Path
 from core.runtime.assimilation import (
     DOSSIER_NAME,
     AssimilationCandidate,
+    AssimilationClosure,
+    AssimilationDecision,
     AssimilationError,
     DossierError,
     LoadedForumDossier,
@@ -127,6 +129,8 @@ class LoadedWorkspace:
     dossier: LoadedForumDossier
     corpus_revision: int
     candidates: tuple[AssimilationCandidate, ...]
+    decisions: tuple[AssimilationDecision, ...]
+    closure: AssimilationClosure | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -431,10 +435,11 @@ def _load_workspace(root: Path, expected_core_root: Path | None) -> LoadedWorksp
         _invalid(f"falta {CORPUS_STATE} o no es un archivo")
     revision, content = load_state(root / CORPUS_STATE)
     try:
-        candidates = decode_candidate_state(content, dossier=dossier)
+        state = decode_candidate_state(content, dossier=dossier, revision=revision)
     except AssimilationError as exc:
         raise WorkspaceError(exc.code, f"{CORPUS_STATE}: {exc.reason}") from exc
-    return LoadedWorkspace(config, root, dossier, revision, candidates)
+    return LoadedWorkspace(config, root, dossier, revision, state.candidates, state.decisions,
+                           state.closure)
 
 
 def _parse_config(data: object) -> WorkspaceConfig:

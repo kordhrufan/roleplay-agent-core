@@ -91,10 +91,10 @@ class ParserTest(CliCase):
                          "--declared-passage", "Convivencia", "--without-declared-passage")
         self.assertEqual(code, 2)
 
-    def test_no_decision_closure_instance_or_publication_commands(self):
-        for argv in (["assimilation", "candidate", "approve"], ["assimilation", "candidate", "reject"],
-                     ["assimilation", "close"], ["assimilation", "decide"], ["instance"],
-                     ["publish"], ["send"], ["post"], ["model"], ["turns"]):
+    def test_no_instance_or_publication_commands(self):
+        # Human decisions exist since 4c1 and are covered by test_assimilation_decision_cli.
+        for argv in (["assimilation", "decide"], ["instance"], ["publish"], ["send"], ["post"],
+                     ["model"], ["turns"]):
             with self.subTest(argv=argv):
                 self.assertEqual(run(*argv)[0], 2)
 
@@ -183,8 +183,9 @@ class CandidateTest(CliCase):
         payload = json.loads(out)
         self.assertEqual(set(payload), {"ok", "action", "candidates", "corpus_revision", "workspace"})
         self.assertEqual([c["class"] for c in payload["candidates"]], list(CANDIDATES))
-        self.assertTrue(all(set(c) == {"candidate_id", "candidate_sha256", "class", "domain",
-                                       "review_status", "version"} for c in payload["candidates"]))
+        self.assertTrue(all(set(c) == {"candidate_id", "candidate_sha256", "class", "decision",
+                                       "domain", "review_status", "version"}
+                            and c["decision"] is None for c in payload["candidates"]))
         code, out, _ = run("assimilation", "candidate", "list", "--workspace", self.ws)
         lines = out.splitlines()
         self.assertEqual(len(lines), 4)
@@ -208,7 +209,9 @@ class CandidateTest(CliCase):
         code, out, _ = run("--json", "assimilation", "candidate", "show", "--workspace", self.ws,
                            "--candidate-id", "turnos")
         payload = json.loads(out)
-        self.assertEqual(set(payload), {"ok", "action", "candidate", "corpus_revision", "workspace"})
+        self.assertEqual(set(payload), {"ok", "action", "candidate", "corpus_revision", "decision",
+                                        "workspace"})
+        self.assertIsNone(payload["decision"])
         self.assertEqual(payload["candidate"]["version"], 2)
         self.assertIn("candidate_sha256", payload["candidate"])
         code, out, _ = run("assimilation", "candidate", "show", "--workspace", self.ws,
