@@ -6,10 +6,10 @@ Generalizar Nozomu Agent como `roleplay-agent-core`: un núcleo reutilizable par
 foro de rol, configurable por personaje, mundo, sistema, plataforma e instancia. Este documento
 define la extracción y un plan para Claude; no implementa código ni altera el legado.
 
-Versión base del detalle del sub-incremento 4c2: commit `8e3185c` a 2026-10-12, rama
-`feature/incremento-4-rebanada-vertical`, con 4a–4c1 aprobados e implementados. La única diferencia
-de trabajo al iniciar este análisis es la nota de validación TTY de 4c1 aportada por el usuario.
-`main` permanece en `96eca81`; los incrementos 1–3 siguen en ramas apiladas sin fusionar.
+Versión base del detalle del sub-incremento 4d: commits `f5a0f97` (4c2 aprobado) y `45f667a`
+(`.gitattributes` fija LF en plantillas/fixtures), a 2026-10-12, rama
+`feature/incremento-4-rebanada-vertical`, sin cambios de trabajo al iniciar este análisis. `main`
+permanece en `96eca81`; los incrementos 1–3 siguen en ramas apiladas sin fusionar.
 `reference/migration-source/` es la copia inmutable inspeccionada. La auditoría anterior se trata
 como hipótesis histórica porque declara que su fuente estaba vacía; no se usa como prueba de la
 implementación actual.
@@ -106,8 +106,11 @@ implementación actual.
 - `core/runtime/{assimilation,workspace,cli}.py` — incrementos 4b–4c1 aprobados: candidatos
   manuales inmutables, citas resueltas desde `quote`, historial/versionado, decisiones con barrera
   TTY, cierre terminal, cerrojo provisional y recarga íntegra del estado cerrado.
-- Las doce suites actuales suman 295 pruebas aprobadas que los incrementos siguientes deben
-  conservar.
+- `core/runtime/{instance,workspace,cli}.py` — 4c2 aprobado: instancia cerrada autocontenida,
+  plantillas congeladas, consultas del corpus aprobado, creación Windows con publicación segura y
+  recarga que rechaza cualquier entrada no declarada.
+- Las quince suites actuales suman 349 pruebas aprobadas en clon limpio que los incrementos
+  siguientes deben conservar.
 
 ### Hallazgos de contraste
 
@@ -519,8 +522,8 @@ el archivo o importar el cambio mediante una operación.
 
 Estos hashes detectan ediciones accidentales, **no autentican al actor**: quien tenga los mismos
 permisos de escritura puede recalcularlos o modificar el core. No deben presentarse como barrera de
-seguridad ni como prueba de intervención humana. `concept.md` es deliberadamente entrada del
-usuario y puede editarse; solo una importación por CLI crea una versión gestionada con su hash.
+seguridad ni como prueba de intervención humana. El archivo externo de concepto es entrada
+editable del usuario; solo una importación por CLI crea una versión gestionada con su hash.
 
 #### Candidatos manuales, decisiones y citas exactas (incrementos 4b–4c1)
 
@@ -582,10 +585,10 @@ Subcomandos acumulados: 4a añade `assimilation init --dossier RUTA --workspace 
 `assimilation status --workspace RUTA`; 4b añade `assimilation source list/show` y `assimilation
 candidate add/list/show`; 4c1 añade decisiones/cierre humanos y 4c2,
 `instance init --workspace RUTA --output RUTA`, `instance status` e `instance corpus list/show`;
-4d añade `character concept import`, `character proposal add/list/show` y su decisión humana; 4e
-añade `character draft create` y `character staff record`. `--workspace` y `--output` son siempre
-explícitos, sin defaults ni variables de entorno. No existe ni se reserva `publish`, `send`, `post`
-o equivalente.
+4d1 añade `character concept import/list/show`; 4d2, `character effective show` y
+`character proposal add/list/show/approve/reject`; 4e añade `character draft create` y
+`character staff record`. `--workspace` y `--output` son siempre explícitos, sin defaults ni
+variables de entorno. No existe ni se reserva `publish`, `send`, `post` o equivalente.
 
 #### Reparto del adaptador manual
 
@@ -2003,32 +2006,298 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
 
      Las cuatro comprobaciones funcionales usan temporales externos; después se aparta o borra el
      workspace y se repiten status/list/show. El `rg` y el diff de `reference/` terminan sin salida.
-4d. [ ] **Concepto aportado y propuestas de ajuste.** Alcance:
-    `core/character/{__init__,models}.py`, `core/runtime/{instance,persistence,cli}.py`,
-    `core/runtime/templates/instance-policy.template.md` y
-    `tests/test_{character_models,character_cli}.py`. Importar/hash/versionar `concept.md`; permitir
-    al agente crear propuestas citadas solo contra candidatos aprobados y al humano aceptar o
-    rechazar cada versión mediante la barrera de 4c1, sin reescribir el concepto original.
-    Criterio: sin concepto del usuario no hay personaje; una propuesta pendiente/rechazada no
-    cambia la versión efectiva y aceptar una crea una nueva composición auditable, no aprobación de
-    staff.
+4d1. [x] **Estado de personaje y declaración del concepto humano (detallado).** Objetivo: abrir un
+     namespace mutable estrictamente validado dentro de la instancia e importar versiones de texto
+     que la persona declara como su concepto; todavía no crear propuestas ni ficha.
+
+     **Decisiones previas.** No modificar ninguna plantilla ni
+     `tests/expected_instance_templates.py`: `INSTANCE_SCHEMA_VERSION == 1` fija también el set de
+     instrucciones v1 y sus cuatro plantillas quedan inmutables. La política v1 ya dice que el
+     concepto procede de la persona y que cualquier acción humana futura se ejecuta personalmente.
+     Cuando sea imprescindible cambiar instrucciones se crearán archivos v2 nuevos y un schema de
+     instancia v2; `load_instance` despachará por schema y conservará el renderizador v1. No habrá
+     actualización implícita ni se reinterpretarán instancias antiguas con plantillas actuales.
+
+     `work/integrity.json` continúa cubriendo **solo** los estáticos de 4c2 y no se reescribe. El
+     nuevo `characters/` es el único root mutable permitido; cada `characters/<character_id>/state.json`
+     es un sobre autohasheado, se valida por su propio decoder y usa
+     `characters/<character_id>/state.json.lock`. No hay lock global: dos personajes distintos
+     pueden avanzar; todas las operaciones sobre uno se serializan. La lista de entradas permitidas
+     sigue cerrada, no se acepta ningún otro archivo/directorio dinámico.
+
+     El concepto es Markdown libre, no un formulario. Se conserva carácter a carácter dentro de un
+     único estado JSON; no se mantiene un `concept.md` duplicado, evitando una transacción de dos
+     archivos. El input debe ser archivo regular externo a checkout e instancia, UTF-8 sin BOM, no
+     vacío, sin NUL ni controles salvo TAB/CR/LF; no se normalizan CRLF, espacios ni LF final. La
+     importación es acción humana con barrera A: el prompt enseña texto, SHA-256, bytes y terminación
+     LF, y la persona lo declara como propio. Esto acredita adopción humana explícita, no demuestra
+     quién redactó originalmente el archivo frente a pseudo-TTY, API con `Terminal` falso o core
+     modificado; se mantiene el límite aceptado de la barrera A.
+
+     **Archivos.** Crear `core/character/{__init__,models}.py` y `core/runtime/character.py`;
+     modificar `core/runtime/{assimilation,instance,cli,__init__}.py`; crear
+     `tests/test_{character_models,character_state,character_cli}.py`. No modificar
+     `persistence.py`, `workspace.py`, plantillas, expected templates, fixtures ni código anterior
+     salvo el pequeño factor común de confirmación descrito abajo.
+     `core/character/__init__.py` reexporta modelos/codec; `core/runtime/__init__.py` añade sus
+     modelos, tres operaciones y `confirm_human_action`, sin retirar exports previos.
+
+     **Modelos inmutables.** En `core/character/models.py`, todos `frozen=True, slots=True`:
+
+     - `ConceptAuthorship(str, Enum)` con único valor `HUMAN_DECLARED`.
+     - `ConceptVersion(version: int, text: str, authorship: ConceptAuthorship,
+       receipt: HumanConfirmationReceipt, evidence: SourceRef, concept_sha256: str = init=False,
+       utf8_size: int = init=False)`. Versión positiva; texto con las reglas anteriores; hash y
+       tamaño se calculan sobre `text.encode("utf-8")`; receipt/evidence obligatorios.
+     - `CharacterState(character_id: str, concepts: tuple[ConceptVersion, ...],
+       proposals: tuple = (), proposal_decisions: tuple = ())`. ID
+       `[a-z0-9]+(?:-[a-z0-9]+)*`; al menos un concepto, versiones contiguas 1..N; en 4d1 las dos
+       tuplas reservadas deben estar vacías. `current_concept()` devuelve la última versión.
+     - `LoadedCharacter(character_root: Path, state_revision: int, state: CharacterState)` y
+       `ConceptImportResult(character: LoadedCharacter, concept: ConceptVersion, created: bool)`.
+     - `CharacterError(code, reason)` admite `INVALID_STATE`, `CONFLICT`,
+       `UNSAFE_DESTINATION`, `IO` y llega al mapeo CLI 3/4/5 existente.
+
+     Reutilizar `HumanConfirmationReceipt` y `Terminal` de `assimilation.py`, sin copiar el modelo
+     ni ofrecer otro canal. Para evitar el ciclo `runtime.__init__` → `instance` →
+     `character.models` → `runtime`, `models.py` usa anotación diferida/`TYPE_CHECKING` y hace el
+     import local del tipo solo al validar o reconstruir, nunca al importar el módulo. Firmas puras:
+
+     ```python
+     def make_concept_version(*, forum_id: str, character_id: str, version: int,
+                              text: str, receipt: HumanConfirmationReceipt) -> ConceptVersion: ...
+     def decode_character_state(content: object, *, forum_id: str,
+                                revision: int) -> CharacterState: ...
+     def encode_character_content(state: CharacterState) -> dict[str, object]: ...
+     ```
+
+     `make_concept_version` crea el `SourceRef`; el decoder reconstruye todo, recalcula hash, tamaño
+     y evidencia y rechaza bytes/registro incoherentes. `revision` debe ser entero positivo y no se
+     confunde con la versión de concepto.
+
+     **Persistencia exacta.** Primera importación: sobre común con `revision: 1`; cada versión nueva
+     incrementa en uno. `content` tiene exactamente:
+
+     ```json
+     {
+       "character_id": "ejemplo",
+       "concepts": [
+         {
+           "authorship": "HUMAN_DECLARED",
+           "concept_sha256": "<sha256 de UTF-8 exacto>",
+           "evidence": {
+             "locator": "instance://<forum_id>/characters/ejemplo/concepts/v1",
+             "section_or_passage": "concept:ejemplo:v1",
+             "sha256": "<sha256 de payload canónico>",
+             "source_id": "human-concept:ejemplo:v1"
+           },
+           "receipt": {
+             "confirmation_sha256": "<sha256 de la frase aceptada>",
+             "method": "TTY_NONCE_V1"
+           },
+           "text": "Texto exacto del concepto",
+           "utf8_size": 25,
+           "version": 1
+         }
+       ],
+       "proposal_decisions": [],
+       "proposals": []
+     }
+     ```
+
+     El payload de evidencia contiene exactamente `authorship`, `character_id`, `concept_sha256`,
+     `receipt`, `text`, `utf8_size` y `version`, sin `evidence`; se hashea como JSON canónico
+     compacto. Percent-encodear `forum_id`/ID al construir el locator aunque sus regex actuales ya
+     sean seguras. No guardar path de input, nonce, hora ni identidad supuesta de la persona.
+
+     Misma ID/versión y mismo texto devuelve el registro existente sin escribir ni retar de nuevo,
+     pero el comando sigue exigiendo stdin+stdout TTY. Misma ID/versión y otro texto da `CONFLICT`;
+     una versión debe ser exactamente N+1 y no puede repetir el texto/hash de N. Cada nueva versión
+     humana pasa a ser el concepto vigente; las anteriores permanecen auditables.
+
+     **Carga de instancia y escritura.** Separar en `instance.py` `_STATIC_ROOT_DIRS` (`dossier`,
+     `corpus`, `work`) de `_MUTABLE_ROOT_DIRS` (`characters`). El paseo del manifiesto se limita a
+     estáticos. `characters/` puede faltar o estar vacío; si existe, no puede ser link/junction y
+     cada hijo debe ser un directorio cuyo nombre sea un ID válido, con exactamente `state.json` y,
+     durante una operación o tras caída, el opcional `state.json.lock`, ambos regulares. Recargar
+     cada sobre/decoder y añadir `characters: tuple[LoadedCharacter, ...]`, ordenada por ID, a
+     `LoadedInstance`. Cualquier otro hijo, staging abandonado, profundidad extra o estado inválido
+     hace fallar `load_instance`; un lock no invalida lectura/status, pero bloquea mutaciones.
+
+     En `core/runtime/character.py`:
+
+     ```python
+     def import_concept(instance_root: Path, *, expected_core_root: Path,
+                        character_id: str, version: int, input_path: Path,
+                        terminal: Terminal) -> ConceptImportResult: ...
+     def list_concepts(instance: LoadedInstance, *,
+                       character_id: str) -> tuple[ConceptVersion, ...]: ...
+     def get_concept(instance: LoadedInstance, *, character_id: str,
+                     version: int) -> ConceptVersion: ...
+     ```
+
+     `import_concept` exige primero terminal interactivo; carga instancia e input, valida secuencia e
+     idempotencia y comprueba lock antes de preguntar. Tras confirmar vuelve a cargar instancia e
+     input y exige mismos bytes, revisión y ausencia/presencia del personaje. Para v1 crea
+     `characters/` si falta, prepara el directorio completo en `.ID.staging-<token>` y lo publica con
+     `_destination_state`/`_publish`; creación solo en Windows, mismas defensas de componentes,
+     junctions, carrera y limpieza que 4c2 (ganador idéntico → `created=False`; distinto →
+     `CONFLICT`). Para N>1 adquiere el lock por `O_CREAT|O_EXCL`, hace la recarga definitiva bajo el
+     lock y usa `atomic_write_bytes(encode_state(...))`. No mantener lock mientras la persona escribe.
+     Copiar la semántica de liberación de 4c1: lock huérfano → `CONFLICT` con path; fallo al quitarlo
+     siempre se informa, diferenciando si se guardó o no. Revalidar `_linked_component` justo antes
+     de crear/publicar/escribir.
+
+     Añadir en `assimilation.py`, sin cambiar un byte de prompts existentes:
+
+     ```python
+     def confirm_human_action(terminal: Terminal, *, phrase_prefix: str,
+                              prompt: str) -> HumanConfirmationReceipt: ...
+     ```
+
+     Valida terminal, genera internamente el nonce de 8 caracteres con el alfabeto aprobado,
+     escribe `prompt + "Escribe exactamente: " + phrase_prefix + " " + nonce + "\n> "`, admite
+     una sola línea y solo elimina un LF o CRLF final; EOF/Ctrl+C/error/frase distinta no guarda.
+     Devuelve recibo con hash de la frase completa. Extraer un auxiliar privado común para lectura y
+     hacer que `_confirm` de 4c1 lo use conservando sus salidas byte a byte. La CLI nunca inyecta
+     terminal, nonce, archivo de respuesta, argumento ni variable de entorno; el bypass por API
+     falsa sigue documentado.
+
+     El prompt exacto de concepto es, sustituyendo mayúsculas y escribiendo `TEXT` literalmente; si
+     no termina en LF se añade solo el LF visual antes del footer:
+
+     ```text
+     DECLARACIÓN HUMANA DE AUTORÍA
+     Personaje: ID
+     Versión: N
+     SHA-256: HASH
+     Bytes UTF-8: SIZE
+     Termina en LF: SÍ|NO
+     Concepto exacto (hasta «Fin del concepto.»):
+     TEXT
+     Fin del concepto.
+     Declara que este texto es el concepto que tú aportas; no una propuesta del agente.
+     Escribe exactamente: DECLARAR-CONCEPTO ID vN NONCE
+     >␠
+     ```
+
+     En el bloque anterior `␠` representa un único espacio ASCII; los bytes finales del prompt son
+     exactamente `> `, sin LF posterior.
+
+     `phrase_prefix` exacto es `DECLARAR-CONCEPTO ID vN`. En terminal integrada de VS Code funciona
+     como 4c1; stdout o stdin redirigido falla con código 3 antes de mutar.
+
+     **CLI exacta.** Añadir:
+
+     ```text
+     character concept import --instance RUTA --character-id ID --version N --input RUTA
+     character concept list --instance RUTA --character-id ID
+     character concept show --instance RUTA --character-id ID --version N
+     ```
+
+     Todos los argumentos son obligatorios; versión positiva. `import` rechaza el flag global
+     `--json` con `INVALID_STATE`: `las declaraciones humanas de concepto no admiten --json:
+     ejecuta el comando en tu terminal y responde a la confirmación`; list/show sí lo admiten. Tras
+     el prompt, texto exacto de éxito:
+
+     ```text
+     Concepto importado: ID vN | sha256=HASH | bytes=SIZE
+     Revisión del personaje: R.
+     ```
+
+     Un retry idéntico imprime `Concepto ya existente:` con el resto igual y la misma revisión. List
+     imprime una línea por versión: `ID vN | HUMAN_DECLARED | sha256=HASH | bytes=SIZE`; show imprime
+     esa línea, `Evidencia: HASH`, `Texto (exacto, hasta «Fin del concepto.»):`, el texto y
+     `Fin del concepto.` usando `_write_exact` y el mismo LF separador de 4c2. ID inexistente o
+     versión ausente da código 3.
+
+     JSON exacto: list emite `ok`, `action="character.concept.list"`, `character_id`, `concepts`
+     (cada resumen: `authorship`, `concept_sha256`, `evidence_sha256`, `utf8_size`, `version`),
+     `instance`, `state_revision`; show cambia `concepts` por `concept`, el registro persistido
+     completo. Se mantienen `{"ok":false,"code","message"}`, `_write_exact` y códigos 0/2/3/4/5.
+
+     **Tests.** `test_character_models.py`: IDs/versiones/texto Unicode, CRLF/LF/no LF/controles;
+     hash/tamaño/receipt/evidencia/locator; forma cerrada, arrays reservados vacíos, secuencia,
+     canonicalidad y manipulación. `test_character_state.py`: carga sin `characters`, vacío y varios
+     IDs ordenados; estáticos intactos; extras, links/junctions y estados/locks; v1/N+1, idempotencia,
+     conflictos y no-op; input externo/links; fake `Terminal` para prompt/frase/nonce/EOF/Ctrl+C;
+     cambio entre prompt y lock; locks concurrentes/huérfanos/fallo de liberación; escritura atómica,
+     staging/Windows y carreras. Comprobar que estado/recibo no contienen nonce/path de input y que
+     borrar el workspace no afecta.
+
+     `test_character_cli.py`: parser y comandos exactos, versión positiva, JSON permitido/prohibido,
+     no TTY y stdout redirigido sin mutación, salidas list/show UTF-8+LF exactas y códigos. Mantener
+     tests de 4c1 para demostrar que el factor común no cambia prompts; mantener las cuatro
+     plantillas y `expected_instance_templates.py` byte a byte; suite completa 349+.
+
+     **Criterios.** Sin declaración TTY de texto/hash exactos no nace concepto ni personaje. Cada
+     versión sobrevive reinicio en un sobre verificable; el manifiesto estático no cambia y el loader
+     solo abre el namespace dinámico definido. No hay propuesta, composición derivada, ficha,
+     plantilla nueva, publicación, red, modelo, SQLite ni contenido temático.
+
+     Verificación exacta desde PowerShell:
+
+     ```powershell
+     py -3.11 -B -m unittest tests.test_character_models tests.test_character_state tests.test_character_cli tests.test_assimilation_decisions tests.test_assimilation_decision_cli -v
+     py -3.11 -B -m unittest discover -s tests -v
+     py -3.11 -B -m core.runtime.cli character concept import --instance '<RUTA_INSTANCIA>' --character-id 'ejemplo' --version 1 --input '<RUTA_EXTERNA_CONCEPTO>'
+     py -3.11 -B -m core.runtime.cli character concept list --instance '<RUTA_INSTANCIA>' --character-id 'ejemplo'
+     py -3.11 -B -m core.runtime.cli character concept show --instance '<RUTA_INSTANCIA>' --character-id 'ejemplo' --version 1
+     rg -n "Nozomu|Naruto|Jcink|narutorol|account 59|275" core/character core/runtime/character.py tests/test_character_models.py tests/test_character_state.py tests/test_character_cli.py
+     git diff --check
+     git diff --name-only 45f667a -- reference core/runtime/templates tests/expected_instance_templates.py
+     git status --short
+     ```
+
+     El import se valida manualmente en TTY real; list/show se repiten tras reiniciar y apartar el
+     workspace. El `rg` y el diff de rutas congeladas terminan sin salida.
+
+4d2. [ ] **Propuestas citadas y composición efectiva (detalle posterior).** Objetivo: permitir al
+     agente proponer una composición completa alternativa y al humano aprobarla/rechazarla con
+     barrera A, sin alterar conceptos ni confundir aceptación con staff. Archivos:
+     `core/character/models.py`, `core/runtime/{character,instance,cli,__init__}.py` y
+     `tests/test_{character_proposals,character_proposal_cli}.py`; tampoco toca plantillas.
+
+     Añadirá `ConceptRef` (versión/hash del concepto humano vigente), `CorpusCandidateRef`
+     (candidate_id, versión y hash resueltos solo mediante `get_approved_candidate`),
+     `CharacterProposal`, `CharacterProposalDecision` y `EffectiveComposition`. Entrada del agente:
+     JSON cerrado con `proposal_id`, `version`, `base_composition_sha256`, `text` completo de la
+     composición propuesta, `rationale` y lista no vacía de `{candidate_id, version}`; el core añade
+     el ConceptRef vigente y hashes. No usa parches: el prompt muestra texto completo/base/hash para
+     que la persona sepa exactamente qué acepta.
+
+     Comandos previstos: `character effective show`, `character proposal add|list|show` y
+     `character proposal approve|reject`; add queda pendiente y approve/reject usan frases
+     `APROBAR-PROPUESTA ID vN NONCE`/`RECHAZAR-PROPUESTA ...`. La composición inicial es el último
+     concepto humano. Una aprobación solo se aplica si proposal es versión vigente y su base es la
+     composición efectiva actual; reemplaza el texto efectivo por el texto completo propuesto.
+     Rechazar no cambia nada; aceptar vuelve obsoletas las propuestas paralelas sobre la base vieja.
+     Un concepto humano nuevo reinicia la composición desde ese texto y deja fuera de la cadena las
+     propuestas ligadas a conceptos anteriores, sin borrar historial.
+
+     Criterio: propuesta pendiente/rechazada/obsoleta nunca entra en la composición; cada paso
+     aprobado forma una cadena de hashes reproducible y citada solo a concepto humano + corpus
+     vigente aprobado; aceptación no significa aprobación de staff, aprendizaje, uso, publicación
+     ni canon. El detalle posterior fijará JSON, outputs y carreras sin cambiar estas decisiones.
 4e. [ ] **Ficha mínima y respuesta del staff.** Alcance: `core/character/models.py`,
-    `core/runtime/{instance,persistence,cli}.py`, `core/runtime/templates/instance-policy.template.md` y
-    `tests/test_{character_draft,staff_review_cli}.py`.
-    Crear desde contenido manual del agente un `DraftVersion` cuyos `SourceRef` enlacen concepto y
-    fuentes tras candidatos aprobados; persistirlo en `profile.json` y permitir registrar una
-    respuesta de staff con evidencia y versión exacta, bajo la barrera de 4c1. Criterio: la ficha
-    inicial queda `ACTIVE` + `PENDING_HUMAN_REVIEW` + `NOT_CONFIRMED`; decidir staff no publica,
-    canoniza, enseña ni vuelve utilizable nada, y no existe comando de publicación.
+    `core/runtime/{character,instance,cli}.py` y `tests/test_{character_draft,staff_review_cli}.py`;
+    las instrucciones v1 siguen congeladas. Crear desde contenido manual del agente un
+    `DraftVersion` ligado a la `EffectiveComposition` exacta de 4d2 y a sus referencias de concepto
+    y corpus; persistirlo como otro sobre gestionado bajo el personaje y registrar respuesta de
+    staff con evidencia/versión exactas y barrera A. Criterio: la ficha inicial queda `ACTIVE` +
+    `PENDING_HUMAN_REVIEW` + `NOT_CONFIRMED`; staff no cambia composición, publica, canoniza,
+    enseña ni vuelve utilizable nada, y no existe comando de publicación.
 4f. [ ] **Recorrido vertical y contrato integrado.** Alcance:
     `tests/fixtures/vertical-neutral/` solo para JSON/Markdown de entrada neutros,
     `tests/test_vertical_slice.py` y correcciones estrictamente necesarias en archivos 4a–4e.
-    Recorrer en temporales externos: expediente → workspace → cuatro clases de candidato →
-    decisiones y cierre exactos → instancia → concepto del usuario → dos propuestas (una aceptada
-    y otra rechazada) → `DraftVersion` pendiente de staff. Criterio: el recorrido sobrevive reinicio
-    entre fases, las repeticiones no cambian historial, solo lo aprobado alimenta la ficha, los
-    bloques comunes no divergen y ninguna ruta invoca modelo, red, publicación o contenido
-    temático.
+    Copiar los inputs fixture a temporales externos antes de importarlos. Recorrer: expediente →
+    workspace → cuatro clases de candidato →
+    decisiones y cierre exactos → instancia → declaración humana de concepto → dos propuestas
+    completas sobre la base exacta (una aceptada y otra rechazada/obsoleta) → composición efectiva
+    → `DraftVersion` pendiente de staff. Criterio: el recorrido sobrevive reinicio entre fases, las
+    repeticiones no cambian historial, solo concepto declarado + corpus/propuestas aprobados
+    alimentan la ficha, instrucciones v1 no divergen y ninguna ruta invoca modelo, red, publicación
+    o contenido temático.
 5. [ ] **Asimilación completa y recuperación dirigida.** Añadir versiones/supersesión, vigencia,
    índice determinista y contratos `core/rules`/`core/world`, incluido `ABSENT`. Criterio:
    pendiente/rechazado no es consultable, conflictos devuelven `REQUIERE CONFIRMACIÓN` y la consulta
@@ -2078,11 +2347,19 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
 
 ## Riesgos y dudas abiertas
 
-No hay dudas que bloqueen 4c1 ni 4c2: la barrera humana ya está decidida como opción A, se exige TTY
-solo en stdin/stdout y el cierre es terminal. Su límite conocido permanece: no demuestra humanidad
-frente a un agente hostil que importe la API con un `Terminal` falso, maneje una pseudo-TTY o
-modifique el core con permisos equivalentes. Una garantía fuerte exigiría una credencial o proceso
-fuera de su alcance, que no forma parte de esta rebanada.
+No hay dudas que bloqueen 4d1. Se adoptan las opciones conservadoras: instrucciones v1 congeladas
+y un schema nuevo para cambios futuros; `work/integrity.json` solo para estáticos y namespace
+`characters/` cerrado con sobres/lock por personaje; concepto Markdown declarado personalmente con
+barrera A; propuesta futura como texto completo citado, no parche. El borrado completo de un
+directorio de personaje no puede distinguirse globalmente de «nunca existió» sin un índice central:
+`instance status` valida todos los presentes y una consulta por ID detecta la ausencia. Se acepta en
+esta persistencia provisional para evitar una falsa transacción entre índice y estados; SQLite del
+incremento 9 dará inventario transaccional.
+
+La barrera sigue sin demostrar humanidad o autoría frente a un agente hostil que importe la API con
+un `Terminal` falso, maneje una pseudo-TTY o modifique el core. En 4d1 significa «la persona vio y
+adoptó este texto exacto como su concepto», no una prueba forense de quién pulsó cada tecla. Una
+garantía fuerte exigiría identidad/credencial o un proceso externo, fuera de esta rebanada.
 
 1. **Antes del incremento 14: ¿cuándo y cómo elegir el segundo caso de generalidad?**
    - A: mantener la elección aplazada y, al llegar al incremento 14, escoger un foro real no Naruto
@@ -2526,3 +2803,76 @@ fuera de su alcance, que no forma parte de esta rebanada.
   - Retrabajo: dos rondas de corrección (4 hallazgos, uno en dos pasos); un caso de 4a roto por
     el arreglo compartido y corregido antes de la verificación; limpieza errónea en un test
     corregida antes de la verificación.
+
+### Incremento 4d1 — estado de personaje y declaración del concepto humano
+- Rama: `feature/incremento-4-rebanada-vertical` (base `45f667a`); incluye el detalle de 4d1/4d2
+  escrito por Codex.
+- Cambios hechos: `core/character/{__init__,models}.py`; `core/runtime/character.py`
+  (`import_concept`, `list_concepts`, `get_concept`, `find_character`); en
+  `core/runtime/assimilation.py`, `confirm_human_action` y el auxiliar `_read_confirmation`
+  que ahora usa `_confirm` (prompts de 4c1 sin cambios: sus tests pasan); en
+  `core/runtime/instance.py`, el espacio mutable `characters/` y `LoadedInstance.characters`;
+  comandos `character concept import|list|show`; exports. Tests nuevos
+  `tests/test_character_{models,state,cli}.py`.
+- Resultado de los tests: suites de 4d1 → 39 OK; suite completa → 388 OK en `py -3.11` y
+  `py -3.14`, sin omitidos. Prueba de API con terminal simulado: v1, reintento sin escribir, v2,
+  `list`/`show` por CLI, e `import` sin TTY o con `--json` rechazados con código 3. Plantillas y
+  `tests/expected_instance_templates.py` sin cambios desde `45f667a`; `rg` sin coincidencias;
+  `git diff --check` limpio.
+- Revisión de Codex: «requiere correcciones» (REV4D1-01 alta, REV4D1-02 media); corregidos
+  juntos:
+  - REV4D1-01: `_path_guard` comprueba que la carpeta del personaje sigue siendo la misma
+    (dispositivo+inodo) y sin enlaces en la ruta antes de tomar el cerrojo, justo después de
+    tomarlo (nuevo parámetro `guard` de `_corpus_lock`) y justo antes de escribir; si falla, se
+    libera el cerrojo y no se escribe nada. Límite documentado: entre la última comprobación y el
+    reemplazo atómico queda una ventana que no se puede cerrar sin APIs relativas a un handle,
+    que la biblioteca estándar no ofrece en Windows.
+  - REV4D1-02: `_corpus_lock` informa un fallo de liberación tras cualquier error con `code` y
+    `reason` (AssimilationError, CharacterError, PersistenceError…), conservando su tipo y
+    código, y tras un `OSError`. Cualquier otra excepción (p. ej. `RuntimeError` o Ctrl+C) conserva
+    su tipo, pero recibe con `add_note` el aviso del cerrojo huérfano (segunda verificación).
+  - Riesgo conocido fuera de 4d1: las mutaciones del corpus del workspace (4b–4c1) no usan
+    todavía un `guard` equivalente frente a la sustitución de carpetas por junctions durante el
+    cerrojo.
+  - Resultado tras las correcciones: 42 tests de 4d1 y 391 en total, OK en `py -3.11` y
+    `py -3.14`, sin omitidos.
+- Validación funcional pendiente: `character concept import` en una terminal integrada real
+  (la shell de Claude no es interactiva).
+- Decisiones de detalle que el plan no fijaba:
+  - Cerrojo: en lugar de copiar la semántica de 4c1, `_corpus_lock` y `_require_unlocked`
+    reciben un `subject` («el corpus» por defecto, «este personaje» aquí) y se reutilizan; los
+    mensajes de 4c1 no cambian salvo «cerrojo para el corpus» en el fallo al cerrar el
+    descriptor.
+  - El error de terminal no interactiva dice ahora «esta acción humana exige…» (antes «esta
+    decisión…»), porque también lo usa la importación del concepto.
+  - Un concepto en blanco (solo espacios o saltos) cuenta como vacío.
+  - Orden de `import_concept`: terminal interactiva → ID y versión → carga de la instancia →
+    archivo de entrada → idempotencia y conflictos → cerrojo libre → frase → segunda lectura de
+    instancia y archivo → escritura (publicación atómica de `characters/<id>/` en la v1;
+    cerrojo y escritura atómica en las siguientes).
+  - Una v1 concurrente de otro proceso nunca es idéntica (lleva otro recibo), así que da
+    `CONFLICT` sin tocar el ganador.
+  - Una importación fallida puede dejar `characters/` vacío; el cargador lo acepta.
+  - Tras añadir personajes, repetir `instance init` sobre la misma carpeta da `CONFLICT`
+    (el árbol ya no es el generado), en vez de éxito idempotente.
+  - Los IDs de personaje son solo minúsculas, así que no colisionan en un sistema de archivos
+    que no distingue mayúsculas.
+  - Auxiliares públicos añadidos: `check_character_id`, `check_concept_text`,
+    `concept_summary`, `concept_record` (modelos) y `find_character` (runtime).
+- Revisión archivada en `docs/analisis/incremento-4d1-revision.md` (veredicto final: aprobado
+  tras dos verificaciones; la primera dejó pendiente el caso de excepciones sin código).
+- Métricas por agente (solo telemetría verificable; ausente = NO DISPONIBLE):
+  - Codex (`gpt-5.6-sol`, high), contadores de `~/.codex/sessions`:
+    - Análisis `01a12fb4-…` (1 encargo: detalle de 4d1/4d2); incremento respecto a la medición
+      de 4c2: entrada 3.704.651 (caché leída 3.526.528), salida 29.543 (razonamiento 18.161).
+      El hilo acumula 12,5 M de entrada: el análisis de 4d2 debe abrir uno nuevo con resumen.
+    - Revisión `01a1318b-af96-7330-a42a-3a3927110df1` (3 encargos: revisión + 2
+      verificaciones): entrada 2.860.219 (caché leída 2.749.568), salida 23.908 (razonamiento
+      11.965).
+    - Escritura de caché 0; errores/cancelaciones 0; coste o cuota NO DISPONIBLE.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde «Sigue con el 4D»; 35 respuestas de
+    API): entrada 70, salida 64.188, caché leída 29.974.149, caché escrita 893.410. Coste NO
+    DISPONIBLE.
+  - Retrabajo: dos rondas de corrección (2 hallazgos, uno en dos pasos); dos tests con
+    particularidades de Windows (mayúsculas en nombres, saltos de `write_text`) corregidos
+    antes de la revisión; reemplazos por línea de comandos fallidos sin efectos.

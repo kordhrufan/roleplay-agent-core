@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from adapters.manual import ManualAdapterError, load_manual_dossier
+from core.character.models import CharacterError, ConceptVersion, concept_record, concept_summary
 from core.review.models import ReviewStatus
 from core.runtime.assimilation import (
     AssimilationCandidate,
@@ -26,6 +27,7 @@ from core.runtime.assimilation import (
     close_assimilation,
     record_candidate_decision,
 )
+from core.runtime.character import get_concept, import_concept, list_concepts
 from core.runtime.instance import (
     ApprovedCorpusEntry,
     InstanceError,
@@ -70,7 +72,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return args.handler(args)
     except ManualAdapterError as exc:
         return _fail(args, "INVALID_STATE", exc.reason)
-    except (WorkspaceError, AssimilationError, PersistenceError, InstanceError) as exc:
+    except (WorkspaceError, AssimilationError, PersistenceError, InstanceError,
+            CharacterError) as exc:
         return _fail(args, exc.code, exc.reason)
 
 
@@ -172,6 +175,31 @@ def _build_parser() -> argparse.ArgumentParser:
     corpus_show.add_argument("--candidate-id", required=True)
     corpus_show.add_argument("--version", required=True, type=_positive_int)
     corpus_show.set_defaults(handler=_instance_corpus_show, action_name="instance.corpus.show")
+
+    character = commands.add_parser("character", help="personajes de la instancia")
+    character_groups = character.add_subparsers(dest="character_group", required=True,
+                                                metavar="grupo")
+    concept = character_groups.add_parser("concept", help="concepto aportado por la persona")
+    concept_actions = concept.add_subparsers(dest="concept_action", required=True,
+                                             metavar="acción")
+    concept_import = concept_actions.add_parser(
+        "import", help="declara un archivo como tu concepto; pide teclear una frase con un "
+                       "código en tu terminal (frena la automatización, no autentica a la persona)")
+    _instance_argument(concept_import)
+    concept_import.add_argument("--character-id", required=True)
+    concept_import.add_argument("--version", required=True, type=_positive_int)
+    concept_import.add_argument("--input", required=True, type=Path,
+                                help="archivo del concepto, fuera del checkout y de la instancia")
+    concept_import.set_defaults(handler=_concept_import, action_name="character.concept.import")
+    concept_list = concept_actions.add_parser("list", help="lista las versiones del concepto")
+    _instance_argument(concept_list)
+    concept_list.add_argument("--character-id", required=True)
+    concept_list.set_defaults(handler=_concept_list, action_name="character.concept.list")
+    concept_show = concept_actions.add_parser("show", help="muestra una versión del concepto")
+    _instance_argument(concept_show)
+    concept_show.add_argument("--character-id", required=True)
+    concept_show.add_argument("--version", required=True, type=_positive_int)
+    concept_show.set_defaults(handler=_concept_show, action_name="character.concept.show")
     return parser
 
 
@@ -609,6 +637,65 @@ def _approved_line(entry: ApprovedCorpusEntry) -> str:
             f"scope={json.dumps(candidate.scope, ensure_ascii=False)} | "
             f"sha256={candidate.candidate_sha256}")
     return f"{line} | REQUIERE CONFIRMACIÓN" if candidate.requires_confirmation else line
+
+
+# --- character --------------------------------------------------------------------------------
+
+
+def _concept_import(args: argparse.Namespace) -> int:
+    if args.json:
+        raise CharacterError("INVALID_STATE", "las declaraciones humanas de concepto no admiten "
+                                              "--json: ejecuta el comando en tu terminal y "
+                                              "responde a la confirmación")
+    result = import_concept(args.instance, expected_core_root=_checkout(),
+                            character_id=args.character_id, version=args.version,
+                            input_path=args.input, terminal=_SystemTerminal())
+    prefix = "Concepto importado" if result.created else "Concepto ya existente"
+    _line(f"{prefix}: {_concept_line(args.character_id, result.concept)}")
+    _line(f"Revisión del personaje: {result.character.state_revision}.")
+    return EXIT_OK
+
+
+def _concept_list(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    concepts = list_concepts(instance, character_id=args.character_id)
+    revision = _character_revision(instance, args.character_id)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "character_id": args.character_id,
+               "concepts": [concept_summary(c) for c in concepts],
+               "instance": str(instance.instance_root), "state_revision": revision})
+    else:
+        for concept in concepts:
+            _line(_concept_line(args.character_id, concept))
+    return EXIT_OK
+
+
+def _concept_show(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    concept = get_concept(instance, character_id=args.character_id, version=args.version)
+    revision = _character_revision(instance, args.character_id)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "character_id": args.character_id,
+               "concept": concept_record(args.character_id, concept),
+               "instance": str(instance.instance_root), "state_revision": revision})
+        return EXIT_OK
+    _line(_concept_line(args.character_id, concept))
+    _line(f"Evidencia: {concept.evidence.sha256}")
+    _exact_block("Texto (exacto, hasta «Fin del concepto.»):", concept.text, "Fin del concepto.")
+    return EXIT_OK
+
+
+def _character_revision(instance: LoadedInstance, character_id: str) -> int:
+    for character in instance.characters:
+        if character.state.character_id == character_id:
+            return character.state_revision
+    raise CharacterError("INVALID_STATE", f"no existe el personaje «{character_id}» en esta "
+                                          "instancia")
+
+
+def _concept_line(character_id: str, concept: ConceptVersion) -> str:
+    return (f"{character_id} v{concept.version} | {concept.authorship.value} | "
+            f"sha256={concept.concept_sha256} | bytes={concept.utf8_size}")
 
 
 # --- output -----------------------------------------------------------------------------------

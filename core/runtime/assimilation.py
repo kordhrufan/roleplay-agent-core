@@ -1381,47 +1381,59 @@ def _lock_path(state_path: Path) -> Path:
     return Path(state_path).with_name(Path(state_path).name + ".lock")
 
 
-def _require_unlocked(state_path: Path) -> None:
+def _require_unlocked(state_path: Path, subject: str = "el corpus") -> None:
     """Courtesy check before asking for a phrase; the lock itself is taken again to write."""
     if os.path.lexists(_lock_path(state_path)):
-        raise AssimilationError("CONFLICT", f"otro proceso está modificando el corpus "
+        raise AssimilationError("CONFLICT", f"otro proceso está modificando {subject} "
                                             f"({_lock_path(state_path)}); espera a que termine o, "
                                             "si no hay ninguno en marcha, borra ese archivo")
 
 
 @contextmanager
-def _corpus_lock(state_path: Path):
+def _corpus_lock(state_path: Path, subject: str = "el corpus", guard=None):
     """Serialize every corpus mutation between processes: re-read, validate and write under it.
 
     The lock is a file created exclusively next to the state. If a process dies holding it, or
     the file cannot be removed, it stays and later mutations fail with CONFLICT until a person
-    removes it; failing to remove it is always reported, never silenced.
+    removes it; failing to remove it is always reported, never silenced, whatever the error.
+    `guard`, if given, runs right after the lock is taken (e.g. to check that no folder on the
+    path was swapped for a link); if it fails, the lock is released and nothing is written.
     """
     lock = _lock_path(state_path)
     try:
         handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError as exc:
-        raise AssimilationError("CONFLICT", f"otro proceso está modificando el corpus ({lock}); "
+        raise AssimilationError("CONFLICT", f"otro proceso está modificando {subject} ({lock}); "
                                             "espera a que termine o, si no hay ninguno en "
                                             "marcha, borra ese archivo") from exc
     except OSError as exc:
-        raise AssimilationError("IO", f"no se puede bloquear el corpus: {exc}") from exc
+        raise AssimilationError("IO", f"no se puede bloquear {subject}: {exc}") from exc
     try:
         os.close(handle)
     except OSError as exc:
         note = "" if _release_lock(lock) else f"; además no se pudo borrar {lock}: bórralo a mano"
-        raise AssimilationError("IO", f"no se pudo preparar el cerrojo del corpus: {exc}{note}"
+        raise AssimilationError("IO", f"no se pudo preparar el cerrojo para {subject}: {exc}{note}"
                                 ) from exc
     try:
+        if guard is not None:
+            guard()
         yield
-    except AssimilationError as exc:
+    except BaseException as exc:
         if _release_lock(lock):
             raise
-        raise AssimilationError(exc.code, f"{exc.reason}; no se guardó ningún cambio, pero no se "
-                                          f"pudo borrar el cerrojo {lock}: bórralo a mano antes "
-                                          "de seguir") from exc
-    except BaseException:
-        _release_lock(lock)
+        note = (f"no se guardó ningún cambio, pero no se pudo borrar el cerrojo {lock}: bórralo a "
+                "mano antes de seguir")
+        code, reason = getattr(exc, "code", None), getattr(exc, "reason", None)
+        if isinstance(code, str) and isinstance(reason, str):
+            try:
+                wrapped = type(exc)(code, f"{reason}; {note}")
+            except Exception:  # an error type with another constructor
+                wrapped = AssimilationError("IO" if code not in _ASSIMILATION_CODES else code,
+                                            f"{reason}; {note}")
+            raise wrapped from exc
+        if isinstance(exc, OSError):
+            raise AssimilationError("IO", f"{exc}; {note}") from exc
+        exc.add_note(note)  # any other error keeps its type but never hides the orphan lock
         raise
     if not _release_lock(lock):
         raise AssimilationError("IO", f"el cambio se guardó, pero no se pudo borrar el cerrojo "
@@ -1448,8 +1460,9 @@ def _write_corpus(state_path: Path, content: dict, revision: int) -> None:
 
 def _require_interactive(terminal: Terminal) -> None:
     if not terminal.is_interactive():
-        _invalid_candidate("esta decisión exige una terminal interactiva: ejecuta el comando tú "
-                           "mismo en la terminal, sin redirigir la entrada ni la salida")
+        _invalid_candidate("esta acción humana exige una terminal interactiva: ejecuta el "
+                           "comando tú mismo en la terminal, sin redirigir la entrada ni la "
+                           "salida")
 
 
 def _decidable_candidate(state: AssimilationState, candidate_id: str,
@@ -1468,10 +1481,28 @@ def _nonce() -> str:
     return "".join(secrets.choice(NONCE_ALPHABET) for _ in range(NONCE_LENGTH))
 
 
+def confirm_human_action(terminal: Terminal, *, phrase_prefix: str,
+                         prompt: str) -> HumanConfirmationReceipt:
+    """Barrier A for any human action: show `prompt`, ask for `phrase_prefix` plus a one-time code.
+
+    The code is generated here and never accepted from outside. Returns the receipt (hash of the
+    accepted phrase). It blocks the automated command path but does not authenticate a person:
+    a fake terminal or pseudo terminal bypasses it.
+    """
+    _require_interactive(terminal)
+    phrase = f"{phrase_prefix} {_nonce()}"
+    _read_confirmation(terminal, prompt + f"Escribe exactamente: {phrase}\n> ", phrase)
+    return HumanConfirmationReceipt(HUMAN_CONFIRMATION_METHOD, _sha256_text(phrase))
+
+
 def _confirm(terminal: Terminal, phrase: str, lines: list[str]) -> None:
     """Show the request, read one answer and require the exact phrase. One attempt only."""
-    terminal.write("".join(f"{line}\n" for line in lines)
-                   + f"Escribe exactamente: {phrase}\n> ")
+    _read_confirmation(terminal, "".join(f"{line}\n" for line in lines)
+                       + f"Escribe exactamente: {phrase}\n> ", phrase)
+
+
+def _read_confirmation(terminal: Terminal, prompt: str, phrase: str) -> None:
+    terminal.write(prompt)
     answer = terminal.read_line()
     if answer is None:
         _invalid_candidate("confirmación cancelada (fin de la entrada); no se ha guardado nada")

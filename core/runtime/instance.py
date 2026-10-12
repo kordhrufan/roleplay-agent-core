@@ -17,6 +17,12 @@ import string
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.character.models import (
+    CharacterError,
+    LoadedCharacter,
+    check_character_id,
+    decode_character_state,
+)
 from core.review.models import ReviewStatus
 from core.runtime.assimilation import (
     AssimilationCandidate,
@@ -67,6 +73,9 @@ INSTANCE_CORPUS = "corpus/state.json"
 INSTANCE_INTEGRITY = "work/integrity.json"
 AGENTS_FILE = "AGENTS.md"
 CLAUDE_FILE = "CLAUDE.md"
+CHARACTERS_DIR = "characters"
+CHARACTER_STATE = "state.json"
+CHARACTER_LOCK = "state.json.lock"
 
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
 INSTANCE_TEMPLATE = _TEMPLATES / "instance.template.json"
@@ -78,7 +87,8 @@ COMMON_END = "<!-- END ROLEPLAY-AGENT-CORE:COMMON -->"
 
 _CODES = frozenset({"INVALID_STATE", "CONFLICT", "UNSAFE_DESTINATION", "IO"})
 _ROOT_FILES = frozenset({AGENTS_FILE, CLAUDE_FILE, INSTANCE_FILE})
-_ROOT_DIRS = frozenset({"dossier", "corpus", "work"})
+_ROOT_DIRS = frozenset({"dossier", "corpus", "work"})  # static, covered by integrity
+_MUTABLE_ROOT_DIRS = frozenset({CHARACTERS_DIR})  # self-hashed states, validated one by one
 _CONFIG_KEYS = frozenset({"core_root", "corpus", "display_name", "dossier", "dossier_version",
                           "forum_id", "instance_root", "kind", "packages", "schema_version",
                           "source_workspace"})
@@ -201,6 +211,7 @@ class LoadedInstance:
     candidates: tuple[AssimilationCandidate, ...]
     decisions: tuple[AssimilationDecision, ...]
     closure: AssimilationClosure
+    characters: tuple[LoadedCharacter, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,7 +224,7 @@ def create_instance(workspace_root: Path, *, output: Path, core_root: Path) -> I
     """Materialize a closed workspace as a new instance at `output`, or return the identical one."""
     try:
         return _create_instance(Path(workspace_root), output, core_root)
-    except (WorkspaceError, PersistenceError, AssimilationError) as exc:
+    except (WorkspaceError, PersistenceError, AssimilationError, CharacterError) as exc:
         raise InstanceError(exc.code, exc.reason) from exc
     except DossierError as exc:
         raise InstanceError("INVALID_STATE", str(exc)) from exc
@@ -226,7 +237,7 @@ def load_instance(instance_root: Path, *, expected_core_root: Path | None = None
     root = _absolute(instance_root)
     try:
         return _load_instance(root, root, expected_core_root)
-    except (WorkspaceError, PersistenceError, AssimilationError) as exc:
+    except (WorkspaceError, PersistenceError, AssimilationError, CharacterError) as exc:
         raise InstanceError(exc.code, exc.reason) from exc
     except DossierError as exc:
         raise InstanceError("INVALID_STATE", f"el expediente copiado no carga: {exc}") from exc
@@ -437,7 +448,8 @@ def _load_instance(physical: Path, logical_root: Path,
     for name, path in entries.items():
         if _is_link(path):
             _invalid(f"{name} es un enlace simbólico o una junction")
-        expected_kind = name in _ROOT_FILES and path.is_file() or name in _ROOT_DIRS and path.is_dir()
+        expected_kind = (name in _ROOT_FILES and path.is_file()
+                         or name in _ROOT_DIRS | _MUTABLE_ROOT_DIRS and path.is_dir())
         if not expected_kind:
             _invalid(f"{name} no forma parte de la instancia")
     config_raw = _read_regular(physical, INSTANCE_FILE)
@@ -504,8 +516,43 @@ def _load_instance(physical: Path, logical_root: Path,
                                 (CLAUDE_FILE, CLAUDE_TEMPLATE, claude_raw)):
         if render_instructions(template, config) != raw:
             _invalid(f"{name} no corresponde a su plantilla")
+    characters = _load_characters(physical, logical_root, config.forum_id)
     return LoadedInstance(config, logical_root, dossier, revision, state.candidates,
-                          state.decisions, state.closure)
+                          state.decisions, state.closure, characters)
+
+
+def _load_characters(physical: Path, logical_root: Path,
+                     forum_id: str) -> tuple[LoadedCharacter, ...]:
+    """The only mutable namespace: `characters/<id>/state.json` (+ an optional lock)."""
+    folder = physical / CHARACTERS_DIR
+    if not os.path.lexists(folder):
+        return ()
+    if _is_link(folder) or not folder.is_dir():
+        _invalid(f"{CHARACTERS_DIR} no es una carpeta normal")
+    loaded = []
+    for entry in sorted(folder.iterdir(), key=lambda p: p.name):
+        where = f"{CHARACTERS_DIR}/{entry.name}"
+        if _is_link(entry) or not entry.is_dir():
+            _invalid(f"{where} no es la carpeta de un personaje")
+        try:
+            check_character_id(entry.name)
+        except CharacterError:
+            _invalid(f"{where} no es un ID de personaje válido (¿restos de una operación "
+                     "interrumpida?)")
+        children = {child.name: child for child in entry.iterdir()}
+        if CHARACTER_STATE not in children or not set(children) <= {CHARACTER_STATE,
+                                                                     CHARACTER_LOCK}:
+            _invalid(f"{where} debe contener solo {CHARACTER_STATE} y, como mucho, su cerrojo")
+        for name, child in children.items():
+            if _is_link(child) or not child.is_file():
+                _invalid(f"{where}/{name} no es un archivo normal")
+        revision, content = load_state(entry / CHARACTER_STATE)
+        state = decode_character_state(content, forum_id=forum_id, revision=revision)
+        if state.character_id != entry.name:
+            _invalid(f"{where} contiene el personaje «{state.character_id}»")
+        loaded.append(LoadedCharacter(logical_root / CHARACTERS_DIR / entry.name, revision,
+                                      state))
+    return tuple(loaded)
 
 
 def _parse_config(data: object) -> InstanceConfig:
