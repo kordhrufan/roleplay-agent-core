@@ -152,10 +152,11 @@ def create_workspace(
         if _identity(dossier.dossier_path) != _identity(dossier_dir / DOSSIER_NAME):
             _invalid("el expediente cargado no corresponde a la carpeta indicada")
         _check_destination(target, core_root, dossier_dir)
+        initial = _destination_state(target)
         expected = _expected_files(dossier, dossier_dir, core_root)
         if target.exists() and any(target.iterdir()):
             return WorkspaceInitResult(_existing(target, expected, core_root), False)
-        return _materialize(target, expected, dossier, core_root)
+        return _materialize(target, expected, dossier, core_root, initial)
     except PersistenceError as exc:
         raise WorkspaceError(exc.code, exc.reason) from exc
     except OSError as exc:
@@ -195,10 +196,12 @@ def _absolute(path: Path) -> Path:
 
 
 def _check_destination(target: Path, core_root: Path, dossier_dir: Path) -> None:
+    _require_publish_support()
     if _CONTROL.search(str(target)):
         _unsafe("la ruta del workspace contiene caracteres de control")
-    if _is_link(target):
-        _unsafe(f"{target} es un enlace simbólico o una junction")
+    linked = _linked_component(target)
+    if linked is not None:
+        _unsafe(f"{linked} es un enlace simbólico o una junction; usa la ruta real")
     parent = target.parent
     if not parent.is_dir():
         _unsafe(f"la carpeta padre {parent} no existe; créala antes")
@@ -248,6 +251,78 @@ def _is_link(path: Path) -> bool:
     return bool(getattr(info, "st_reparse_tag", 0) & _NAME_SURROGATE)
 
 
+def _linked_component(path: Path) -> Path | None:
+    """The first existing component of `path`, itself or a parent, that is a link or junction."""
+    absolute = Path(_strip_device_prefix(os.fspath(Path(path).absolute())))
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current = current / part
+        if not os.path.lexists(current):
+            return None
+        if _is_link(current):
+            return current
+    return None
+
+
+def _destination_state(target: Path) -> tuple[int, int, int] | None:
+    """Identity of the destination when it was checked: None if absent."""
+    try:
+        info = os.lstat(target)
+    except FileNotFoundError:
+        return None
+    return (info.st_dev, info.st_ino, stat.S_IFMT(info.st_mode))
+
+
+def _publish_supported() -> bool:
+    """Atomic no-replace publishing relies on Windows rename semantics."""
+    return os.name == "nt"
+
+
+def _require_publish_support() -> None:
+    if not _publish_supported():
+        _unsafe("crear workspaces e instancias solo está soportado en Windows por ahora: en "
+                "este sistema, renombrar una carpeta puede reemplazar otra vacía creada a la vez")
+
+
+def _publish(staging: Path, target: Path, initial: tuple[int, int, int] | None) -> None:
+    """Move the staging into place only if the destination is exactly as it was checked.
+
+    Absent stays absent (rename never replaces an existing folder on Windows); an initially empty
+    folder must be the same folder and still empty. Any other change is a CONFLICT and the
+    destination is left untouched. Only Windows is supported: on POSIX, rename could replace an
+    empty folder created in the instant between the last check and the rename, so creation is
+    refused there (see `_require_publish_support`).
+    """
+    _require_publish_support()
+    linked = _linked_component(target)
+    if linked is not None:
+        raise WorkspaceError("UNSAFE_DESTINATION", f"{linked} es un enlace simbólico o una "
+                                                   "junction; usa la ruta real")
+    if _destination_state(target) != initial:
+        raise WorkspaceError("CONFLICT", f"{target} cambió mientras se preparaba; no se ha "
+                                         "tocado")
+    if initial is not None:
+        if any(target.iterdir()):
+            raise WorkspaceError("CONFLICT", f"{target} dejó de estar vacía; no se ha tocado")
+        target.rmdir()
+    try:
+        os.replace(staging, target)
+    except OSError as exc:
+        if os.path.lexists(target):
+            raise _ConcurrentDestination(exc) from exc
+        if initial is not None:
+            target.mkdir()
+        raise
+
+
+class _ConcurrentDestination(Exception):
+    """Another actor created the destination between the last check and the rename."""
+
+    def __init__(self, error: OSError):
+        super().__init__(str(error))
+        self.error = error
+
+
 def _existing(target: Path, expected: dict[str, bytes], core_root: Path) -> LoadedWorkspace:
     """Accept a non-empty destination only if it is exactly the workspace that would be created."""
     if _tree_bytes(target) != expected:
@@ -291,7 +366,8 @@ def _expected_files(
 
 
 def _materialize(
-    target: Path, expected: dict[str, bytes], dossier: LoadedForumDossier, core_root: Path
+    target: Path, expected: dict[str, bytes], dossier: LoadedForumDossier, core_root: Path,
+    initial: tuple[int, int, int] | None,
 ) -> WorkspaceInitResult:
     staging = target.parent / f".{target.name}.staging-{secrets.token_hex(8)}"
     staging.mkdir()
@@ -307,21 +383,11 @@ def _materialize(
         staged = load_workspace(staging, expected_core_root=core_root)
         if _source_fingerprint(staged.dossier) != _source_fingerprint(dossier):
             raise WorkspaceError("CONFLICT", "el expediente cambió mientras se copiaba; repite")
-        existed = target.exists()
-        if existed:
-            if _is_link(target) or any(target.iterdir()):
-                raise WorkspaceError("CONFLICT", f"{target} cambió mientras se preparaba el "
-                                                 "workspace")
-            target.rmdir()
         try:
-            os.replace(staging, target)
-        except OSError as replace_error:
-            if not (target.exists() or _is_link(target)):
-                if existed:
-                    target.mkdir()
-                raise
+            _publish(staging, target, initial)
+        except _ConcurrentDestination as race:
             # Another actor created the destination meanwhile: never overwrite it.
-            concurrent = (_existing(target, expected, core_root), replace_error)
+            concurrent = (_existing(target, expected, core_root), race.error)
     except BaseException as exc:
         leftover = _remove_staging(staging)
         if leftover is None or not isinstance(exc, (WorkspaceError, OSError)):
@@ -393,7 +459,10 @@ def _managed(path: str, data: bytes) -> ManagedFile:
 
 
 def _load_workspace(root: Path, expected_core_root: Path | None) -> LoadedWorkspace:
-    if _is_link(root) or not root.is_dir():
+    linked = _linked_component(root)
+    if linked is not None:
+        _invalid(f"{linked} es un enlace simbólico o una junction; usa la ruta real")
+    if not root.is_dir():
         _invalid(f"{root} no es una carpeta de workspace")
     config_raw = _read_managed(root, WORKSPACE_FILE)
     config_data = parse_strict_json(config_raw, WORKSPACE_FILE)

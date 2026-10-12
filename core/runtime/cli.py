@@ -26,6 +26,15 @@ from core.runtime.assimilation import (
     close_assimilation,
     record_candidate_decision,
 )
+from core.runtime.instance import (
+    ApprovedCorpusEntry,
+    InstanceError,
+    LoadedInstance,
+    approved_corpus,
+    create_instance,
+    get_approved_candidate,
+    load_instance,
+)
 from core.runtime.persistence import PersistenceError, load_strict_json
 from core.runtime.workspace import (
     CORPUS_STATE,
@@ -61,14 +70,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return args.handler(args)
     except ManualAdapterError as exc:
         return _fail(args, "INVALID_STATE", exc.reason)
-    except (WorkspaceError, AssimilationError, PersistenceError) as exc:
+    except (WorkspaceError, AssimilationError, PersistenceError, InstanceError) as exc:
         return _fail(args, exc.code, exc.reason)
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="core.runtime.cli",
-        description="Prepara el workspace de asimilación de un foro. No publica nada.",
+        description="Prepara el workspace de asimilación de un foro y su instancia. No "
+                    "publica nada.",
     )
     parser.add_argument("--json", action="store_true", help="salida en JSON")
     commands = parser.add_subparsers(dest="command", required=True, metavar="comando")
@@ -138,11 +148,49 @@ def _build_parser() -> argparse.ArgumentParser:
     close = groups.add_parser("close", help="cierra la asimilación; pide teclear una frase con un código en tu terminal; frena la automatización pero no autentica a la persona")
     _workspace_argument(close)
     close.set_defaults(handler=_assimilation_close, action_name="assimilation.close")
+
+    instance = commands.add_parser("instance", help="instancia del foro generada desde un "
+                                                    "workspace cerrado")
+    instance_actions = instance.add_subparsers(dest="instance_action", required=True,
+                                               metavar="acción")
+    instance_init = instance_actions.add_parser("init", help="crea la instancia en una carpeta "
+                                                              "externa")
+    _workspace_argument(instance_init)
+    instance_init.add_argument("--output", required=True, type=Path,
+                               help="carpeta de la instancia")
+    instance_init.set_defaults(handler=_instance_init, action_name="instance.init")
+    instance_status = instance_actions.add_parser("status", help="comprueba la integridad")
+    _instance_argument(instance_status)
+    instance_status.set_defaults(handler=_instance_status, action_name="instance.status")
+    corpus = instance_actions.add_parser("corpus", help="consulta el corpus aprobado")
+    corpus_actions = corpus.add_subparsers(dest="corpus_action", required=True, metavar="acción")
+    corpus_list = corpus_actions.add_parser("list", help="lista las versiones vigentes aprobadas")
+    _instance_argument(corpus_list)
+    corpus_list.set_defaults(handler=_instance_corpus_list, action_name="instance.corpus.list")
+    corpus_show = corpus_actions.add_parser("show", help="muestra una versión aprobada")
+    _instance_argument(corpus_show)
+    corpus_show.add_argument("--candidate-id", required=True)
+    corpus_show.add_argument("--version", required=True, type=_positive_int)
+    corpus_show.set_defaults(handler=_instance_corpus_show, action_name="instance.corpus.show")
     return parser
 
 
 def _workspace_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--workspace", required=True, type=Path, help="carpeta del workspace")
+
+
+def _instance_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--instance", required=True, type=Path, help="carpeta de la instancia")
+
+
+def _positive_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        number = 0
+    if number < 1:
+        raise argparse.ArgumentTypeError("debe ser un entero positivo")
+    return number
 
 
 def _checkout() -> Path:
@@ -453,6 +501,114 @@ def _decision_summary(decision: AssimilationDecision) -> dict[str, object]:
         "evidence_sha256": decision.evidence.sha256,
         "review_status": decision.review_status.value,
     }
+
+
+# --- instance -------------------------------------------------------------------------------
+
+
+def _load_instance(args: argparse.Namespace) -> LoadedInstance:
+    return load_instance(args.instance, expected_core_root=_checkout())
+
+
+def _instance_init(args: argparse.Namespace) -> int:
+    result = create_instance(args.workspace, output=args.output, core_root=_checkout())
+    instance = result.instance
+    forum_id = instance.config.forum_id
+    root = str(instance.instance_root)
+    snapshot = instance.config.corpus.snapshot_sha256
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "created": result.created,
+               "forum_id": forum_id, "instance": root, "snapshot_sha256": snapshot})
+    elif result.created:
+        _line(f"Instancia creada para el foro «{forum_id}» en {root} (snapshot sha256={snapshot}).")
+    else:
+        _line(f"La instancia del foro «{forum_id}» ya existía con el mismo contenido: {root} "
+              f"(snapshot sha256={snapshot}).")
+    return EXIT_OK
+
+
+def _instance_status(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    forum_id = instance.config.forum_id
+    root = str(instance.instance_root)
+    snapshot = instance.config.corpus.snapshot_sha256
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "corpus_revision": instance.corpus_revision,
+               "forum_id": forum_id, "instance": root, "integrity": "OK",
+               "snapshot_sha256": snapshot})
+    else:
+        _line(f"Instancia íntegra del foro «{forum_id}» en {root} (revisión del corpus "
+              f"{instance.corpus_revision}; snapshot sha256={snapshot}).")
+    return EXIT_OK
+
+
+def _instance_corpus_list(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    entries = approved_corpus(instance)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name,
+               "candidates": [_approved_summary(e) for e in entries],
+               "corpus_revision": instance.corpus_revision, "instance": str(instance.instance_root),
+               "snapshot_sha256": instance.config.corpus.snapshot_sha256})
+    elif not entries:
+        _line("No hay candidatos aprobados vigentes.")
+    else:
+        for entry in entries:
+            _line(_approved_line(entry))
+    return EXIT_OK
+
+
+def _instance_corpus_show(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    entry = get_approved_candidate(instance, candidate_id=args.candidate_id, version=args.version)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name,
+               "candidate": _candidate_record(entry.candidate, include_hash=True),
+               "corpus_revision": instance.corpus_revision,
+               "decision": _decision_summary(entry.decision),
+               "effective_review_status": "APPROVED", "instance": str(instance.instance_root),
+               "snapshot_sha256": instance.config.corpus.snapshot_sha256})
+        return EXIT_OK
+    _line(_approved_line(entry))
+    _line(f"Decisión: APPROVED (evidencia={entry.decision.evidence.sha256}).")
+    for index, citation in enumerate(entry.candidate.citations, start=1):
+        passage = "null" if citation.declared_passage is None else citation.declared_passage
+        _line(f"Cita {index}: {citation.dossier_section.value} | {citation.source_id} | "
+              f"v{citation.source_version} | pasaje={passage} | sha256={citation.source_sha256} | "
+              f"caracteres {citation.start}-{citation.end}")
+        _exact_block(f"Cita {index} (exacta, hasta «Fin de la cita {index}.»):", citation.quote,
+                     f"Fin de la cita {index}.")
+    _exact_block("Texto (exacto, hasta «Fin del texto.»):", entry.candidate.text, "Fin del texto.")
+    return EXIT_OK
+
+
+def _exact_block(header: str, content: str, footer: str) -> None:
+    _line(header)
+    _write_exact(content if content.endswith("\n") else content + "\n")
+    _line(footer)
+
+
+def _approved_summary(entry: ApprovedCorpusEntry) -> dict[str, object]:
+    candidate = entry.candidate
+    return {
+        "candidate_id": candidate.candidate_id,
+        "candidate_sha256": candidate.candidate_sha256,
+        "class": candidate.candidate_class.value,
+        "decision": "APPROVED",
+        "domain": candidate.domain.value,
+        "requires_confirmation": candidate.requires_confirmation,
+        "scope": candidate.scope,
+        "version": candidate.version,
+    }
+
+
+def _approved_line(entry: ApprovedCorpusEntry) -> str:
+    candidate = entry.candidate
+    line = (f"{candidate.candidate_id} v{candidate.version} | {candidate.candidate_class.value} | "
+            f"{candidate.domain.value} | APPROVED | "
+            f"scope={json.dumps(candidate.scope, ensure_ascii=False)} | "
+            f"sha256={candidate.candidate_sha256}")
+    return f"{line} | REQUIERE CONFIRMACIÓN" if candidate.requires_confirmation else line
 
 
 # --- output -----------------------------------------------------------------------------------

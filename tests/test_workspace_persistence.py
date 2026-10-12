@@ -351,6 +351,36 @@ class CreateWorkspaceTest(unittest.TestCase):
         self.assertIn(leftovers[0].name, ctx.exception.reason)
         real_rmtree(leftovers[0])
 
+    @unittest.skipUnless(os.name == "nt", "las junctions son de Windows")
+    def test_parent_junction_is_rejected_on_create_and_load(self):
+        import _winapi
+        real_parent = self.root / "padre-real"
+        real_parent.mkdir()
+        _winapi.CreateJunction(str(real_parent), str(self.root / "padre-enlace"))
+        with self.assertRaises(WorkspaceError) as ctx:
+            self.create(self.root / "padre-enlace" / "ws")
+        self.assertEqual(ctx.exception.code, "UNSAFE_DESTINATION")
+        self.assertEqual(list(real_parent.iterdir()), [])
+        self.create(real_parent / "ws")
+        with self.assertRaises(WorkspaceError):
+            load_workspace(self.root / "padre-enlace" / "ws")
+        load_workspace(real_parent / "ws")
+
+    def test_absent_destination_that_appears_empty_is_not_overwritten(self):
+        real_fingerprint = workspace._source_fingerprint
+
+        def fingerprint(dossier):
+            if not self.target.exists():
+                self.target.mkdir()
+            return real_fingerprint(dossier)
+
+        with mock.patch.object(workspace, "_source_fingerprint", fingerprint):
+            with self.assertRaises(WorkspaceError) as ctx:
+                self.create()
+        self.assertEqual(ctx.exception.code, "CONFLICT")
+        self.assertEqual(list(self.target.iterdir()), [])
+        self.assertFalse([p for p in self.root.iterdir() if ".staging-" in p.name])
+
     def test_dossier_must_match_its_directory(self):
         other = self.root / "otro"
         shutil.copytree(FIXTURE, other)

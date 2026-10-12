@@ -65,8 +65,8 @@ class ParserTest(CliTestCase):
                 self.assertIn("usage", err)
         self.assertFalse(self.workspace.exists())
 
-    def test_no_publication_or_instance_commands(self):
-        for command in ("instance", "publish", "send", "post"):
+    def test_no_publication_commands(self):
+        for command in ("publish", "send", "post"):  # instance exists since 4c2
             with self.subTest(command=command):
                 self.assertEqual(run(command)[0], 2)
         help_text = cli._build_parser().format_help().lower()

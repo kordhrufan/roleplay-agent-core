@@ -6,10 +6,10 @@ Generalizar Nozomu Agent como `roleplay-agent-core`: un núcleo reutilizable par
 foro de rol, configurable por personaje, mundo, sistema, plataforma e instancia. Este documento
 define la extracción y un plan para Claude; no implementa código ni altera el legado.
 
-Versión base del detalle del sub-incremento 4c: commit `91205fc` a 2026-10-12, rama
-`feature/incremento-4-rebanada-vertical`, con 4a–4b aprobados e implementados y sin cambios al
-iniciar este análisis. `main` permanece en `96eca81`; los incrementos 1–3 siguen en ramas apiladas
-sin fusionar.
+Versión base del detalle del sub-incremento 4c2: commit `8e3185c` a 2026-10-12, rama
+`feature/incremento-4-rebanada-vertical`, con 4a–4c1 aprobados e implementados. La única diferencia
+de trabajo al iniciar este análisis es la nota de validación TTY de 4c1 aportada por el usuario.
+`main` permanece en `96eca81`; los incrementos 1–3 siguen en ramas apiladas sin fusionar.
 `reference/migration-source/` es la copia inmutable inspeccionada. La auditoría anterior se trata
 como hipótesis histórica porque declara que su fuente estaba vacía; no se usa como prueba de la
 implementación actual.
@@ -103,10 +103,10 @@ implementación actual.
 - `core/runtime/{persistence,workspace,cli}.py` y `adapters/manual.py` — incremento 4a aprobado:
   workspace externo íntegro, sobre de estado atómico, importación manual y CLI init/status; el
   corpus nace vacío.
-- `core/runtime/{assimilation,workspace,cli}.py` — incremento 4b aprobado: candidatos manuales
-  inmutables, citas resueltas desde `quote`, historial/versionado, validación completa del estado y
-  comandos source/candidate; decisiones y cierre siguen prohibidos.
-- Las diez suites actuales suman 252 pruebas aprobadas que los incrementos siguientes deben
+- `core/runtime/{assimilation,workspace,cli}.py` — incrementos 4b–4c1 aprobados: candidatos
+  manuales inmutables, citas resueltas desde `quote`, historial/versionado, decisiones con barrera
+  TTY, cierre terminal, cerrojo provisional y recarga íntegra del estado cerrado.
+- Las doce suites actuales suman 295 pruebas aprobadas que los incrementos siguientes deben
   conservar.
 
 ### Hallazgos de contraste
@@ -371,9 +371,10 @@ desde una línea `Nota:` y no contiene comentarios ni ejemplos fingidos.
 #### Carpeta de instancia externa
 
 `instance init` exige siempre `--output <ruta>`: no consulta ni deriva ubicaciones por defecto.
-Rechaza una ruta dentro del checkout o una carpeta no vacía que no sea un retry idéntico. El
-usuario elige ruta, `forum_id`, paquetes —cuando se habiliten— y confirma la creación; el runtime
-materializa de forma transaccional y deja auditable el origen de cada archivo. Layout objetivo:
+Rechaza una ruta dentro del checkout o del workspace y una carpeta no vacía que no sea un retry
+idéntico. El usuario elige solo la ruta; `forum_id` y el snapshot proceden del workspace cerrado.
+No es una decisión humana ni lleva barrera TTY: materializa de forma transaccional contenido ya
+decidido y deja auditable el origen de cada archivo.
 
 Antes de esa instancia existe un **workspace de asimilación**, también externo y elegido mediante
 `--workspace` explícito. No es un agente ni una instancia: carece de `AGENTS.md`, `CLAUDE.md`,
@@ -388,9 +389,12 @@ decisiones necesarias para que el core pueda impedir materializar antes de la ap
   work/integrity.json
 ```
 
-Tras el cierre humano del snapshot exacto, `instance init --workspace ... --output ...` copia ese
-expediente/corpus aprobado a la carpeta final; el workspace permanece como historial y no se
-reutiliza para otro foro o versión.
+Tras el cierre humano del snapshot exacto, `instance init --workspace ... --output ...` copia el
+expediente y **todo** el `corpus/state.json` cerrado a la carpeta final: historial, decisiones y
+cierre. No crea una segunda proyección autoritativa. Las consultas de instancia filtran en runtime
+solo la última versión `APPROVED` de cada ID; pendientes, rechazadas y sustituidas permanecen
+auditables pero no son consultables como corpus utilizable. El workspace puede conservarse como
+expediente histórico, pero la instancia no depende de él tras crearse.
 
 ```text
 <instancia-foro>/
@@ -399,14 +403,13 @@ reutiliza para otro foro o versión.
   instance.json                    # schema, forum_id, core_root y paquetes/versiones
   dossier/                         # copia literal del expediente y sus fuentes
   corpus/state.json                # desde 4c1: candidatos, decisiones y cierre, con historial
-  characters/<character_id>/
-    concept.md                     # entrada editable del usuario; no es estado hasta importarla
-    state.json                     # desde 4d: versiones del concepto y propuestas/decisiones
-    profile.json                   # desde 4e: DraftVersion y respuesta de staff separada
-  memory/                          # eventos y vistas con SourceRef
   work/integrity.json              # hashes de archivos gestionados estáticos
-  specialists/                    # solo capacidades exigidas por el foro aprobado
 ```
+
+4c2 no crea `characters/`, `memory/` ni `specialists/`: los dos primeros aparecerán cuando sus
+incrementos tengan estado real; los especialistas se aplazan hasta el evaluador técnico del
+incremento 11. En particular, un `LITERAL` de combate aprobado no basta por sí solo para prometer
+una capacidad que todavía no existe.
 
 Solo las plantillas están en el repo, bajo `core/runtime/templates/`: expediente, configuración y
 ambos archivos de instrucciones; más adelante, plantillas de especialistas genéricos. Una política
@@ -418,10 +421,9 @@ propias, también en español: `AGENTS.md` declara su alcance para Codex y la je
 `AGENTS.md`; `CLAUDE.md` declara el alcance equivalente para Claude. Ambos muestran el mismo patrón
 PowerShell renderizado. Ninguno redefine estados, autoridad, decisiones o publicación.
 `instance.json` se renderiza desde `instance.template.json` y los demás datos proceden del
-expediente, decisiones humanas y comandos del core. Un especialista de combate se genera solo si
-`combat_system` tiene entradas aprobadas;
-`NOT_APPLICABLE`, `MISSING` o candidatos pendientes no bastan. Nozomu, Naruto, reglas, memoria ni
-configuración efectiva se añaden a ninguna plantilla.
+expediente, decisiones humanas y comandos del core. En 4c2 `packages` es exactamente `[]` y no hay
+especialistas. Nozomu, Naruto, reglas, memoria ni configuración efectiva se añaden a ninguna
+plantilla.
 
 #### Uso del core desde el agente generado
 
@@ -434,13 +436,12 @@ py -3.11 -B -m core.runtime.cli <grupo> <comando> --instance '<instance_root>'
 Pop-Location
 ```
 
-Así `core` se importa desde la raíz del checkout, sin dependencia global ni `PYTHONPATH`. Si el
-checkout se mueve, una operación explícita de relink actualizará solo `core_root` con confirmación.
-El CLI valida rutas y versiones, recupera solo corpus aprobado, crea `DraftVersion`, exige
-`SourceRef` para decisiones/memoria y carece de comando de publicación. Los documentos del usuario
-se pueden editar, pero ningún cambio de corpus, estado o memoria se considera válido por editar
-JSON/Markdown directamente: debe pasar por las operaciones del core. Las instrucciones explican el
-flujo; estas barreras ejecutables sostienen las invariantes.
+Así `core` se importa desde la raíz del checkout, sin dependencia global ni `PYTHONPATH`. 4c2 no
+ofrece `relink`: si el checkout se mueve, los comandos detectan que `core_root` ya no coincide y la
+instancia debe recrearse desde el workspace mientras este exista. El CLI valida rutas y versiones,
+recupera solo corpus aprobado y carece de comando de publicación. Los documentos futuros del
+usuario se podrán editar, pero ningún cambio de corpus o estado se considera válido por editar
+JSON/Markdown gestionado directamente: debe pasar por operaciones del core.
 
 #### Persistencia provisional e integridad (incrementos 4a–4f)
 
@@ -457,6 +458,13 @@ estándar y claves desconocidas. La forma exacta de la configuración final `ins
 ```json
 {
   "core_root": "<ruta absoluta nativa del checkout>",
+  "corpus": {
+    "path": "corpus/state.json",
+    "revision": 11,
+    "sha256": "<64 hex de los bytes del sobre>",
+    "size": 123,
+    "snapshot_sha256": "<64 hex del cierre>"
+  },
   "display_name": "<nombre del expediente>",
   "dossier": {
     "files": [
@@ -466,8 +474,13 @@ estándar y claves desconocidas. La forma exacta de la configuración final `ins
   },
   "dossier_version": "<versión_expediente>",
   "forum_id": "<forum_id>",
+  "instance_root": "<ruta absoluta nativa de la instancia>",
+  "kind": "forum-roleplay-instance",
   "packages": [],
-  "schema_version": 1
+  "schema_version": 1,
+  "source_workspace": {
+    "workspace_json_sha256": "<64 hex>"
+  }
 }
 ```
 
@@ -478,14 +491,15 @@ la rebanada vertical: la selección/payload de paquetes pertenece al incremento 
 un paquete neutro. `work/integrity.json` tiene exactamente `schema_version`, `algorithm="sha256"`
 y `files`, otra lista ordenada de `{path, sha256, size}`. En el workspace cubre
 `workspace.json` y `dossier/`; en la instancia cubre `AGENTS.md`, `CLAUDE.md`, `instance.json`,
-`dossier/` y el snapshot cerrado de `corpus/`; nunca se incluye a sí misma ni duplica el hash
-autocontenido del estado mutable abierto.
+`dossier/` y el snapshot cerrado de `corpus/`; nunca se incluye a sí misma. La instancia no guarda
+la ruta del workspace y sigue operativa sin él: conserva su huella y una copia íntegra del estado.
 
-Los estados mutables posteriores (`corpus/state.json`, `characters/<id>/state.json` y
+Los estados gestionados (`corpus/state.json`, `characters/<id>/state.json` y
 `profile.json`) usan un sobre común con claves exactas `schema_version`, `revision`, `content` y
 `content_sha256`. El hash se calcula sobre los bytes JSON canónicos compactos
 (`ensure_ascii=False`, `sort_keys=True`, `separators=(",", ":")`) del objeto formado por las tres
-primeras claves; el archivo legible se serializa con el formato anterior. Cada operación cambia un
+primeras claves; el archivo legible se serializa con el formato anterior. El corpus es mutable en
+el workspace hasta cerrarse y su copia de instancia es inmutable; cada operación futura cambia un
 solo estado autoritativo, conserva su historial dentro de `content` y lo sustituye atómicamente.
 
 Toda escritura de archivo se hace en un temporal nuevo del mismo directorio, escribe bytes,
@@ -567,10 +581,11 @@ inseguro o conflicto de versión/identidad y `5` error de E/S. No se captura `Ke
 Subcomandos acumulados: 4a añade `assimilation init --dossier RUTA --workspace RUTA` y
 `assimilation status --workspace RUTA`; 4b añade `assimilation source list/show` y `assimilation
 candidate add/list/show`; 4c1 añade decisiones/cierre humanos y 4c2,
-`instance init --workspace RUTA --output RUTA`/`instance status`; 4d añade `character concept
-import`, `character proposal add/list/show` y su decisión humana; 4e añade `character draft create`
-y `character staff record`. `--workspace` y `--output` son siempre explícitos, sin defaults ni
-variables de entorno. No existe ni se reserva `publish`, `send`, `post` o equivalente.
+`instance init --workspace RUTA --output RUTA`, `instance status` e `instance corpus list/show`;
+4d añade `character concept import`, `character proposal add/list/show` y su decisión humana; 4e
+añade `character draft create` y `character staff record`. `--workspace` y `--output` son siempre
+explícitos, sin defaults ni variables de entorno. No existe ni se reserva `publish`, `send`, `post`
+o equivalente.
 
 #### Reparto del adaptador manual
 
@@ -585,7 +600,7 @@ acreditar identidad y completitud; esa responsabilidad no se anticipa en la reba
 | Paso | Decide/aporta el usuario | Hace el agente, siempre mediante el core |
 | --- | --- | --- |
 | Expediente | Fuentes, versión/autoridad/vigencia y marcadores `FALTA` o `NO APLICA`; aprueba/rechaza cada candidato exacto y cierra el snapshot revisado. | Valida literales y citas, clasifica solo como candidato, enumera faltantes/contradicciones y marca `REQUIERE CONFIRMACIÓN`; nunca aprueba ni cierra. |
-| Instancia | Ruta, foro y paquetes/versiones; confirma materialización. | Genera desde plantillas y habilita especialistas solo por capacidades aprobadas. |
+| Instancia | Elige la ruta externa; las decisiones de contenido ya quedaron en el cierre. | Genera atómicamente configuración e instrucciones desde el snapshot; 4c2 no crea especialistas. |
 | Concepto | Escribe el concepto, fija lo irrenunciable y responde dudas. | Lo conserva como fuente, recupera normas aprobadas pertinentes y no usa reglas pendientes. |
 | Ajuste | Acepta/rechaza cada mejora y elige entre alternativas. | Presenta diferencias con citas como `PROPUESTA`; una aceptación crea una versión nueva, no reescribe el concepto original ni acredita staff. |
 | Ficha | Decide cuándo presentar y aporta la respuesta/evidencia del staff. | Valida cada campo contra normas aprobadas; ante hueco/ambigüedad bloquea la afirmación de conformidad. Crea `DraftVersion` en borrador y pendiente de revisión. |
@@ -1673,20 +1688,149 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
      workspace temporal; se prueba además que redirigir stdout los bloquea. El `rg` y el diff de
      `reference/` terminan sin salida.
 
-4c2. [ ] **Instancia cerrada e instrucciones generadas (detalle posterior).** Objetivo: consumir el
-     cierre terminal de 4c1 y materializar una instancia externa, sin añadir personajes todavía.
-     Alcance previsto: `core/runtime/{instance,workspace,cli,__init__}.py`,
-     `core/runtime/templates/{instance.template.json,instance-policy.template.md,
-     AGENTS.template.md,CLAUDE.template.md}` y
-     `tests/test_{instance,instance_cli,instance_templates}.py`; `persistence.py` se reutiliza.
-     Comandos: `instance init --workspace RUTA --output RUTA` e
-     `instance status --instance RUTA`. Criterio: cierre y digest se revalidan; copia atómica e
-     idempotente de expediente/corpus; `--output` externo obligatorio; integridad cubre estáticos y
-     snapshot; no se materializa con pendientes ni cierre inválido.
+4c2. [x] **Instancia cerrada e instrucciones generadas (detallado).** Objetivo: materializar desde
+     un workspace cerrado una instancia externa, autocontenida y solo consultable, con instrucciones
+     listas para Codex y Claude; no añadir personaje, memoria, especialista ni publicación.
 
-     El contenido invariante exacto que ambas plantillas deben incluir byte a byte entre los
-     marcadores existentes queda fijado ahora; 4c2 detallará el renderizado y solo podrá añadir
-     contenido fuera del bloque:
+     **Alcance cerrado y archivos.** Crear `core/runtime/instance.py` y las cuatro plantillas
+     `core/runtime/templates/{instance.template.json,instance-policy.template.md,
+     AGENTS.template.md,CLAUDE.template.md}`; modificar `core/runtime/{cli,__init__}.py`; crear
+     `tests/test_{instance,instance_cli,instance_templates}.py`. `assimilation.py`, `workspace.py` y
+     `persistence.py` son dependencias ya aprobadas y no se modifican salvo un defecto demostrado
+     por estos tests. No tocar otros archivos, `reference/`, las notas inferiores ni los formatos
+     persistidos de 4a–4c1.
+
+     **Modelo y API de `instance.py`.** Constantes: `INSTANCE_SCHEMA_VERSION = 1`,
+     `INSTANCE_KIND = "forum-roleplay-instance"`, `INSTANCE_FILE = "instance.json"`,
+     `INSTANCE_CORPUS = "corpus/state.json"`, `INSTANCE_INTEGRITY = "work/integrity.json"` y los
+     cuatro paths de plantilla. Añadir modelos `frozen=True, slots=True`:
+
+     - `InstanceCorpus(path: str, revision: int, sha256: str, size: int,
+       snapshot_sha256: str)`; path exacto `corpus/state.json`, revisión no negativa, tamaño no
+       negativo y hashes SHA-256 minúsculos.
+     - `SourceWorkspace(workspace_json_sha256: str)`; es una huella, no autenticación ni vínculo.
+     - `InstanceConfig(schema_version: int, forum_id: str, display_name: str,
+       dossier_version: str, core_root: Path, instance_root: Path, dossier_path: str,
+       dossier_files: tuple[ManagedFile, ...], corpus: InstanceCorpus,
+       source_workspace: SourceWorkspace, packages: tuple[str, ...])`; en 4c2 `packages == ()`.
+     - `ApprovedCorpusEntry(candidate: AssimilationCandidate, decision: AssimilationDecision)`;
+       valida misma clave/hash y `decision.review_status is APPROVED`.
+     - `LoadedInstance(config: InstanceConfig, instance_root: Path, dossier: LoadedForumDossier,
+       corpus_revision: int, candidates: tuple[AssimilationCandidate, ...],
+       decisions: tuple[AssimilationDecision, ...], closure: AssimilationClosure)` e
+       `InstanceInitResult(instance: LoadedInstance, created: bool)`.
+     - `InstanceError(code: str, reason: str)` admite exactamente `INVALID_STATE`, `CONFLICT`,
+       `UNSAFE_DESTINATION`, `IO`.
+
+     Firmas públicas exactas:
+
+     ```python
+     def create_instance(workspace_root: Path, *, output: Path,
+                         core_root: Path) -> InstanceInitResult: ...
+     def load_instance(instance_root: Path, *,
+                       expected_core_root: Path | None = None) -> LoadedInstance: ...
+     def approved_corpus(instance: LoadedInstance) -> tuple[ApprovedCorpusEntry, ...]: ...
+     def get_approved_candidate(instance: LoadedInstance, *, candidate_id: str,
+                                version: int) -> ApprovedCorpusEntry: ...
+     ```
+
+     `core/runtime/__init__.py` reexporta esos seis modelos, `InstanceError`, las cuatro funciones e
+     `INSTANCE_SCHEMA_VERSION`, sin retirar ningún export previo.
+
+     `approved_corpus` recorre `AssimilationState.current_versions()` en su orden estable y conserva
+     solo las que tienen decisión efectiva `APPROVED`; no devuelve pendientes, rechazadas ni
+     versiones sustituidas. Conserva `UNCERTAINTY` aprobada con `requires_confirmation=True`: puede
+     consultarse como incertidumbre, nunca convertirse en hecho por la aprobación.
+     `get_approved_candidate` exige la versión explícita y que sea a la vez vigente y aprobada; en
+     cualquier otro caso da `INVALID_STATE` sin caer implícitamente a otra versión.
+
+     **Forma persistida y copia.** `instance.template.json` se parsea con `parse_strict_json` y se
+     reemite mediante `canonical_json_bytes(..., pretty=True)`. Su contenido completo es:
+
+     ```json
+     {
+       "core_root": $core_root_json,
+       "corpus": {
+         "path": "corpus/state.json",
+         "revision": $corpus_revision,
+         "sha256": $corpus_sha256_json,
+         "size": $corpus_size,
+         "snapshot_sha256": $snapshot_sha256_json
+       },
+       "display_name": $display_name_json,
+       "dossier": {
+         "files": $dossier_files_json,
+         "path": "dossier/expediente.md"
+       },
+       "dossier_version": $dossier_version_json,
+       "forum_id": $forum_id_json,
+       "instance_root": $instance_root_json,
+       "kind": "forum-roleplay-instance",
+       "packages": [],
+       "schema_version": 1,
+       "source_workspace": {
+         "workspace_json_sha256": $workspace_json_sha256_json
+       }
+     }
+     ```
+
+     Los valores `_json` son `json.dumps(..., ensure_ascii=False)`; enteros se sustituyen sin
+     comillas. `core_root` e `instance_root` son absolutos, resueltos y con spelling canónico.
+     `source_workspace` **no guarda la ruta**: el hash de los bytes canónicos de `workspace.json`,
+     los metadatos repetidos, los hashes del expediente y los dos hashes del corpus permiten
+     cotejar el origen sin crear una dependencia móvil ni filtrar una ruta local innecesaria.
+
+     Copiar byte a byte todos los archivos declarados de `dossier/` y el `corpus/state.json`
+     completo del workspace, incluido historial, recibos, decisiones y cierre. No copiar
+     `workspace.json`, su lock ni `work/integrity.json`, y no generar `approved.json`. El estado se
+     carga con `load_state` + `decode_candidate_state`; se exige `closure is not None`, que
+     `closure.snapshot_sha256` ya haya superado su validación contra candidatos/decisiones y que no
+     exista `corpus/state.json.lock` (si existe, `CONFLICT` con su ruta). `InstanceCorpus.sha256`
+     cubre los bytes exactos del sobre;
+     `snapshot_sha256` cubre el contenido previo al cierre; el sobre conserva además su hash propio.
+
+     `work/integrity.json` mantiene la forma de 4a (`schema_version: 1`, `algorithm: "sha256"`,
+     `files` ordenados de `ManagedFile`) y cubre exactamente `AGENTS.md`, `CLAUDE.md`,
+     `instance.json`, todos los archivos declarados bajo `dossier/` y `corpus/state.json`; no se
+     incluye a sí mismo. Layout exacto de 4c2: esos tres archivos raíz y solo `dossier/`, `corpus/`
+     y `work/`; no crear `characters/`, `memory/`, `specialists/` ni directorios vacíos.
+
+     **Seguridad de rutas, atomicidad e idempotencia.** Reproducir en `instance.py` el algoritmo de
+     4a, sin cambiar su contrato: identidad por ruta absoluta/real/normcase y prefijos de dispositivo
+     normalizados; rechazo de symlinks y junctions en cada componente; `output` explícito, padre ya
+     existente, carpeta inexistente o vacía; rechazo si output coincide, contiene o está contenido
+     en el checkout o el workspace, incluso con spelling alternativo. Leer solo archivos regulares.
+     Crear un sibling `.<nombre>.staging-<secrets.token_hex(8)>`, escribir con `xb`+flush+fsync,
+     recargar allí y publicar con `os.replace`; nunca sobrescribir el ganador de una carrera.
+     El destino vacío que cambie, un árbol extranjero o una carrera distinta da `CONFLICT`; una
+     carrera con árbol byte a byte idéntico devuelve `created=False`. Limpiar staging como en 4a e
+     informar el path si no se puede borrar.
+
+     Antes de preparar y justo antes de publicar, volver a `load_workspace(...,
+     expected_core_root=core_root)`, comprobar ausencia del lock y comparar bytes de
+     `workspace.json`, dossier gestionado y corpus con la primera lectura; si cambia, abortar con
+     `CONFLICT`. El cierre es terminal, por lo que ninguna API aprobada puede mutarlo; esta doble
+     lectura protege la carrera ordinaria sin introducir otro cerrojo. Un retry sobre destino no
+     vacío solo es idempotente si `_tree_bytes(output)` coincide exactamente con el árbol que se
+     generaría ahora; no reescribe bytes ni mtimes. `instance init` es una operación normal sin TTY,
+     nonce ni confirmación: crea archivos elegidos por el usuario, pero no toma una decisión sobre
+     contenido ya cerrado.
+
+     **Recarga.** `load_instance` rechaza links/junctions, JSON no canónico, claves extra/faltantes,
+     paths o hashes inválidos, extras dentro de `dossier/`/`corpus/`/`work/`, archivos raíz extra y
+     cualquier byte gestionado alterado. Comprueba identidad de `instance_root`, y de `core_root`
+     cuando se pasa `expected_core_root`; recarga expediente y estado, exige cierre válido y compara
+     forum/dossier, revisión, tamaño, hash del sobre y snapshot con `instance.json`. También vuelve a
+     renderizar ambos archivos de instrucciones para la raíz declarada y exige bytes idénticos. La
+     recarga privada del staging recibe `logical_root=output`: lee del staging, pero valida config y
+     plantillas contra el destino final; la API pública usa la raíz física y exige identidad. Tras
+     crearla, `status` y las consultas no abren el workspace: si este se mueve o borra, la instancia
+     sigue funcionando. No hay sincronización; cualquier corrección exige otro workspace y otra
+     instancia. Si se mueve el checkout o la propia instancia, falla cerrado; 4c2 no implementa
+     relink.
+
+     **Plantillas de instrucciones.** Todos los archivos son UTF-8 sin BOM, LF y newline final.
+     `instance-policy.template.md` contiene **exactamente**, sin marcadores:
 
      ```text
      ## Invariantes obligatorias
@@ -1698,11 +1842,169 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
      - No edites directamente estados JSON gestionados ni recalcules sus hashes. Usa los comandos del core y conserva procedencia, citas y versiones exactas.
      ```
 
-     `AGENTS.md` y `CLAUDE.md` pueden diferir solo fuera del bloque común para explicar su mecanismo
-     de alcance; una prueba extrae los marcadores y compara el interior byte a byte. El patrón de
-     comando que muestren lleva rutas PowerShell renderizadas, nunca nonce ni confirmación.
+     `AGENTS.template.md` contiene exactamente (el valor de `$common_policy` termina en LF):
+
+     ````text
+     # Instrucciones de la instancia del foro
+
+     Este `AGENTS.md` rige esta carpeta y todas sus subcarpetas para Codex. Un `AGENTS.md` más específico puede concretar trabajo futuro, pero no debilitar el bloque común. Esta carpeta es una instancia local y autocontenida del foro «$display_name» (ID «$forum_id»), generada desde un snapshot de asimilación cerrado; no es el checkout del core ni un lugar para editar estados gestionados.
+
+     <!-- BEGIN ROLEPLAY-AGENT-CORE:COMMON -->
+     $common_policy<!-- END ROLEPLAY-AGENT-CORE:COMMON -->
+
+     ## Consultas disponibles
+
+     Ejecuta el core desde su checkout con estos patrones PowerShell ya renderizados:
+
+     ```powershell
+     Push-Location '$core_root_ps'
+     py -3.11 -B -m core.runtime.cli instance status --instance '$instance_root_ps'
+     py -3.11 -B -m core.runtime.cli instance corpus list --instance '$instance_root_ps'
+     py -3.11 -B -m core.runtime.cli instance corpus show --instance '$instance_root_ps' --candidate-id 'ID_DEL_CANDIDATO' --version 1
+     Pop-Location
+     ```
+
+     `corpus list` devuelve solo versiones vigentes aprobadas. `corpus show` exige el ID y la versión mostrados por la lista y presenta texto, decisión y citas exactas. Una entrada `UNCERTAINTY` sigue requiriendo confirmación aunque esté aprobada. Estos comandos son de solo lectura.
+
+     ## Trabajo posterior
+
+     En 4d el concepto de personaje lo aportará la persona y las mejoras del agente serán propuestas separadas; en 4e la ficha seguirá siendo un borrador distinto de la respuesta del staff. Hasta que el core implemente esas operaciones, no inventes comandos ni crees o edites sus JSON. Si una operación futura requiere decisión humana, muestra a la persona el comando exacto y espera a que ella lo ejecute en su propia terminal.
+     ````
+
+     `CLAUDE.template.md` contiene exactamente:
+
+     ````text
+     # Instrucciones de la instancia del foro
+
+     Este `CLAUDE.md` da a Claude las instrucciones de proyecto para esta carpeta y todas sus subcarpetas. Instrucciones más específicas pueden concretar trabajo futuro, pero no debilitar el bloque común. Esta carpeta es una instancia local y autocontenida del foro «$display_name» (ID «$forum_id»), generada desde un snapshot de asimilación cerrado; no es el checkout del core ni un lugar para editar estados gestionados.
+
+     <!-- BEGIN ROLEPLAY-AGENT-CORE:COMMON -->
+     $common_policy<!-- END ROLEPLAY-AGENT-CORE:COMMON -->
+
+     ## Consultas disponibles
+
+     Ejecuta el core desde su checkout con estos patrones PowerShell ya renderizados:
+
+     ```powershell
+     Push-Location '$core_root_ps'
+     py -3.11 -B -m core.runtime.cli instance status --instance '$instance_root_ps'
+     py -3.11 -B -m core.runtime.cli instance corpus list --instance '$instance_root_ps'
+     py -3.11 -B -m core.runtime.cli instance corpus show --instance '$instance_root_ps' --candidate-id 'ID_DEL_CANDIDATO' --version 1
+     Pop-Location
+     ```
+
+     `corpus list` devuelve solo versiones vigentes aprobadas. `corpus show` exige el ID y la versión mostrados por la lista y presenta texto, decisión y citas exactas. Una entrada `UNCERTAINTY` sigue requiriendo confirmación aunque esté aprobada. Estos comandos son de solo lectura.
+
+     ## Trabajo posterior
+
+     En 4d el concepto de personaje lo aportará la persona y las mejoras del agente serán propuestas separadas; en 4e la ficha seguirá siendo un borrador distinto de la respuesta del staff. Hasta que el core implemente esas operaciones, no inventes comandos ni crees o edites sus JSON. Si una operación futura requiere decisión humana, muestra a la persona el comando exacto y espera a que ella lo ejecute en su propia terminal.
+     ````
+
+     Sustituir `$display_name`/`$forum_id` literalmente (el modelo ya rechaza CR/LF y controles);
+     para PowerShell, resolver las rutas y duplicar cada `'` como `''` antes de sustituir
+     `$core_root_ps`/`$instance_root_ps`. No usar shell, variable de entorno ni `PYTHONPATH`. Extraer
+     de cada resultado los bytes entre marcadores: deben ser `instance-policy.template.md` byte a
+     byte, incluida su LF final. No aparece un nonce, una frase de confirmación ni una forma de
+     ejecutar decisiones automáticamente.
+
+     **CLI exacta.** Ampliar la descripción a workspace e instancias, capturar `InstanceError` en
+     `main` y añadir `instance` con:
+
+     ```text
+     instance init --workspace RUTA --output RUTA
+     instance status --instance RUTA
+     instance corpus list --instance RUTA
+     instance corpus show --instance RUTA --candidate-id ID --version N
+     ```
+
+     Todos los argumentos mostrados son obligatorios; `version` es entero positivo. `--json` sigue
+     siendo global y va antes de `instance`. Ningún comando de instancia muta corpus ni acepta
+     nonce. Salidas de éxito exactas en texto:
+
+     ```text
+     Instancia creada para el foro «FORUM_ID» en RUTA (snapshot sha256=HASH).
+     La instancia del foro «FORUM_ID» ya existía con el mismo contenido: RUTA (snapshot sha256=HASH).
+     Instancia íntegra del foro «FORUM_ID» en RUTA (revisión del corpus N; snapshot sha256=HASH).
+     No hay candidatos aprobados vigentes.
+     ID vN | CLASS | DOMAIN | APPROVED | scope=SCOPE_JSON | sha256=HASH[ | REQUIERE CONFIRMACIÓN]
+     ```
+
+     `corpus show` imprime exactamente: la línea de lista; `Decisión: APPROVED (evidencia=HASH).`;
+     por cada cita, `Cita I: SECTION | SOURCE_ID | vSOURCE_VERSION |
+     pasaje=VALOR | sha256=HASH | caracteres START-END`, luego `Cita I (exacta, hasta «Fin de la
+     cita I.»):`, sus bytes UTF-8 y `Fin de la cita I.`; finalmente `Texto (exacto, hasta «Fin del
+     texto.»):`, el texto y `Fin del texto.`. Si un bloque no termina en LF, `_write_exact` añade
+     solo el LF separador antes del marcador; el JSON conserva la terminación exacta. `pasaje=null`
+     o el texto literal; `SCOPE_JSON` usa `json.dumps(..., ensure_ascii=False)`.
+
+     JSON, emitido por `_emit` con claves ordenadas/ASCII como hoy:
+
+     - init: `{"ok":true,"action":"instance.init","created":BOOL,"forum_id":ID,
+       "instance":RUTA,"snapshot_sha256":HASH}`;
+     - status: `{"ok":true,"action":"instance.status","corpus_revision":N,"forum_id":ID,
+       "instance":RUTA,"integrity":"OK","snapshot_sha256":HASH}`;
+     - list: `{"ok":true,"action":"instance.corpus.list","candidates":[...],
+       "corpus_revision":N,"instance":RUTA,"snapshot_sha256":HASH}`, donde cada resumen tiene
+       exactamente `candidate_id`, `candidate_sha256`, `class`, `decision: "APPROVED"`, `domain`,
+       `requires_confirmation`, `scope`, `version`;
+     - show: `{"ok":true,"action":"instance.corpus.show","candidate":RECORD,
+       "corpus_revision":N,"decision":DECISION_SUMMARY,"effective_review_status":"APPROVED",
+       "instance":RUTA,"snapshot_sha256":HASH}`. `RECORD` reutiliza `_candidate_record(...,
+       include_hash=True)` y `DECISION_SUMMARY` la forma ya pública por CLI de 4c1.
+
+     Errores conservan `{"ok":false,"code","message"}` y texto `Error (CODE): MESSAGE`, siempre
+     mediante `_write_exact`: 0 éxito; 2 sintaxis; 3 JSON/modelo/estado/cierre/consulta inválidos;
+     4 conflicto, destino inseguro, retry distinto o carrera; 5 E/S. Stdout redirigido no bloquea
+     estos comandos normales; solo los comandos humanos de 4c1 requieren TTY.
+
+     **Tests.** `test_instance.py`: validación e inmutabilidad de todos los modelos; workspace sin
+     cierre/cierre manipulado/lock; copia exacta del dossier y del sobre completo; hashes/revisión;
+     historial preservado; filtro de vigente+APPROVED (rechazado, pendiente y sustituido ocultos;
+     incertidumbre marcada); lookup explícito; fuente borrada tras init; config sin ruta del
+     workspace; manipulación de cada estático/snapshot/config/integrity y extras; core/instance
+     movidos; retry exacto sin cambio de bytes/mtime; output inexistente/vacío/no vacío, padres,
+     solapes/spellings, symlinks y junctions Windows; cambio de fuente entre lecturas, replace fallido,
+     staging limpiado y carreras idéntica/distinta.
+
+     `test_instance_templates.py`: bytes UTF-8/LF/newline; parseo de las cuatro plantillas; contenido
+     completo; escaping JSON/PowerShell con espacios, Unicode y `'`; comandos renderizados entre
+     comillas y ejecutables sintácticamente; ausencia de nonce, bypass, nombres temáticos,
+     `specialists/` y comandos futuros; ambos marcadores aparecen una vez y el interior extraído es
+     idéntico entre archivos y exactamente igual a la política, incluida LF final.
+
+     `test_instance_cli.py`: parser/obligatoriedad y `--json`; cuatro comandos texto/JSON con claves,
+     orden, UTF-8 y LF exactos; init creado/retry; status sin workspace; list/show solo aprobados con
+     citas y terminaciones con/sin LF; versión requerida, inexistente/sustituida/rechazada; códigos
+     2/3/4/5; stdout redirigido funciona y no hay TTY/nonce. Mantener y ejecutar además las doce
+     suites previas.
+
+     **Criterios de aceptación.** Solo un cierre 4c1 íntegro materializa; la instancia contiene la
+     copia exacta y auditable, pero su API/CLI de consulta nunca entrega pendiente, rechazada o
+     sustituida como utilizable. Creación externa explícita, atómica, idempotente y segura ante
+     links/races; recarga independiente del workspace; estáticos y snapshot cubiertos por hashes;
+     instrucciones españolas completas, rutas PowerShell seguras y bloque común sin divergencia.
+     No hay barrera nueva, especialista, personaje, memoria, red, modelo, publicación, SQLite,
+     JSONL, secreto ni contenido temático.
+
+     Verificación exacta desde PowerShell:
+
+     ```powershell
+     py -3.11 -B -m unittest tests.test_instance tests.test_instance_templates tests.test_instance_cli -v
+     py -3.11 -B -m unittest discover -s tests -v
+     py -3.11 -B -m core.runtime.cli instance init --workspace '<RUTA_WORKSPACE_CERRADO>' --output '<RUTA_INSTANCIA_EXTERNA>'
+     py -3.11 -B -m core.runtime.cli instance status --instance '<RUTA_INSTANCIA_EXTERNA>'
+     py -3.11 -B -m core.runtime.cli instance corpus list --instance '<RUTA_INSTANCIA_EXTERNA>'
+     py -3.11 -B -m core.runtime.cli instance corpus show --instance '<RUTA_INSTANCIA_EXTERNA>' --candidate-id '<ID_APROBADO>' --version 1
+     rg -n "Nozomu|Naruto|Jcink|narutorol|account 59|275" core/runtime/instance.py core/runtime/templates tests/test_instance.py tests/test_instance_templates.py tests/test_instance_cli.py
+     git diff --check
+     git diff --name-only 8e3185c -- reference
+     git status --short
+     ```
+
+     Las cuatro comprobaciones funcionales usan temporales externos; después se aparta o borra el
+     workspace y se repiten status/list/show. El `rg` y el diff de `reference/` terminan sin salida.
 4d. [ ] **Concepto aportado y propuestas de ajuste.** Alcance:
-    `core/character/{__init__,models}.py`, `core/runtime/{persistence,cli}.py`,
+    `core/character/{__init__,models}.py`, `core/runtime/{instance,persistence,cli}.py`,
     `core/runtime/templates/instance-policy.template.md` y
     `tests/test_{character_models,character_cli}.py`. Importar/hash/versionar `concept.md`; permitir
     al agente crear propuestas citadas solo contra candidatos aprobados y al humano aceptar o
@@ -1711,7 +2013,7 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
     cambia la versión efectiva y aceptar una crea una nueva composición auditable, no aprobación de
     staff.
 4e. [ ] **Ficha mínima y respuesta del staff.** Alcance: `core/character/models.py`,
-    `core/runtime/{persistence,cli}.py`, `core/runtime/templates/instance-policy.template.md` y
+    `core/runtime/{instance,persistence,cli}.py`, `core/runtime/templates/instance-policy.template.md` y
     `tests/test_{character_draft,staff_review_cli}.py`.
     Crear desde contenido manual del agente un `DraftVersion` cuyos `SourceRef` enlacen concepto y
     fuentes tras candidatos aprobados; persistirlo en `profile.json` y permitir registrar una
@@ -2116,9 +2418,10 @@ fuera de su alcance, que no forma parte de esta rebanada.
     cierre del descriptor se intenta borrar el cerrojo y se informa si queda.
   - Resultado tras las correcciones: 43 tests de 4c1 y 295 en total, OK en `py -3.11` y
     `py -3.14`, sin omitidos.
-- Validación funcional pendiente: ejecutar `candidate approve` y `close` en una terminal
-  integrada real tecleando la frase. La shell de Claude no es interactiva, así que no puede
-  hacerlo: lo hace el usuario sobre un workspace temporal.
+- Validación funcional: el 12-10-2026 el usuario informó que ejecutó en la terminal integrada
+  de VS Code los cinco `candidate approve` y el `close` sobre el workspace temporal preparado
+  por Claude, sin incidencias. No verificado por Claude: el workspace ya se había borrado
+  cuando intentó comprobar el estado. Se repetirá con verificación al terminar 4f.
 - Decisiones de detalle que el plan no fijaba:
   - Orden en `record_candidate_decision`: terminal interactivo → estado pedido válido → carga
     con revisión esperada → candidato existente → decisión existente (idempotente u opuesta) →
@@ -2147,3 +2450,79 @@ fuera de su alcance, que no forma parte de esta rebanada.
     784.886. Coste NO DISPONIBLE.
   - Retrabajo: dos rondas de corrección (3 hallazgos + 1 nuevo); dos tests mal planteados
     corregidos antes de la revisión; una espera con señal errónea (mtime en Windows) relanzada.
+
+### Incremento 4c2 — instancia cerrada e instrucciones generadas
+- Rama: `feature/incremento-4-rebanada-vertical` (base `8e3185c`); incluye el detalle de 4c2
+  escrito por Codex y la nota de validación funcional de 4c1.
+- Cambios hechos: `core/runtime/instance.py`; plantillas `core/runtime/templates/{instance.template.json,
+  instance-policy.template.md,AGENTS.template.md,CLAUDE.template.md}` (comprobadas byte a byte
+  contra los bloques de este plan); comandos `instance init|status` e `instance corpus list|show`
+  en `core/runtime/cli.py`; exports; tests `tests/test_instance{,_templates,_cli}.py` y el
+  auxiliar `tests/instance_support.py`.
+- Resultado de los tests: suites de 4c2 → 40 OK; suite completa → 335 OK en `py -3.11` y
+  `py -3.14`, sin omitidos. Prueba manual: `instance init` rechaza un workspace sin cierre;
+  con cierre crea la instancia (rutas con comilla y «ñ»), el reintento no reescribe, y tras
+  borrar el workspace `status`, `corpus list` y `corpus show` funcionan; una versión rechazada
+  o sustituida da código 3. `reference/` sin cambios desde `8e3185c`; `git diff --check`
+  limpio.
+- Revisión de Codex: «no aprobado» (REV4C2-01 y REV4C2-02 altas, REV4C2-03 media, REV4C2-04
+  baja); corregidos juntos:
+  - REV4C2-01: `_linked_component` (en `workspace.py`) rechaza un symlink o junction en
+    cualquier componente existente de la ruta, padres incluidos, al crear y al cargar; se repite
+    justo antes de publicar.
+  - REV4C2-02: `_destination_state` registra la identidad inicial del destino (ausente, o
+    dispositivo+inodo de la carpeta vacía) y `_publish` la exige antes de publicar: ausente →
+    aparecida, o vacía → sustituida, dan `CONFLICT` sin tocar el destino. Si el rename falla y
+    el destino existe, `_ConcurrentDestination` lo trata como carrera (idéntica → idempotente;
+    distinta → `CONFLICT`).
+  - REV4C2-02 (segunda ronda, POSIX): en POSIX rename aún podía reemplazar una carpeta vacía
+    creada en el instante final. Decisión de Claude, conservadora y reversible: crear
+    workspaces e instancias solo se permite en Windows (`_require_publish_support`, código 4 con
+    mensaje claro); leer y consultar siguen funcionando en cualquier sistema. El proyecto ya es
+    de facto solo Windows (instrucciones PowerShell, lanzador `py`). Añadir soporte POSIX exige
+    una publicación sin reemplazo con sus propias pruebas en ese sistema.
+  - Ampliación de alcance (anotada para la verificación): REV4C2-01 y REV4C2-02 existían también
+    en el workspace de 4a, porque la instancia reutiliza su lógica; se corrigieron en los
+    auxiliares compartidos de `workspace.py`, que ahora usan ambos, con regresiones en
+    `tests/test_workspace_persistence.py`.
+  - REV4C2-03: la recarga rechaza directorios no implicados por los archivos gestionados,
+    incluidos vacíos y anidados.
+  - REV4C2-04: `tests/expected_instance_templates.py` congela las cuatro plantillas y se
+    comparan byte a byte, igual que `AGENTS.md`/`CLAUDE.md` renderizados; `ExactOutputTest`
+    compara salidas completas de `init`, `status`, `corpus list` y `corpus show` en texto y
+    JSON.
+  - Resultado tras las correcciones: 349 tests OK en `py -3.11` y `py -3.14`, sin omitidos.
+- Desviaciones del plan y decisiones de detalle:
+  - Seguridad de rutas: en lugar de reproducir en `instance.py` el algoritmo de 4a, se
+    reutilizan los auxiliares ya revisados de `workspace.py` (`_checkout`, `_identity`,
+    `_contains`, `_is_link`, `_tree_bytes`, `_remove_staging`, `_strip_device_prefix`,
+    `_managed`, `_parse_managed_list`, `_check_managed_list`); sus `WorkspaceError` se
+    convierten en `InstanceError` con el mismo código. Evita duplicar código delicado.
+  - `render_instructions(template, config)` es pública para que `load_instance` y los tests
+    comparen las instrucciones renderizadas con las del disco.
+  - `instance_root` y `core_root` se guardan con `realpath` sin prefijo de dispositivo y con su
+    capitalización real (no `normcase`); la comparación sigue usando la identidad canónica.
+  - En `corpus show`, si una cita o el texto no terminan en LF se añade solo el LF separador,
+    como fija el plan (el JSON conserva la terminación exacta); no se añade la línea aclaratoria
+    de `candidate show`.
+  - `--version` de `corpus show` usa un tipo de argparse que exige entero positivo (código 2).
+  - Se ajustaron dos tests de 4a/4b que listaban `instance` como comando inexistente (ahora
+    existe); siguen comprobando que no hay comandos de publicación.
+  - El `rg` de verificación coincide únicamente en `tests/test_instance_templates.py`, que
+    enumera esos nombres para afirmar que las plantillas renderizadas no los contienen.
+- Revisión archivada en `docs/analisis/incremento-4c2-revision.md` (veredicto final: aprobado
+  tras dos verificaciones; la segunda dejó solo la parte POSIX de REV4C2-02).
+- Métricas por agente (solo telemetría verificable; ausente = NO DISPONIBLE):
+  - Codex (`gpt-5.6-sol`, high), contadores de `~/.codex/sessions`:
+    - Análisis `01a12fb4-…` (1 encargo: detalle de 4c2); incremento respecto a la medición de
+      4c1: entrada 1.974.224 (caché leída 1.691.520), salida 23.848 (razonamiento 10.678).
+    - Revisión `01a13050-7451-72b0-b060-9cc1b54bde4f` (3 encargos: revisión + 2
+      verificaciones): entrada 4.806.062 (caché leída 4.657.280), salida 32.537 (razonamiento
+      18.252).
+    - Escritura de caché 0; errores/cancelaciones 0; coste o cuota NO DISPONIBLE.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde «primero acabemos con toda la
+    configuración»; 35 respuestas de API): entrada 70, salida 81.781, caché leída 27.113.860,
+    caché escrita 110.099. Coste NO DISPONIBLE.
+  - Retrabajo: dos rondas de corrección (4 hallazgos, uno en dos pasos); un caso de 4a roto por
+    el arreglo compartido y corregido antes de la verificación; limpieza errónea en un test
+    corregida antes de la verificación.

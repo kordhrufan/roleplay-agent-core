@@ -91,9 +91,9 @@ class ParserTest(CliCase):
                          "--declared-passage", "Convivencia", "--without-declared-passage")
         self.assertEqual(code, 2)
 
-    def test_no_instance_or_publication_commands(self):
+    def test_no_publication_commands(self):
         # Human decisions exist since 4c1 and are covered by test_assimilation_decision_cli.
-        for argv in (["assimilation", "decide"], ["instance"], ["publish"], ["send"], ["post"],
+        for argv in (["assimilation", "decide"], ["publish"], ["send"], ["post"],
                      ["model"], ["turns"]):
             with self.subTest(argv=argv):
                 self.assertEqual(run(*argv)[0], 2)
