@@ -6,15 +6,15 @@ Generalizar Nozomu Agent como `roleplay-agent-core`: un núcleo reutilizable par
 foro de rol, configurable por personaje, mundo, sistema, plataforma e instancia. Este documento
 define la extracción y un plan para Claude; no implementa código ni altera el legado.
 
-Versión base del detalle del incremento 4: commit `42e724a` a 2026-10-11, rama
-`feature/incremento-4-rebanada-vertical`, creada desde el incremento 3 aprobado y sin cambios al
-iniciar este análisis. `main` permanece en `96eca81`; los incrementos 1–3 siguen en ramas apiladas
-sin fusionar.
+Versión base del detalle del sub-incremento 4b: commit `91289a7` a 2026-10-12, rama
+`feature/incremento-4-rebanada-vertical`, con 4a aprobado e implementado y sin cambios al iniciar
+este análisis. `main` permanece en `96eca81`; los incrementos 1–3 siguen en ramas apiladas sin
+fusionar.
 `reference/migration-source/` es la copia inmutable inspeccionada. La auditoría anterior se trata
 como hipótesis histórica porque declara que su fuente estaba vacía; no se usa como prueba de la
 implementación actual.
 
-### Decisiones del usuario (11-10-2026)
+### Decisiones del usuario (11-10-2026 y 12-10-2026)
 
 - Se adopta literalmente el árbol solicitado: `core/{character,world,rules,memory,runtime,review}/`,
   `adapters/jcink/`, `packages/{characters/nozomu,worlds/naruto-rol,systems/naruto-rol}/`,
@@ -74,6 +74,12 @@ implementación actual.
   orden y no se repiten. El origen se infiere de `archivo`: string significa fichero; omisión o
   `null`, literal cercado en la línea siguiente. Los ejemplos copiables viven fuera del documento
   válido, en `core/runtime/templates/LEEME-expediente.md`.
+- La barrera humana es la opción A: los comandos de decisión solo funcionan con stdin y stdout
+  TTY, muestran ID, versión, hash y decisión, generan un nonce mediante `secrets` y exigen que el
+  usuario teclee la frase completa. El nonce no se admite por argumento, archivo ni variable de
+  entorno; `AGENTS.md` y `CLAUDE.md` ordenarán al agente mostrar el comando y pedir al usuario que
+  lo ejecute. Se implementa en 4c. Reduce la automatización accidental, pero no garantiza humanidad
+  frente a un agente hostil capaz de crear y manejar una pseudo-TTY con el mismo usuario del SO.
 
 ## Contexto del código
 
@@ -95,8 +101,11 @@ implementación actual.
 - `core/runtime/assimilation.py` y `core/runtime/templates/` — incremento 3 aprobado: expediente
   Markdown cerrado, modelos inmutables, fuentes literales/hash y diagnósticos; aún no persiste,
   crea candidatos ni decide revisiones.
-- Las cinco suites actuales suman 145 pruebas aprobadas que los incrementos siguientes deben
-  conservar.
+- `core/runtime/{persistence,workspace,cli}.py` y `adapters/manual.py` — incremento 4a aprobado:
+  workspace externo íntegro, sobre de estado atómico, importación manual y CLI init/status; el
+  corpus nace vacío y todavía no valida registros de candidato.
+- Las ocho suites actuales suman 203 pruebas descubiertas en este checkout que los incrementos
+  siguientes deben conservar.
 
 ### Hallazgos de contraste
 
@@ -506,18 +515,20 @@ crear candidatos, pero no necesita editar el estado. Crear un candidato no lo ap
 incertidumbre se muestra como `REQUIERE CONFIRMACIÓN` aunque después exista una decisión sobre el
 registro.
 
-Cada cita guarda `dossier_section` (valor interno de `DossierSection`), `source_id`,
+Cada cita persistida guarda `dossier_section` (valor interno de `DossierSection`), `source_id`,
 `source_version`, `source_sha256`, `declared_passage` (string o `null`), `start`, `end` y `quote`.
-Sección y pasaje desambiguan ocurrencias repetidas de una misma fuente. `start` y `end` son offsets
-de caracteres Python, base 0 y rango semiabierto, sobre `literal_text` tal como lo entregó
-`load_dossier` —incluidos CRLF de un archivo externo y LF canónicos de un inline—. La CLI exige que
-la ocurrencia exista, `0 <= start < end <= len(literal_text)`, hash/versión exactos y
-`literal_text[start:end] == quote`; calcula línea/columna base 1 solo para mostrar diagnósticos.
-Así una repetición textual queda desambiguada y una edición de otra parte del expediente no mueve
-la identidad de la fuente, que sigue fijada por versión/hash. Un `LITERAL` exige una sola cita y
-`text == quote`; las otras clases pueden redactar una conclusión distinta, pero todas sus citas
-deben resolver. En 4b `WORLD` solo admite fuentes de `setting`, `RULES` las otras seis secciones de
-dominio y `Material suelto` no genera candidatos hasta su clasificación en el incremento 5.
+El JSON de entrada **no** aporta offsets: identifica la declaración por sección, ID, versión y
+pasaje declarado, y aporta la cita literal. La CLI busca `quote` sin normalizar en `literal_text`
+tal como lo entregó `load_dossier` —incluidos CRLF de archivo y LF canónicos inline— y calcula
+`start`/`end` como offsets de caracteres Python, base 0 y rango semiabierto. Si hay varias
+coincidencias, falla indicando el recuento; el autor debe ampliar la cita o añadir `occurrence`
+base 1, una pista de entrada que no se persiste. Se cuentan también coincidencias solapadas.
+La resolución final exige `0 <= start < end <= len(literal_text)`, hash/versión exactos y
+`literal_text[start:end] == quote`; línea/columna base 1 son solo diagnóstico. Un `LITERAL` exige
+una sola cita y `text == quote`; las otras clases pueden redactar una conclusión distinta, pero
+todas sus citas deben resolver. En 4b `WORLD` solo admite fuentes de `setting`, `RULES` las otras
+seis secciones de dominio y `Material suelto` no genera candidatos aunque declare sugerencias;
+su clasificación queda para el incremento 5.
 
 Una decisión conserva `candidate_id`, versión y SHA-256 del candidato exacto, `ReviewStatus`
 (`APPROVED` o `REJECTED`) y un recibo del mecanismo humano. El recibo se serializa canónicamente,
@@ -529,8 +540,9 @@ Repetir la misma decisión devuelve el registro existente; una decisión opuesta
 requiere una versión nueva, no reescribe la anterior.
 
 El cierre de asimilación es otra decisión humana, no una inferencia de la CLI. Solo se ofrece cuando
-no queda candidato pendiente y cada sección de dominio `PROVIDED` tiene al menos un `LITERAL`
-aprobado con cita en esa sección; `Material suelto` no bloquea. La CLI muestra por separado
+no queda pendiente ninguna versión vigente —la mayor de cada ID— y cada sección de dominio
+`PROVIDED` tiene al menos un `LITERAL` vigente aprobado con cita en esa sección; las versiones
+sustituidas siguen auditables y `Material suelto` no bloquea. La CLI muestra por separado
 rechazos e `UNCERTAINTY` y el humano confirma el snapshot. El recibo guarda el SHA-256 canónico del
 objeto `{candidates, decisions}` —excluye `closure` para evitar circularidad—. Añadir/cambiar una
 versión o decisión altera ese digest e invalida el cierre; `instance init` exige que el recibo siga
@@ -548,7 +560,7 @@ repetición idempotente, `2` uso de `argparse`, `3` entrada/estado/integridad in
 inseguro o conflicto de versión/identidad y `5` error de E/S. No se captura `KeyboardInterrupt`.
 
 Subcomandos acumulados: 4a añade `assimilation init --dossier RUTA --workspace RUTA` y
-`assimilation status --workspace RUTA`; 4b añade `assimilation source list` y `assimilation
+`assimilation status --workspace RUTA`; 4b añade `assimilation source list/show` y `assimilation
 candidate add/list/show`; 4c añade las decisiones/cierre humanos e
 `instance init --workspace RUTA --output RUTA`/`instance status`; 4d añade `character concept
 import`, `character proposal add/list/show` y su decisión humana; 4e añade `character draft create`
@@ -1241,24 +1253,232 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
 
 #### Sub-incrementos restantes de la rebanada
 
-4b. [ ] **Candidatos manuales citados, aún pendientes.** Alcance:
-    `core/runtime/{assimilation,persistence,cli,__init__}.py` y
-    `tests/test_{assimilation_candidates,assimilation_cli}.py`. Añadir modelos inmutables
-    `AssimilationDomain`, `CandidateClass`, `CandidateCitation` y `AssimilationCandidate`, entrada
-    JSON estricta y comandos source/candidate sobre el workspace. Criterio: ningún candidato sin
-    citas exactas entra, las cuatro clases permanecen `PENDING_HUMAN_REVIEW`, material suelto no se
-    autoclasifica y un retry no duplica ni cambia historial.
+4b. [x] **Candidatos manuales citados, aún pendientes (detallado).** Objetivo: permitir que un
+    agente prepare candidatos reproducibles a partir de citas literales sin contar offsets, sin
+    decidirlos, cerrar la asimilación ni crear una instancia.
+
+    Alcance exacto de producción: modificar `core/runtime/{assimilation,workspace,cli,__init__}.py`.
+    `persistence.py` no cambia: reutilizar `load_strict_json`, `load_state`, `encode_state` y
+    `atomic_write_bytes`. Crear `tests/test_assimilation_candidates.py` y
+    `tests/test_assimilation_cli.py`; no modificar fixtures aprobadas, adaptadores, review,
+    paquetes, plantillas ni `reference/`.
+
+    1. En `assimilation.py`, importar `ReviewStatus` y definir:
+       - `AssimilationDomain(str, Enum)`: exactamente `RULES` y `WORLD`.
+       - `CandidateClass(str, Enum)`: exactamente `LITERAL`, `INTERPRETATION`, `PROPOSAL` y
+         `UNCERTAINTY`.
+       - `AssimilationError(ValueError)` con `code` y `reason`; códigos admitidos
+         `INVALID_STATE`, `CONFLICT` e `IO`.
+       - `CandidateCitation(dossier_section: DossierSection, source_id: str,
+         source_version: str, source_sha256: str, declared_passage: str | None, start: int,
+         end: int, quote: str)`, dataclass `frozen=True, slots=True`.
+       - `AssimilationCandidate(candidate_id: str, version: int, domain: AssimilationDomain,
+         candidate_class: CandidateClass, text: str, scope: str,
+         citations: tuple[CandidateCitation, ...], review_status: ReviewStatus =
+         ReviewStatus.PENDING_HUMAN_REVIEW,
+         candidate_sha256: str = field(init=False))`, también inmutable.
+       - `CandidateAddResult(candidate: AssimilationCandidate, created: bool,
+         corpus_revision: int)`, inmutable.
+    2. Validar en los constructores tipos exactos (`bool` no es entero), enum real, ID ASCII con
+       `[a-z0-9]+(?:-[a-z0-9]+)*`, versión positiva, textos UTF-8 no vacíos y `scope` sin espacios
+       exteriores/C0. `text` y `quote` se conservan carácter por carácter tras decodificar JSON y
+       pueden contener saltos; deben contener algún carácter no blanco. Las citas son una tupla no
+       vacía, no repiten la misma coordenada fuente+`start`+`end`, y satisfacen rango semiabierto.
+       Solo se admite `review_status=PENDING_HUMAN_REVIEW`; 4b nunca lo muta.
+    3. El JSON de entrada es estricto y tiene exactamente estas claves de raíz:
+
+       ```json
+       {
+         "candidate_id": "convivencia-respeto",
+         "version": 1,
+         "domain": "RULES",
+         "class": "LITERAL",
+         "text": "Trata con respeto al resto de participantes",
+         "scope": "foro",
+         "citations": [{"dossier_section": "forum_rules", "source_id": "manual-foro", "source_version": "1", "declared_passage": "Convivencia", "quote": "Trata con respeto al resto de participantes"}]
+       }
+       ```
+
+       Cada cita de entrada exige las cinco claves mostradas; admite únicamente la sexta clave
+       opcional `occurrence`, entero base 1. No admite `start`, `end`, `source_sha256`, estado,
+       decisión ni hash del candidato. Rechazar claves desconocidas, duplicadas, BOM,
+       `NaN`/`Infinity`, UTF-8/JSON inválido y recursión mediante `load_strict_json`; no exigir
+       formato pretty/canónico al archivo de entrada.
+    4. Resolver cada cita contra una declaración del expediente copiado que coincida exactamente en
+       `dossier_section`, `source_id`, `source_version` y `declared_passage` (`null` también es un
+       valor exacto). Declaraciones idénticas repetidas se colapsan para esta búsqueda. Cero
+       coincidencias falla con los identificadores recibidos. No aceptar `loose_material`, aunque
+       tenga `sugerencias`.
+    5. Buscar `quote` literalmente, sin `strip`, normalización Unicode ni cambio de finales de
+       línea. Enumerar todas las posiciones de inicio, incluidas las solapadas. Con cero, informar
+       que la cita no está en ese literal; con más de una y sin `occurrence`, informar el número y
+       pedir una cita más larga o `occurrence` base 1; con un índice fuera de rango, informar el
+       total. Calcular `start` y `end=start+len(quote)` y copiar el SHA-256 cargado, sin persistir
+       `occurrence`. El diagnóstico incluye línea y columna base 1 de cada coincidencia como ayuda,
+       pero esos valores no forman identidad.
+    6. Aplicar dominio↔sección: `WORLD` solo `setting`; `RULES` exactamente `forum_rules`,
+       `character_creation`, `staff_review`, `platform_format`, `combat_system` y
+       `ability_technique_creation`. Todas las citas de un candidato deben pertenecer a su dominio.
+       `LITERAL` exige una única cita y `text == quote`; las otras clases exigen una o más citas y
+       permiten texto distinto. `UNCERTAINTY` sigue mostrándose como `REQUIERE CONFIRMACIÓN`.
+    7. Calcular `candidate_sha256` como SHA-256 de la forma JSON compacta canónica del registro con
+       claves `candidate_id`, `version`, `domain`, `class`, `text`, `scope`, `citations` y
+       `review_status`, excluyendo solo `candidate_sha256`. La lista de citas y su orden forman
+       parte del hash. Usar `canonical_json_bytes(..., pretty=False)`; nunca hashear el JSON de
+       entrada ni timestamps.
+    8. Persistir cada elemento de `content.candidates` con esta forma exacta; `closure` permanece
+       `null` y `decisions`, vacía en 4b:
+
+       ```json
+       {
+         "candidate_id": "convivencia-respeto",
+         "candidate_sha256": "<64 hex minúsculas>",
+         "citations": [{"declared_passage": "Convivencia", "dossier_section": "forum_rules", "end": 54, "quote": "Trata con respeto al resto de participantes", "source_id": "manual-foro", "source_sha256": "<64 hex minúsculas>", "source_version": "1", "start": 12}],
+         "class": "LITERAL",
+         "domain": "RULES",
+         "review_status": "PENDING_HUMAN_REVIEW",
+         "scope": "foro",
+         "text": "Trata con respeto al resto de participantes",
+         "version": 1
+       }
+       ```
+
+       Los números del ejemplo son ilustrativos; los tests obtienen los reales desde el literal.
+       Al cargar, exigir claves exactas, reconstruir modelos, volver a resolver cada cita contra el
+       expediente, comprobar substring/hash y recalcular `candidate_sha256`. Una edición manual,
+       fuente inexistente o dato derivado discordante es `INVALID_STATE`.
+    9. Añadir firmas públicas exactas en `assimilation.py`:
+       `parse_candidate_input(value: object, *, dossier: LoadedForumDossier)
+       -> AssimilationCandidate`,
+       `decode_candidate_state(content: object, *, dossier: LoadedForumDossier)
+       -> tuple[AssimilationCandidate, ...]`, y
+       `add_candidate(state_path: Path, *, dossier: LoadedForumDossier,
+       expected_revision: int, value: object) -> CandidateAddResult`.
+       Reexportar error, enums, modelos y funciones desde `core/runtime/__init__.py`; los helpers de
+       serialización y de selección de fuentes siguen privados.
+    10. `decode_candidate_state` exige las tres claves de 4a, `closure is None`, `decisions == []`,
+        candidatos en orden de inserción y claves `(candidate_id, version)` únicas. Para cada ID,
+        las versiones empiezan en 1, son contiguas y aparecen en orden ascendente; la versión mayor
+        es la vigente, sin borrar las anteriores. Esto prepara 4c para decidir solo versiones
+        vigentes y conservar las sustituidas como historial.
+    11. `add_candidate` vuelve a cargar el sobre y exige `revision == expected_revision`; valida el
+        historial antes de añadir. Una clave nueva debe ser versión 1 o exactamente la siguiente de
+        ese ID. Repetir la misma clave con el mismo registro/hash devuelve `created=False`, no
+        escribe y conserva revisión/mtime; misma clave con otra resolución o contenido, salto de
+        versión y una versión nueva con el mismo payload semántico que la anterior —ignorando solo
+        `version` y `candidate_sha256`— son `CONFLICT`. Un alta real añade al final, incrementa la
+        revisión en uno y sustituye el estado con
+        `atomic_write_bytes(encode_state(...))`. Envolver `PersistenceError` conservando código,
+        causa y mensaje. No prometer exclusión entre procesos; los locks llegan en el incremento 9.
+    12. En `workspace.py`, ampliar `LoadedWorkspace` con
+        `candidates: tuple[AssimilationCandidate, ...]`. Reordenar `_load_workspace` para cargar el
+        expediente antes de validar el contenido del corpus y sustituir `_check_corpus` por la
+        decodificación completa anterior. El estado inicial de 4a sigue válido y devuelve tupla
+        vacía. No relajar integridad, rutas, junctions ni la comprobación del checkout.
+    13. Añadir comandos exactos, todos con `--workspace RUTA` obligatorio:
+        - `assimilation source list`;
+        - `assimilation source show --section SECCIÓN --source-id ID --source-version VERSIÓN
+          [--declared-passage TEXTO | --without-declared-passage]`;
+        - `assimilation candidate add --input ARCHIVO`;
+        - `assimilation candidate list`;
+        - `assimilation candidate show --candidate-id ID [--version N]` (sin versión muestra la
+          última; nunca la presupone en una operación de decisión futura).
+        `SECCIÓN` usa los siete valores internos y `loose_material`. `source list/show` son vistas
+        de solo lectura: incluyen el material suelto como `candidate_eligible=false`, no lo
+        clasifican ni cambian revisión/mtime. Si `source show` no recibe selector de pasaje y hay
+        varias declaraciones, falla e indica las opciones; las dos opciones de pasaje son
+        mutuamente excluyentes.
+    14. Salidas JSON de éxito, emitidas con `_emit`, tienen exactamente estas claves de raíz:
+        - source list: `ok`, `action="assimilation.source.list"`, `sources`, `workspace`;
+        - source show: `ok`, `action="assimilation.source.show"`, `source`, `workspace`;
+        - candidate add: `ok`, `action="assimilation.candidate.add"`, `candidate_id`,
+          `candidate_sha256`, `corpus_revision`, `created`, `version`, `workspace`;
+        - candidate list: `ok`, `action="assimilation.candidate.list"`, `candidates`,
+          `corpus_revision`, `workspace`;
+        - candidate show: `ok`, `action="assimilation.candidate.show"`, `candidate`,
+          `corpus_revision`, `workspace`.
+        `sources` conserva el orden del expediente y cada elemento tiene exactamente
+        `candidate_eligible`, `declared_passage`, `dossier_section`, `domain`, `source_id`,
+        `source_sha256`, `source_version`; `source` añade `literal_text`. `candidates` en list usa
+        resúmenes con `candidate_id`, `candidate_sha256`, `class`, `domain`, `review_status` y
+        `version`; show devuelve el registro persistido completo. No incluir rutas fuente originales
+        ni locator del expediente.
+    15. Salida texto exacta: source list imprime una línea por fuente
+        `SECCIÓN | ID | vVERSIÓN | pasaje=VALOR | sha256=HASH | dominio=DOMINIO | candidato=SI|NO`;
+        `VALOR` y `DOMINIO` usan el literal `null` cuando no existen. Candidate list imprime una
+        línea por candidato:
+        `ID vVERSIÓN | CLASE | DOMINIO | PENDING_HUMAN_REVIEW | sha256=HASH` y, para
+        `UNCERTAINTY`, añade ` | REQUIERE CONFIRMACIÓN`. Las listas vacías imprimen respectivamente
+        `No hay fuentes.` o `No hay candidatos.`. Source show imprime primero la misma línea y luego
+        el literal como `LÍNEA | CONTENIDO`, con número base 1 y ancho calculado; es una ayuda visual,
+        no texto copiable exacto (el JSON sí entrega `literal_text`). Candidate show imprime su
+        resumen, una línea por cita con sección/ID/versión/pasaje/SHA/rango y, tras `Texto:`, el
+        texto sin modificar. Candidate add reutiliza el resumen precedido por `Candidato añadido:`
+        o `Candidato ya existente:` y termina con `Revisión del corpus: N.`.
+    16. Mantener el contrato de error JSON exacto `{"ok":false,"code","message"}`. Entrada,
+        selector, cita, no encontrado o estado/hash inválido → código 3 `INVALID_STATE`; identidad,
+        versión o revisión concurrente conflictiva → 4 `CONFLICT`; E/S al leer entrada o estado →
+        5 `IO`; uso de argparse → 2. En texto, solo errores a stderr. No capturar
+        `KeyboardInterrupt` ni introducir TTY/nonce en 4b.
+    17. `tests/test_assimilation_candidates.py`: inmovilidad/enums/validación de cada modelo; forma
+        de entrada y persistida exactas; cálculo de hash; cita única y multilínea, CRLF de archivo,
+        Unicode, coincidencias cero/una/múltiples/solapadas y `occurrence`; pasaje nulo/declarado;
+        seis secciones RULES y única WORLD; cruces de dominio; `LITERAL` y las otras clases;
+        material suelto; claves/tipos/UTF-8; carga manipulada; versiones contiguas, vigente, retry
+        sin escritura y conflictos; fallo de replace conserva estado anterior.
+    18. `tests/test_assimilation_cli.py`: import sin efectos; ayuda y flags; los cinco comandos por
+        `main`; source list/show texto y JSON, líneas y ambigüedad; add/list/show de las cuatro
+        clases; última versión frente a `--version`; salidas/claves/códigos/stdout/stderr exactos;
+        input ausente o inválido; workspace manipulado; subprocess happy path. Afirmar que no
+        existen comandos de decisión, cierre, instancia, publicación, modelo, red ni turnos.
+
+    Criterios de aceptación de 4b:
+
+    - El autor solo transcribe una cita literal e identidad de fuente; el core calcula y persiste
+      offsets/hash exactos, y una cita repetida nunca se resuelve por suposición.
+    - Todo candidato válido queda inmutable y `PENDING_HUMAN_REVIEW`; no alimenta todavía consultas,
+      cierre, instancia, personaje ni canon.
+    - El registro conserva historia por ID/versión, un retry exacto no escribe y ninguna edición del
+      estado o fuente pasa la recarga.
+    - `source show` facilita citar sin crear una segunda representación autoritativa; material
+      suelto se puede inspeccionar pero no citar en candidatos.
+    - Solo biblioteca estándar; sin TTY/nonce aún, modelo, red, SQLite, publicación o contenido
+      temático.
+
+    Verificación exacta de 4b desde PowerShell:
+
+    ```powershell
+    py -3.11 -B -m unittest tests.test_assimilation_candidates tests.test_assimilation_cli -v
+    py -3.11 -B -m unittest discover -s tests -v
+    py -3.11 -B -m core.runtime.cli --json assimilation source list --workspace <RUTA_TEMP_EXTERNA>
+    py -3.11 -B -m core.runtime.cli --json assimilation candidate add --workspace <RUTA_TEMP_EXTERNA> --input <CANDIDATO_JSON>
+    py -3.11 -B -m core.runtime.cli --json assimilation candidate show --workspace <RUTA_TEMP_EXTERNA> --candidate-id convivencia-respeto --version 1
+    rg -n "Nozomu|Naruto|Jcink|narutorol|account 59|275" core/runtime tests/test_assimilation_candidates.py tests/test_assimilation_cli.py
+    git diff --check
+    git diff --name-only 91289a7 -- reference
+    git status --short
+    ```
+
+    El `rg` y el diff de `reference/` terminan sin salida. La comprobación manual parte de un
+    workspace temporal externo creado por 4a, usa una copia temporal del JSON de entrada y elimina
+    ambos al terminar; no se usa un workspace real.
+
 4c. [ ] **Decisiones, cierre de asimilación e instancia generada.** Alcance:
     `core/runtime/{assimilation,persistence,instance,cli,__init__}.py`,
     `core/runtime/templates/{instance.template.json,instance-policy.template.md,
     AGENTS.template.md, CLAUDE.template.md}` y
     `tests/test_{assimilation_decisions,instance,instance_cli,instance_templates}.py`. Aplicar la
-    barrera humana elegida a decisiones exactas y a `assimilation close`, cuyo recibo fija el digest
-    canónico de `{candidates, decisions}`; añadir `instance init --workspace --output`, que solo
-    acepta un cierre vigente y copia el snapshot cerrado. Criterio: pendiente/rechazado no es
-    corpus usable, cambiar un candidato invalida el cierre, no se materializa antes de cerrarlo, `--output` es
+    barrera humana TTY de la opción A a decisiones exactas y a `assimilation close`, cuyo recibo
+    fija el digest canónico de `{candidates, decisions}`; el nonce se genera dentro del comando y
+    nunca entra por argumento, archivo o entorno. Las instrucciones generadas muestran el comando
+    y exigen que lo ejecute el usuario. Decidir solo la versión vigente (la mayor) de cada ID; las
+    versiones sustituidas y sus posibles decisiones siguen auditables, pero no bloquean el cierre.
+    Añadir `instance init --workspace --output`, que solo acepta un cierre vigente y copia el
+    snapshot cerrado. Criterio: pendiente/rechazado no es corpus usable, cambiar/añadir una versión
+    vigente invalida el cierre, no se materializa antes de cerrarlo, `--output` es
     obligatorio/idempotente/externo y los bloques invariantes de `AGENTS.md`/`CLAUDE.md` son
-    idénticos byte a byte.
+    idénticos byte a byte. La barrera reduce automatización accidental; no se presenta como prueba
+    criptográfica de humanidad ante un agente hostil con pseudo-TTY.
 4d. [ ] **Concepto aportado y propuestas de ajuste.** Alcance:
     `core/character/{__init__,models}.py`, `core/runtime/{persistence,cli}.py`,
     `core/runtime/templates/instance-policy.template.md` y
@@ -1334,29 +1554,12 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
 
 ## Riesgos y dudas abiertas
 
-Las decisiones de formato, instrucciones, ruta de instancia y ficha mecánica están cerradas. 4a y
-4b no están bloqueados; antes de implementar 4c el usuario debe elegir el límite práctico de la
-barrera humana. Ninguna opción puede demostrar humanidad frente a un agente hostil con el mismo usuario de
-SO, escritura sobre instancia/checkout y capacidad de crear una pseudo-TTY; para una garantía
-fuerte hace falta separar credencial o proceso fuera de su alcance. El límite afecta tanto al agente que
-prepara el workspace como a Codex/Claude dentro de la instancia generada.
+No hay dudas que bloqueen 4b ni 4c: la barrera humana ya está decidida como opción A. Su límite
+conocido permanece: no demuestra humanidad frente a un agente hostil con permisos equivalentes y
+capacidad de manejar una pseudo-TTY; una garantía fuerte exigiría una credencial o un proceso fuera
+de su alcance, que no forma parte de esta rebanada.
 
-1. **¿Qué barrera debe proteger aprobar/rechazar candidatos, cerrar la asimilación,
-   aceptar/rechazar propuestas y registrar respuestas del staff?**
-   - A: comandos separados de decisión que solo funcionan con stdin y stdout TTY; muestran
-     ID+versión+hash+decisión, generan un nonce con `secrets`, y exigen que el usuario teclee en su
-     terminal la frase completa (`APROBAR … <nonce>`, etc.). El nonce no se acepta por argumento,
-     archivo ni variable de entorno. `AGENTS.md`/`CLAUDE.md` ordenan al agente limitarse a mostrar
-     el comando y pedir al usuario que lo ejecute. **Recomendación: A**; bloquea el camino autónomo
-     normal de Codex/Claude y deja una interacción explícita, sin fingir una frontera criptográfica.
-   - B: archivo JSON de decisión que escribe el usuario y la CLI importa/verifica. Es fácil de
-     auditar y automatizar, pero el agente puede escribir el mismo archivo con sus permisos; ofrece
-     menos barrera que A y convierte una acción sencilla en edición manual.
-   - C: recibo firmado por una clave/servicio o helper ejecutado con credenciales que el agente no
-     pueda leer. Es la única vía hacia una garantía fuerte, pero introduce gestión de secretos,
-     plataforma o proceso externo y excede la rebanada sin una autoridad adicional del usuario.
-
-2. **Antes del incremento 14: ¿cuándo y cómo elegir el segundo caso de generalidad?**
+1. **Antes del incremento 14: ¿cuándo y cómo elegir el segundo caso de generalidad?**
    - A: mantener la elección aplazada y, al llegar al incremento 14, escoger un foro real no Naruto
      que contraste mecánicas/plataforma con el primero. **Recomendación:** A; evita diseñar ahora
      contra un caso hipotético y conserva la decisión previa.
@@ -1588,3 +1791,62 @@ prepara el workspace como a Codex/Claude dentro de la instancia generada.
   - Retrabajo: dos rondas de corrección (4 hallazgos + 1 pendiente); una prueba manual con ruta
     mal compuesta creó un workspace fuera del temporal, eliminado de inmediato; un literal de
     test mal escapado corregido antes de la verificación.
+
+### Incremento 4b — candidatos manuales citados
+- Rama: `feature/incremento-4-rebanada-vertical` (base `91289a7`); incluye la decisión de barrera
+  A y el detalle de 4b escritos por Codex en un hilo nuevo.
+- Cambios hechos: candidatos en `core/runtime/assimilation.py` (enums, `AssimilationError`,
+  `CandidateCitation`, `AssimilationCandidate`, `CandidateAddResult`, `parse_candidate_input`,
+  `decode_candidate_state`, `add_candidate`); `LoadedWorkspace.candidates` y decodificación
+  completa del corpus en `core/runtime/workspace.py` (se eliminó `_check_corpus`); comandos
+  `assimilation source list|show` y `assimilation candidate add|list|show` en
+  `core/runtime/cli.py`; exports; `tests/test_assimilation_{candidates,cli}.py`.
+- Resultado de los tests: las dos suites de 4b → 42 OK; suite completa → 245 OK en `py -3.11`
+  y `py -3.14`, sin omitidos. Prueba manual en un temporal externo: `source list/show`, alta
+  de las cuatro clases (revisiones 1–4), reintento sin escritura, `UNCERTAINTY` marcada como
+  «REQUIERE CONFIRMACIÓN», cita ambigua rechazada con posiciones y `status` íntegro. `rg` sin
+  coincidencias; `reference/` sin cambios desde `91289a7`; `git diff --check` limpio.
+- Desviaciones del plan y decisiones de detalle que el plan no fijaba:
+  - `cli.py` importa los auxiliares privados `_source_declarations`, `_SourceDeclaration` y
+    `_candidate_record` de `assimilation.py` para no duplicar la selección de fuentes ni la
+    forma persistida (la CLI es interna del core; no se reexportan).
+  - `source list` colapsa las declaraciones idénticas (misma sección, id, versión y pasaje),
+    igual que la resolución de citas; el material suelto aparece al final.
+  - `candidate list` muestra todas las versiones (el historial) en orden de inserción.
+  - El diagnóstico de cita ambigua lista como máximo diez posiciones y resume el resto.
+  - `CandidateCitation` exige además `end - start == len(quote)`. `text` y `quote` admiten
+    saltos y tabuladores (son literales); `scope` sigue la regla de texto sin controles.
+  - Propiedades auxiliares `AssimilationCandidate.key`, `.requires_confirmation` y
+    `CandidateCitation.coordinate`.
+  - `source show` en texto quita el `\r` final de cada línea al mostrarla (es una ayuda visual
+    numerada; el JSON entrega el literal exacto).
+- Revisión de Codex: «requiere cambios» (REV4B-01 y REV4B-02, media); corregidos juntos:
+  - REV4B-01: toda la salida de la CLI (texto, JSON y errores) pasa por `_write_exact`: UTF-8
+    exacto con finales LF escrito en el buffer binario, sin traducción de saltos ni
+    sustitución de caracteres, sea cual sea la página de códigos de la consola. Se retiró el
+    `reconfigure(errors="replace")`. `candidate show` imprime `Texto (exacto, hasta «Fin del
+    texto.»):`, el texto tal cual y, si no termina en salto, la línea
+    `(el texto no termina en salto de línea)` antes de `Fin del texto.`.
+  - REV4B-02: tests de colapso de declaraciones idénticas, ambigüedad de `source show` con
+    ambos selectores, las seis secciones RULES con fuentes (y WORLD rechazado en cada una),
+    historial completo en `candidate list`, inmutabilidad de `CandidateCitation` y
+    `CandidateAddResult`, y texto exacto por `main` y por subproceso con
+    `PYTHONIOENCODING=ascii:strict` (CRLF, salto final y Unicode).
+  - Resultado tras las correcciones: 49 tests de 4b y 252 en total, OK en `py -3.11` y
+    `py -3.14`, sin omitidos.
+- Revisión archivada en `docs/analisis/incremento-4b-revision.md` (veredicto final: aprobado).
+- Métricas por agente (solo telemetría verificable; ausente = NO DISPONIBLE):
+  - Codex (`gpt-5.6-sol`, high), contadores de `~/.codex/sessions`:
+    - Análisis `01a12fb4-2c71-71c3-b73d-30683f51381c` (hilo nuevo, 1 encargo: barrera A y
+      detalle de 4b): entrada 3.134.651 (caché leída 3.013.248), salida 24.491 (razonamiento
+      11.745). Frente al encargo equivalente del hilo anterior (8,3 M de entrada), abrir un
+      hilo nuevo redujo la entrada a menos de la mitad.
+    - Revisión `01a12fc1-e87e-7580-8870-75dd6f5ed655` (2 encargos: revisión + verificación):
+      entrada 4.441.362 (caché leída 4.274.432), salida 31.603 (razonamiento 19.580).
+    - Escritura de caché 0; errores/cancelaciones 0; coste o cuota NO DISPONIBLE.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde «Nos vamos con la opción A»; 35
+    respuestas de API): entrada 70, salida 73.183, caché leída 18.498.005, caché escrita
+    560.611. Coste NO DISPONIBLE.
+  - Retrabajo: una ronda de correcciones (2 hallazgos); un heredoc de shell fallido sin
+    efectos; un retorno de carro colado en estas notas y corregido; un caso de test mal
+    planteado corregido antes de la revisión.

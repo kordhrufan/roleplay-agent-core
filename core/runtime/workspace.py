@@ -20,8 +20,11 @@ from pathlib import Path
 
 from core.runtime.assimilation import (
     DOSSIER_NAME,
+    AssimilationCandidate,
+    AssimilationError,
     DossierError,
     LoadedForumDossier,
+    decode_candidate_state,
     load_dossier,
 )
 from core.runtime.persistence import (
@@ -52,7 +55,6 @@ _WORKSPACE_KEYS = frozenset(
 )
 _INTEGRITY_KEYS = frozenset({"algorithm", "files", "schema_version"})
 _MANAGED_KEYS = frozenset({"path", "sha256", "size"})
-_CORPUS_KEYS = frozenset(INITIAL_CORPUS)
 _NAME_SURROGATE = 0x20000000  # reparse tags that redirect to another path (junction, symlink)
 _FORUM_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -124,6 +126,7 @@ class LoadedWorkspace:
     workspace_root: Path
     dossier: LoadedForumDossier
     corpus_revision: int
+    candidates: tuple[AssimilationCandidate, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -415,11 +418,6 @@ def _load_workspace(root: Path, expected_core_root: Path | None) -> LoadedWorksp
             if name in files and path.relative_to(root).as_posix() not in listed:
                 _invalid(f"{path.relative_to(root).as_posix()} no forma parte del expediente copiado")
 
-    if not _reject_symlinks(root, CORPUS_STATE).is_file():
-        _invalid(f"falta {CORPUS_STATE} o no es un archivo")
-    revision, content = load_state(root / CORPUS_STATE)
-    _check_corpus(content)
-
     if expected_core_root is not None and _identity(config.core_root) != _identity(expected_core_root):
         raise WorkspaceError("CONFLICT", f"el workspace pertenece al checkout {config.core_root}")
     dossier = load_dossier(root / DOSSIER_DIR)
@@ -428,7 +426,15 @@ def _load_workspace(root: Path, expected_core_root: Path | None) -> LoadedWorksp
         config.forum_id, config.display_name, config.dossier_version
     ):
         _invalid("el expediente copiado no coincide con workspace.json")
-    return LoadedWorkspace(config, root, dossier, revision)
+
+    if not _reject_symlinks(root, CORPUS_STATE).is_file():
+        _invalid(f"falta {CORPUS_STATE} o no es un archivo")
+    revision, content = load_state(root / CORPUS_STATE)
+    try:
+        candidates = decode_candidate_state(content, dossier=dossier)
+    except AssimilationError as exc:
+        raise WorkspaceError(exc.code, f"{CORPUS_STATE}: {exc.reason}") from exc
+    return LoadedWorkspace(config, root, dossier, revision, candidates)
 
 
 def _parse_config(data: object) -> WorkspaceConfig:
@@ -481,15 +487,6 @@ def _check_managed_list(files: object) -> None:
     paths = [f.path for f in files]
     if paths != sorted(paths) or len(set(paths)) != len(paths):
         _invalid("los archivos gestionados deben estar ordenados y sin repetir")
-
-
-def _check_corpus(content: object) -> None:
-    if not isinstance(content, dict) or set(content) != _CORPUS_KEYS:
-        _invalid(f"{CORPUS_STATE} no tiene exactamente candidates, closure y decisions")
-    if not isinstance(content["candidates"], list) or not isinstance(content["decisions"], list):
-        _invalid(f"{CORPUS_STATE}: candidates y decisions deben ser listas")
-    if content["closure"] is not None and not isinstance(content["closure"], dict):
-        _invalid(f"{CORPUS_STATE}: closure debe ser null o un objeto")
 
 
 def _read_managed(root: Path, relative: str) -> bytes:

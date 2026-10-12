@@ -1,8 +1,8 @@
 """Forum dossier: the human-written `expediente.md` that feeds rule and setting assimilation.
 
-This module only parses, validates and loads the dossier with provenance. It never approves,
-interprets, indexes or persists sources. Error reasons are in Spanish because the dossier is
-written by hand and every message must help to fix the exact line.
+It parses, validates and loads the dossier with provenance, and records cited assimilation
+candidates as pending proposals. It never approves, interprets or indexes sources. Error reasons
+are in Spanish because the dossier is written by hand and every message must help to fix it.
 """
 
 from __future__ import annotations
@@ -17,6 +17,14 @@ from pathlib import Path
 from urllib.parse import quote
 
 from core.memory.provenance import SourceRef
+from core.review.models import ReviewStatus
+from core.runtime.persistence import (
+    PersistenceError,
+    atomic_write_bytes,
+    canonical_json_bytes,
+    encode_state,
+    load_state,
+)
 
 DOSSIER_NAME = "expediente.md"
 DOSSIER_SCHEMA_VERSION = 1
@@ -846,3 +854,455 @@ def _read_checked_source_file(
 
 def _sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
+
+
+# --- Assimilation candidates (4b) -------------------------------------------------------------
+# A candidate is a cited proposal about the forum's rules or setting. Creating one never approves
+# it: every candidate stays PENDING_HUMAN_REVIEW until a human decision (4c).
+
+
+class AssimilationDomain(str, Enum):
+    RULES = "RULES"
+    WORLD = "WORLD"
+
+
+class CandidateClass(str, Enum):
+    LITERAL = "LITERAL"
+    INTERPRETATION = "INTERPRETATION"
+    PROPOSAL = "PROPOSAL"
+    UNCERTAINTY = "UNCERTAINTY"
+
+
+_DOMAIN_BY_SECTION = {
+    section: (AssimilationDomain.WORLD if section is DossierSection.SETTING
+              else AssimilationDomain.RULES)
+    for section in DossierSection
+}
+_CANDIDATE_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+_SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+_ASSIMILATION_CODES = frozenset({"INVALID_STATE", "CONFLICT", "IO"})
+_INPUT_KEYS = frozenset({"candidate_id", "version", "domain", "class", "text", "scope",
+                         "citations"})
+_INPUT_CITATION_KEYS = frozenset({"dossier_section", "source_id", "source_version",
+                                  "declared_passage", "quote"})
+_RECORD_KEYS = frozenset({"candidate_id", "candidate_sha256", "citations", "class", "domain",
+                          "review_status", "scope", "text", "version"})
+_RECORD_CITATION_KEYS = frozenset({"declared_passage", "dossier_section", "end", "quote",
+                                   "source_id", "source_sha256", "source_version", "start"})
+_CORPUS_KEYS = frozenset({"candidates", "closure", "decisions"})
+
+
+class AssimilationError(ValueError):
+    """`code` is INVALID_STATE, CONFLICT or IO."""
+
+    def __init__(self, code: str, reason: str):
+        if code not in _ASSIMILATION_CODES:
+            raise ValueError(f"unknown assimilation error code {code!r}")
+        self.code = code
+        self.reason = reason
+        super().__init__(f"{code}: {reason}")
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateCitation:
+    """An exact, half-open character range of a loaded source literal."""
+
+    dossier_section: DossierSection
+    source_id: str
+    source_version: str
+    source_sha256: str
+    declared_passage: str | None
+    start: int
+    end: int
+    quote: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.dossier_section, DossierSection):
+            _invalid_candidate("la sección de la cita es desconocida")
+        _require_candidate_text("source_id", self.source_id)
+        _require_candidate_text("source_version", self.source_version)
+        if self.declared_passage is not None:
+            _require_candidate_text("declared_passage", self.declared_passage)
+        if not isinstance(self.source_sha256, str) or not _SHA256_HEX.fullmatch(self.source_sha256):
+            _invalid_candidate("source_sha256 debe ser un SHA-256 en minúsculas")
+        for name in ("start", "end"):
+            if type(getattr(self, name)) is not int:
+                _invalid_candidate(f"{name} debe ser un entero")
+        _require_content("quote", self.quote)
+        if not 0 <= self.start < self.end or self.end - self.start != len(self.quote):
+            _invalid_candidate("el rango de la cita no corresponde a la longitud de quote")
+
+    @property
+    def coordinate(self) -> tuple:
+        return (self.dossier_section, self.source_id, self.source_version,
+                self.declared_passage, self.start, self.end)
+
+
+@dataclass(frozen=True, slots=True)
+class AssimilationCandidate:
+    candidate_id: str
+    version: int
+    domain: AssimilationDomain
+    candidate_class: CandidateClass
+    text: str
+    scope: str
+    citations: tuple[CandidateCitation, ...]
+    review_status: ReviewStatus = ReviewStatus.PENDING_HUMAN_REVIEW
+    candidate_sha256: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.candidate_id, str) or not _CANDIDATE_ID.fullmatch(self.candidate_id):
+            _invalid_candidate("candidate_id solo admite minúsculas ASCII, dígitos y guiones "
+                               "simples (p. ej. «convivencia-respeto»)")
+        if type(self.version) is not int or self.version < 1:
+            _invalid_candidate("version debe ser un entero positivo")
+        if not isinstance(self.domain, AssimilationDomain):
+            _invalid_candidate("domain debe ser RULES o WORLD")
+        if not isinstance(self.candidate_class, CandidateClass):
+            _invalid_candidate("class debe ser LITERAL, INTERPRETATION, PROPOSAL o UNCERTAINTY")
+        _require_content("text", self.text)
+        _require_candidate_text("scope", self.scope)
+        if self.review_status is not ReviewStatus.PENDING_HUMAN_REVIEW:
+            _invalid_candidate("un candidato nuevo solo puede estar PENDING_HUMAN_REVIEW")
+        if not isinstance(self.citations, tuple) or not self.citations or not all(
+            isinstance(c, CandidateCitation) for c in self.citations
+        ):
+            _invalid_candidate("citations debe ser una tupla no vacía de citas")
+        if len({c.coordinate for c in self.citations}) != len(self.citations):
+            _invalid_candidate("una cita está repetida")
+        for citation in self.citations:
+            if _DOMAIN_BY_SECTION[citation.dossier_section] is not self.domain:
+                _invalid_candidate(
+                    f"una cita de «{_HEADINGS[citation.dossier_section]}» no pertenece al dominio "
+                    f"{self.domain.value}; WORLD solo admite «{_HEADINGS[DossierSection.SETTING]}»"
+                )
+        if self.candidate_class is CandidateClass.LITERAL:
+            if len(self.citations) != 1:
+                _invalid_candidate("un LITERAL lleva exactamente una cita")
+            if self.text != self.citations[0].quote:
+                _invalid_candidate("en un LITERAL, text debe ser idéntico a la cita")
+        record = _candidate_record(self, include_hash=False)
+        object.__setattr__(self, "candidate_sha256",
+                           hashlib.sha256(canonical_json_bytes(record, pretty=False)).hexdigest())
+
+    @property
+    def key(self) -> tuple[str, int]:
+        return (self.candidate_id, self.version)
+
+    @property
+    def requires_confirmation(self) -> bool:
+        return self.candidate_class is CandidateClass.UNCERTAINTY
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateAddResult:
+    candidate: AssimilationCandidate
+    created: bool
+    corpus_revision: int
+
+
+def parse_candidate_input(value: object, *, dossier: LoadedForumDossier) -> AssimilationCandidate:
+    """Build a candidate from the author's JSON: the core locates each quote and fixes its range."""
+    if not isinstance(value, dict) or set(value) != _INPUT_KEYS:
+        _invalid_candidate("el candidato debe tener exactamente las claves "
+                           f"{', '.join(sorted(_INPUT_KEYS))}")
+    citations_value = value["citations"]
+    if not isinstance(citations_value, list) or not citations_value:
+        _invalid_candidate("citations debe ser una lista no vacía")
+    declarations = _source_declarations(dossier)
+    citations = tuple(_resolve_input_citation(i, item, declarations)
+                      for i, item in enumerate(citations_value, start=1))
+    return AssimilationCandidate(
+        candidate_id=value["candidate_id"],
+        version=value["version"],
+        domain=_enum_value(AssimilationDomain, value["domain"], "domain"),
+        candidate_class=_enum_value(CandidateClass, value["class"], "class"),
+        text=value["text"],
+        scope=value["scope"],
+        citations=citations,
+    )
+
+
+def decode_candidate_state(
+    content: object, *, dossier: LoadedForumDossier
+) -> tuple[AssimilationCandidate, ...]:
+    """Rebuild and re-verify every persisted candidate against the copied dossier."""
+    if not isinstance(content, dict) or set(content) != _CORPUS_KEYS:
+        _invalid_candidate("el corpus debe tener exactamente candidates, closure y decisions")
+    if content["closure"] is not None or content["decisions"] != []:
+        _invalid_candidate("el corpus todavía no admite decisiones ni cierre")
+    records = content["candidates"]
+    if not isinstance(records, list):
+        _invalid_candidate("candidates debe ser una lista")
+    declarations = _source_declarations(dossier)
+    candidates: list[AssimilationCandidate] = []
+    latest: dict[str, int] = {}
+    for position, record in enumerate(records, start=1):
+        candidate = _decode_record(position, record, declarations)
+        expected = latest.get(candidate.candidate_id, 0) + 1
+        if candidate.version != expected:
+            _invalid_candidate(f"el candidato {candidate.candidate_id} salta de la versión "
+                               f"{expected - 1} a la {candidate.version}")
+        latest[candidate.candidate_id] = candidate.version
+        candidates.append(candidate)
+    return tuple(candidates)
+
+
+def add_candidate(
+    state_path: Path, *, dossier: LoadedForumDossier, expected_revision: int, value: object
+) -> CandidateAddResult:
+    """Append a new pending candidate version, or return the identical existing one."""
+    try:
+        revision, content = load_state(state_path)
+    except PersistenceError as exc:
+        raise AssimilationError(exc.code, exc.reason) from exc
+    if revision != expected_revision:
+        raise AssimilationError("CONFLICT", f"el corpus cambió (revisión {revision}, se esperaba "
+                                            f"{expected_revision}); vuelve a intentarlo")
+    existing = decode_candidate_state(content, dossier=dossier)
+    candidate = parse_candidate_input(value, dossier=dossier)
+    by_key = {c.key: c for c in existing}
+    if candidate.key in by_key:
+        if by_key[candidate.key].candidate_sha256 == candidate.candidate_sha256:
+            return CandidateAddResult(by_key[candidate.key], False, revision)
+        raise AssimilationError("CONFLICT", f"{candidate.candidate_id} v{candidate.version} ya "
+                                            "existe con otro contenido; usa una versión nueva")
+    versions = [c for c in existing if c.candidate_id == candidate.candidate_id]
+    expected_version = len(versions) + 1
+    if candidate.version != expected_version:
+        raise AssimilationError("CONFLICT", f"la siguiente versión de {candidate.candidate_id} es "
+                                            f"la {expected_version}, no la {candidate.version}")
+    if versions and _semantic_payload(versions[-1]) == _semantic_payload(candidate):
+        raise AssimilationError("CONFLICT", f"la versión {candidate.version} de "
+                                            f"{candidate.candidate_id} no cambia nada respecto a "
+                                            "la anterior")
+    new_content = {
+        "candidates": [*content["candidates"], _candidate_record(candidate, include_hash=True)],
+        "closure": None,
+        "decisions": [],
+    }
+    try:
+        atomic_write_bytes(Path(state_path), encode_state(new_content, revision=revision + 1))
+    except PersistenceError as exc:
+        raise AssimilationError(exc.code, exc.reason) from exc
+    return CandidateAddResult(candidate, True, revision + 1)
+
+
+@dataclass(frozen=True, slots=True)
+class _SourceDeclaration:
+    """One distinct (section, id, version, passage) declaration of the dossier."""
+
+    section: DossierSection | None  # None for loose material
+    source_id: str
+    source_version: str
+    declared_passage: str | None
+    literal_text: str
+    source_sha256: str
+
+    @property
+    def candidate_eligible(self) -> bool:
+        return self.section is not None
+
+    @property
+    def domain(self) -> AssimilationDomain | None:
+        return _DOMAIN_BY_SECTION[self.section] if self.section is not None else None
+
+    @property
+    def key(self) -> tuple:
+        return (self.section, self.source_id, self.source_version, self.declared_passage)
+
+
+def _source_declarations(dossier: LoadedForumDossier) -> tuple[_SourceDeclaration, ...]:
+    """Distinct source declarations in dossier order, loose material last (not citable)."""
+    if not isinstance(dossier, LoadedForumDossier):
+        _invalid_candidate("se necesita un expediente cargado")
+    pairs = [(section.spec.section, loaded) for section in dossier.sections
+             for loaded in section.sources]
+    pairs += [(None, material.source) for material in dossier.loose_material]
+    seen: dict[tuple, _SourceDeclaration] = {}
+    for section, loaded in pairs:
+        declaration = _SourceDeclaration(section, loaded.spec.source_id, loaded.spec.version,
+                                         loaded.spec.section_or_passage, loaded.literal_text,
+                                         loaded.source_ref.sha256)
+        seen.setdefault(declaration.key, declaration)
+    return tuple(seen.values())
+
+
+def _find_declaration(
+    declarations: tuple[_SourceDeclaration, ...], section: DossierSection, source_id: str,
+    source_version: str, declared_passage: str | None,
+) -> _SourceDeclaration:
+    key = (section, source_id, source_version, declared_passage)
+    for declaration in declarations:
+        if declaration.key == key:
+            return declaration
+    passage = "null" if declared_passage is None else json.dumps(declared_passage,
+                                                                 ensure_ascii=False)
+    _invalid_candidate(
+        f"no hay ninguna fuente declarada en «{_HEADINGS[section]}» con id "
+        f"{json.dumps(source_id, ensure_ascii=False)}, versión "
+        f"{json.dumps(source_version, ensure_ascii=False)} y pasaje {passage}; consulta "
+        "«assimilation source list»"
+    )
+
+
+def _resolve_input_citation(
+    index: int, item: object, declarations: tuple[_SourceDeclaration, ...]
+) -> CandidateCitation:
+    where = f"cita {index}"
+    allowed = _INPUT_CITATION_KEYS | {"occurrence"}
+    if not isinstance(item, dict) or not _INPUT_CITATION_KEYS <= set(item) <= allowed:
+        _invalid_candidate(f"{where}: debe tener exactamente dossier_section, source_id, "
+                           "source_version, declared_passage, quote y, opcionalmente, occurrence")
+    section = _enum_value(DossierSection, item["dossier_section"], f"{where}: dossier_section")
+    for name in ("source_id", "source_version"):
+        if not isinstance(item[name], str):
+            _invalid_candidate(f"{where}: {name} debe ser texto")
+    passage = item["declared_passage"]
+    if passage is not None and not isinstance(passage, str):
+        _invalid_candidate(f"{where}: declared_passage debe ser texto o null")
+    quote_text = item["quote"]
+    _require_content(f"{where}: quote", quote_text)
+    occurrence = item.get("occurrence")
+    if "occurrence" in item and (type(occurrence) is not int or occurrence < 1):
+        _invalid_candidate(f"{where}: occurrence debe ser un entero desde 1")
+    declaration = _find_declaration(declarations, section, item["source_id"],
+                                    item["source_version"], passage)
+    literal = declaration.literal_text
+    starts = _all_occurrences(literal, quote_text)
+    if not starts:
+        _invalid_candidate(f"{where}: la cita no aparece literalmente en esa fuente (se compara "
+                           "carácter a carácter, incluidos espacios y saltos de línea)")
+    if occurrence is None and len(starts) > 1:
+        _invalid_candidate(f"{where}: la cita aparece {len(starts)} veces "
+                           f"({_positions(literal, starts)}); alarga la cita o indica "
+                           "«occurrence» desde 1")
+    if occurrence is not None and occurrence > len(starts):
+        _invalid_candidate(f"{where}: occurrence {occurrence} no existe; la cita aparece "
+                           f"{len(starts)} vez/veces ({_positions(literal, starts)})")
+    start = starts[(occurrence or 1) - 1]
+    return CandidateCitation(section, declaration.source_id, declaration.source_version,
+                             declaration.source_sha256, declaration.declared_passage, start,
+                             start + len(quote_text), quote_text)
+
+
+def _all_occurrences(literal: str, quote_text: str) -> list[int]:
+    """Every start position, overlapping matches included."""
+    starts, position = [], literal.find(quote_text)
+    while position != -1:
+        starts.append(position)
+        position = literal.find(quote_text, position + 1)
+    return starts
+
+
+def _positions(literal: str, starts: list[int]) -> str:
+    def line_column(offset: int) -> str:
+        line = literal.count("\n", 0, offset) + 1
+        column = offset - (literal.rfind("\n", 0, offset) + 1) + 1
+        return f"línea {line}, columna {column}"
+
+    shown = "; ".join(line_column(s) for s in starts[:10])
+    return shown if len(starts) <= 10 else f"{shown}; y {len(starts) - 10} más"
+
+
+def _decode_record(
+    position: int, record: object, declarations: tuple[_SourceDeclaration, ...]
+) -> AssimilationCandidate:
+    where = f"candidato {position} del corpus"
+    if not isinstance(record, dict) or set(record) != _RECORD_KEYS:
+        _invalid_candidate(f"{where}: claves inesperadas")
+    citations_value = record["citations"]
+    if not isinstance(citations_value, list):
+        _invalid_candidate(f"{where}: citations debe ser una lista")
+    citations = []
+    for item in citations_value:
+        if not isinstance(item, dict) or set(item) != _RECORD_CITATION_KEYS:
+            _invalid_candidate(f"{where}: una cita tiene claves inesperadas")
+        citation = CandidateCitation(
+            _enum_value(DossierSection, item["dossier_section"], f"{where}: dossier_section"),
+            item["source_id"], item["source_version"], item["source_sha256"],
+            item["declared_passage"], item["start"], item["end"], item["quote"],
+        )
+        declaration = _find_declaration(declarations, citation.dossier_section, citation.source_id,
+                                        citation.source_version, citation.declared_passage)
+        if (declaration.source_sha256 != citation.source_sha256
+                or declaration.literal_text[citation.start:citation.end] != citation.quote):
+            _invalid_candidate(f"{where}: una cita ya no corresponde a su fuente")
+        citations.append(citation)
+    if record["review_status"] != ReviewStatus.PENDING_HUMAN_REVIEW.value:
+        _invalid_candidate(f"{where}: estado de revisión inesperado")
+    candidate = AssimilationCandidate(
+        candidate_id=record["candidate_id"],
+        version=record["version"],
+        domain=_enum_value(AssimilationDomain, record["domain"], f"{where}: domain"),
+        candidate_class=_enum_value(CandidateClass, record["class"], f"{where}: class"),
+        text=record["text"],
+        scope=record["scope"],
+        citations=tuple(citations),
+    )
+    if candidate.candidate_sha256 != record["candidate_sha256"]:
+        _invalid_candidate(f"{where}: se modificó fuera del core (hash distinto)")
+    return candidate
+
+
+def _candidate_record(candidate: AssimilationCandidate, *, include_hash: bool) -> dict:
+    record = {
+        "candidate_id": candidate.candidate_id,
+        "citations": [
+            {
+                "declared_passage": c.declared_passage,
+                "dossier_section": c.dossier_section.value,
+                "end": c.end,
+                "quote": c.quote,
+                "source_id": c.source_id,
+                "source_sha256": c.source_sha256,
+                "source_version": c.source_version,
+                "start": c.start,
+            }
+            for c in candidate.citations
+        ],
+        "class": candidate.candidate_class.value,
+        "domain": candidate.domain.value,
+        "review_status": candidate.review_status.value,
+        "scope": candidate.scope,
+        "text": candidate.text,
+        "version": candidate.version,
+    }
+    if include_hash:
+        record["candidate_sha256"] = candidate.candidate_sha256
+    return record
+
+
+def _semantic_payload(candidate: AssimilationCandidate) -> dict:
+    record = _candidate_record(candidate, include_hash=False)
+    del record["version"]
+    return record
+
+
+def _enum_value(enum: type[Enum], value: object, name: str):
+    try:
+        return enum(value)
+    except (ValueError, TypeError):
+        options = ", ".join(e.value for e in enum)
+        _invalid_candidate(f"{name} debe ser uno de: {options}")
+
+
+def _require_candidate_text(name: str, value: object) -> None:
+    try:
+        _check_text("candidato", name, value)
+    except DossierError as exc:
+        raise AssimilationError("INVALID_STATE", exc.reason) from exc
+
+
+def _require_content(name: str, value: object) -> None:
+    """Free text kept character by character: may span lines, must not be blank."""
+    if not isinstance(value, str) or not value.strip():
+        _invalid_candidate(f"«{name}» debe ser un texto no vacío")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        _invalid_candidate(f"«{name}» contiene caracteres que no se pueden guardar en UTF-8")
+
+
+def _invalid_candidate(reason: str) -> None:
+    raise AssimilationError("INVALID_STATE", reason)
