@@ -586,7 +586,7 @@ Subcomandos acumulados: 4a añade `assimilation init --dossier RUTA --workspace 
 candidate add/list/show`; 4c1 añade decisiones/cierre humanos y 4c2,
 `instance init --workspace RUTA --output RUTA`, `instance status` e `instance corpus list/show`;
 4d1 añade `character concept import/list/show`; 4d2, `character effective show` y
-`character proposal add/list/show/approve/reject`; 4e añade `character draft create` y
+`character proposal add/list/show/approve/reject`; 4e añade `character draft create/list/show` y
 `character staff record`. `--workspace` y `--output` son siempre explícitos, sin defaults ni
 variables de entorno. No existe ni se reserva `publish`, `send`, `post` o equivalente.
 
@@ -2633,14 +2633,358 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
      misma base, aprobar una en TTY real, comprobar que la otra queda `OBSOLETE`, importar un
      concepto v2, confirmar que effective vuelve a su raíz y verificar que todo el historial sigue
      visible. El `rg` y el diff de rutas congeladas deben terminar sin salida.
-4e. [ ] **Ficha mínima y respuesta del staff.** Alcance: `core/character/models.py`,
-    `core/runtime/{character,instance,cli}.py` y `tests/test_{character_draft,staff_review_cli}.py`;
-    las instrucciones v1 siguen congeladas. Crear desde contenido manual del agente un
-    `DraftVersion` ligado a la `EffectiveComposition` exacta de 4d2 y a sus referencias de concepto
-    y corpus; persistirlo como otro sobre gestionado bajo el personaje y registrar respuesta de
-    staff con evidencia/versión exactas y barrera A. Criterio: la ficha inicial queda `ACTIVE` +
-    `PENDING_HUMAN_REVIEW` + `NOT_CONFIRMED`; staff no cambia composición, publica, canoniza,
-    enseña ni vuelve utilizable nada, y no existe comando de publicación.
+4e. [x] **Ficha mínima y respuesta del staff (detallado).** Objetivo: conservar una ficha redactada
+     manualmente por el agente como Markdown libre, ligada a la composición efectiva exacta que la
+     originó, y permitir que la persona usuaria transcriba una respuesta atribuida al staff sobre
+     esa versión. Es un registro local y verificable, no acceso al foro ni autenticación del staff.
+
+     **Alcance cerrado.** Modificar `core/character/{models,__init__}.py` y
+     `core/runtime/{character,cli,__init__}.py`; ajustar solo el docstring/aserciones necesarios de
+     `core/runtime/instance.py` y las pruebas de compatibilidad en
+     `tests/test_{character_models,character_state,character_cli,character_proposals,
+     character_proposal_cli,instance}.py`; crear
+     `tests/test_{character_draft,staff_review_cli}.py`. No modificar `core/review/models.py`,
+     `assimilation.py`, `persistence.py`, `workspace.py`, adaptadores, paquetes, las cuatro
+     plantillas v1, `tests/expected_instance_templates.py` ni `reference/`. Reutilizar
+     `DraftVersion`, `DraftLifecycle`, `ReviewStatus`, `PublicationStatus`, `approve`, `reject`,
+     `mark_stale`, `SourceRef`, `HumanConfirmationReceipt`, `Terminal`, `confirm_human_action`,
+     `_write_event`, `_read_input` (generalizado solo para rotular concepto/ficha),
+     `get_approved_candidate`, `load_strict_json`, `_write_exact` y el codec/cierre de rutas actual.
+
+     **Qué es la ficha mínima.** No interpretar Markdown ni imponer encabezados, campos, plantilla,
+     temática o sistema de un foro. La entrada es un archivo UTF-8 sin BOM, fuera del checkout y de
+     la instancia, no vacío y sin controles salvo TAB/CR/LF; sus caracteres, incluidos CRLF y la
+     ausencia de LF final, se conservan exactamente. Hay una única serie por personaje, con
+     `draft_id` interno fijo `character-sheet` y versiones `1, 2, 3…`; no se añade `--draft-id` ni
+     una segunda clase de ficha. El agente puede redactarla y ejecutar `draft create`: no es una
+     decisión humana y no usa TTY. El core acredita hashes y referencias, no que cada frase cumpla
+     semánticamente las normas; esa limitación debe constar en docstring y ayuda.
+
+     **Modelos inmutables.** En `core/character/models.py`, todos `frozen=True, slots=True`, añadir:
+
+     - `CharacterDraftRecord(created_revision: int, composition_sha256: str,
+       concept: ConceptRef, corpus_refs: tuple[CorpusCandidateRef, ...], draft: DraftVersion,
+       draft_sha256: str = init=False)`. `draft.draft_id` es exactamente `character-sheet`; versión y
+       revisión son positivas; contenido usa la validación libre anterior; refs de corpus no se
+       repiten. En el evento de alta, `draft` debe ser exactamente `ACTIVE` +
+       `PENDING_HUMAN_REVIEW` + `NOT_CONFIRMED`, con `stale_reason`, `review_evidence` y
+       `publication_evidence` a `None`.
+     - `StaffResponse(review_revision: int, draft_version: int, draft_sha256: str,
+       composition_sha256: str, review_status: ReviewStatus, response: str,
+       response_sha256: str, receipt: HumanConfirmationReceipt, evidence: SourceRef,
+       staff_review_sha256: str = init=False)`. Solo `APPROVED` o `REJECTED`; la respuesta es el
+       texto literal atribuido al staff. No hay staff ID, cuenta, rol ni afirmación de identidad.
+     - `CharacterDraftView(record: CharacterDraftRecord, effective: DraftVersion,
+       staff_response: StaffResponse | None, current: bool, base: EffectiveComposition)`. `record`
+       conserva el alta; `effective` se obtiene aplicando `approve`/`reject` y después, si procede,
+       `mark_stale`, nunca mutando el registro. `base` es la composición reproducida en la revisión
+       de alta.
+     - `DraftCreateResult(character: LoadedCharacter, draft: CharacterDraftView, created: bool)` y
+       `StaffResponseResult(character: LoadedCharacter, draft: CharacterDraftView,
+       response: StaffResponse, created: bool)`.
+
+     Extender `CharacterState` con `drafts: tuple[CharacterDraftRecord, ...] = ()` y
+     `staff_responses: tuple[StaffResponse, ...] = ()`; `revision` suma los cinco historiales de
+     eventos. Añadir
+     `current_draft()`, `draft_at(version)` y `staff_response_for(record)`. Mantener
+     `CharacterReplay.views` para propuestas y añadir `draft_views`; reexportar modelos,
+     serializadores y operaciones sin retirar exports de 4d.
+
+     **Referencias, hashes y evidencia.** Al crear, exigir por argumento el
+     `composition_sha256` mostrado por `character effective show` y capturar bajo el mismo evento:
+     su `ConceptRef` y la unión estable, por primera aparición, de las `CorpusCandidateRef` de todas
+     las propuestas aplicadas. Cero refs de corpus es válido para una composición que solo contiene
+     el concepto. Resolver cada ref mediante `get_approved_candidate`; no aceptar refs aportadas por
+     el JSON ni estados pendientes/rechazados/sustituidos.
+
+     Construir el `DraftVersion` inicial con `content` exacto. `source_refs` contiene primero la
+     evidencia ya existente del concepto y después un `SourceRef` determinista por candidato:
+     `source_id="corpus-candidate:<id>:v<N>"`, locator
+     `instance://<forum_id>/corpus/candidates/<id>/v<N>` con segmentos percent-encoded,
+     `sha256=candidate_sha256`, `section_or_passage="candidate:<id>:v<N>"`, sin fechas.
+     `context_refs` contiene, en ese orden, `character:<character_id>:composition:<hash>`,
+     `character:<character_id>:concept:v<N>:<hash>` y una entrada
+     `corpus:<id>:v<N>:<hash>` por ref. No duplicar el texto de la composición en el evento.
+
+     `draft_sha256` es SHA-256 de `canonical_json_bytes(..., pretty=False)` del registro persistido
+     de alta salvo la propia clave `draft_sha256`. Incluye `composition_sha256`, `concept`,
+     `content`, `context_refs`, `corpus_refs`, `created_revision`, `draft_id`, los tres ejes y sus
+     evidencias/razón nulas, `source_refs`, `utf8_size` y `version`. Por tanto liga contenido, base,
+     referencias y posición del evento.
+
+     La entrada de `staff record` es JSON estricto con exactamente:
+
+     ```json
+     {
+       "draft_sha256": "<hash mostrado por draft show>",
+       "locator": "<URL o localizador manual de la respuesta>",
+       "observed_at": "2026-10-12T18:30:00+02:00",
+       "response": "Texto literal pegado de la respuesta del staff"
+     }
+     ```
+
+     `locator` es texto no vacío sin controles y no se abre ni verifica. `observed_at` es obligatorio,
+     con offset, y debe ser ya la forma canónica devuelta por `datetime.fromisoformat(...).isoformat()`;
+     no se inventa reloj ni se admite fecha IC. `response` conserva Unicode/CRLF/no LF y usa la misma
+     validación libre. `response_sha256` es SHA-256 de sus bytes UTF-8. La evidencia de revisión es
+     `SourceRef(source_id="staff-response:<character_id>:v<N>", locator=<entrada>,
+     sha256=response_sha256, section_or_passage="character-sheet:<character_id>:v<N>",
+     observed_at=<entrada>)`; no acredita que el locator, la atribución o la persona sean auténticos.
+     `staff_review_sha256` es el hash canónico compacto de todas las claves persistidas de la
+     respuesta salvo él mismo, incluidas evidencia, receipt y `review_revision`.
+
+     **Persistencia y compatibilidad 4d.** Usar el mismo
+     `characters/<id>/state.json`, no otro sobre. Un segundo archivo exigiría otra autoridad y otro
+     cerrojo: una aprobación de propuesta podría cambiar la composición entre archivos sin poder
+     marcar la ficha de forma atómica. El único escritor continúa siendo `_write_event`, con el
+     lock, anti-junction, recarga completa, revisión esperada y `os.replace` ya probados.
+
+     El decoder acepta exactamente dos formas de `content`: la forma 4d con las cuatro claves
+     actuales, que equivale a `drafts=staff_responses=()`, o la forma 4e con esas cuatro más
+     `drafts` y `staff_responses`; cinco claves o cualquier extra fallan. El encoder omite ambas
+     claves nuevas cuando ambos historiales están vacíos y las incluye cuando alguno no lo está.
+     Así un estado 4d1/4d2 carga y se recodifica byte a byte, y cualquier evento de concepto o
+     propuesta anterior a la primera ficha conserva la forma de cuatro claves. No cambiar
+     `schema_version=1`, el sobre ni `_load_characters`: su árbol permitido sigue siendo solo
+     `state.json` y su lock.
+
+     Forma persistida exacta de cada alta (los `SourceRef` de esta estructura usan las seis claves
+     `ic_date`, `locator`, `observed_at`, `section_or_passage`, `sha256`, `source_id`, con `null`
+     donde corresponda; no se cambia la forma corta de evidencias 4d):
+
+     ```json
+     {
+       "composition_sha256": "<hash efectivo>",
+       "concept": {"concept_sha256": "<hash>", "version": 1},
+       "content": "Markdown exacto",
+       "context_refs": ["character:ejemplo:composition:<hash>", "character:ejemplo:concept:v1:<hash>"],
+       "corpus_refs": [{"candidate_id": "creacion-limites", "candidate_sha256": "<hash>", "version": 1}],
+       "created_revision": 4,
+       "draft_id": "character-sheet",
+       "draft_sha256": "<hash del registro>",
+       "lifecycle": "ACTIVE",
+       "publication_evidence": null,
+       "publication_status": "NOT_CONFIRMED",
+       "review_evidence": null,
+       "review_status": "PENDING_HUMAN_REVIEW",
+       "source_refs": [{"ic_date": null, "locator": "<locator>", "observed_at": null, "section_or_passage": "<pasaje>", "sha256": "<hash>", "source_id": "<id>"}],
+       "stale_reason": null,
+       "utf8_size": 42,
+       "version": 1
+     }
+     ```
+
+     Cada respuesta persistida tiene exactamente:
+
+     ```json
+     {
+       "composition_sha256": "<hash citado por la ficha>",
+       "draft_id": "character-sheet",
+       "draft_sha256": "<hash de ficha>",
+       "draft_version": 1,
+       "evidence": {"ic_date": null, "locator": "<entrada>", "observed_at": "2026-10-12T18:30:00+02:00", "section_or_passage": "character-sheet:ejemplo:v1", "sha256": "<hash de respuesta>", "source_id": "staff-response:ejemplo:v1"},
+       "receipt": {"confirmation_sha256": "<hash de frase>", "method": "TTY_NONCE_V1"},
+       "response": "Texto literal",
+       "response_sha256": "<hash de respuesta>",
+       "review_revision": 5,
+       "review_status": "APPROVED",
+       "staff_review_sha256": "<hash del registro>"
+     }
+     ```
+
+     **Reproducción, vigencia y versiones.** Incorporar revisiones de alta y respuesta al mapa
+     explícito de eventos de 4d2; exigir unicidad, orden ascendente por cada array y rango
+     `1..revision`. Los huecos restantes siguen correspondiendo, en orden, a conceptos. Al
+     reproducir un alta, la composición, concepto, refs, `DraftVersion`, fuentes/contexto y hashes
+     deben coincidir exactamente con la `EffectiveComposition` de esa revisión; la versión debe ser
+     la anterior + 1. Una respuesta debe ser posterior a su ficha, única para esa versión y coincidir
+     en ambos hashes y composición; aplica `approve` o `reject` solo al eje de revisión y nunca toca
+     la composición.
+
+     Tras reproducir todo, solo la versión mayor es `current=True`. Esta queda `ACTIVE` únicamente
+     si su `composition_sha256` aún coincide con la composición efectiva final; si cambió concepto o
+     se aprobó otra propuesta, derivar `STALE` con razón exacta
+     `EFFECTIVE_COMPOSITION_CHANGED:<hash_anterior>-><hash_actual>`. Todas las versiones menores son
+     `STALE` con `SUPERSEDED_BY:character-sheet:v<N>` (esta razón tiene prioridad si además cambió la
+     composición). La obsolescencia no se persiste ni consume revisión. Una respuesta tardía se
+     puede registrar sobre una ficha `STALE`, porque es un hecho externo sobre esa versión; conserva
+     `APPROVED`/`REJECTED` junto a `STALE`. `RETIRED` no se produce en 4e. Crear la versión siguiente
+     exige la composición efectiva actual; esa nueva versión es la única vigente. El estado de
+     publicación permanece siempre `NOT_CONFIRMED`.
+
+     **Operaciones exactas, idempotencia y concurrencia.** Añadir en
+     `core/runtime/character.py`:
+
+     ```python
+     def create_draft(instance_root: Path, *, expected_core_root: Path,
+                      character_id: str, version: int, composition_sha256: str,
+                      input_path: Path) -> DraftCreateResult: ...
+     def list_drafts(instance: LoadedInstance, *,
+                     character_id: str) -> tuple[CharacterDraftView, ...]: ...
+     def get_draft(instance: LoadedInstance, *, character_id: str,
+                   version: int) -> CharacterDraftView: ...
+     def record_staff_response(instance_root: Path, *, expected_core_root: Path,
+                               character_id: str, version: int,
+                               review_status: ReviewStatus, input_path: Path,
+                               terminal: Terminal) -> StaffResponseResult: ...
+     ```
+
+     `create_draft` rechaza hash base viejo, salto de versión y una versión siguiente semánticamente
+     idéntica (misma base, refs y contenido). Repetir una versión con todo idéntico devuelve
+     `created=False` sin lock, escritura ni cambio de mtime; misma versión con otra entrada da
+     `CONFLICT`. `_write_event` vuelve a verificar bajo lock el estado completo y las refs resueltas;
+     cualquier evento concurrente, aunque no cambie la composición, da `CONFLICT` y no crea una
+     ficha silenciosamente sobre otra revisión.
+
+     `record_staff_response` valida la ruta externa, carga con `load_strict_json` y exige TTY real
+     antes de mutar. Una respuesta semánticamente idéntica
+     ya registrada (estado, texto, locator, fecha y hashes) devuelve `created=False` sin nuevo reto;
+     cualquier diferencia u otra decisión sobre la misma versión da `CONFLICT` y no reescribe
+     historia. Antes del prompt comprobar ausencia de lock; después releer el archivo de entrada y,
+     dentro de `_write_event`, toda la instancia: cambio de bytes, ficha, composición, refs o
+     revisión durante la confirmación da `CONFLICT`. Mantener el guard antes/después del lock y antes
+     del replace. EOF, frase distinta y Ctrl+C no escriben; no capturar `KeyboardInterrupt`.
+
+     El prompt de staff se construye exactamente con LF y sin normalizar los dos textos:
+
+     ```text
+     REGISTRO HUMANO DE RESPUESTA ATRIBUIDA AL STAFF
+     Personaje: CHARACTER_ID
+     Ficha: character-sheet vN
+     Vigencia actual: ACTIVE|STALE
+     Resultado transcrito: APPROVED|REJECTED
+     Ficha SHA-256: DRAFT_HASH
+     Composición citada SHA-256: COMPOSITION_HASH
+     Respuesta SHA-256: RESPONSE_HASH
+     Respuesta bytes UTF-8: SIZE
+     Locator declarado: LOCATOR
+     Observada en: ISO_DATETIME
+     Concepto citado: vC | sha256=HASH | evidencia=HASH
+     Corpus citado (K):
+     Cita 1: ID vN | sha256=HASH | APPROVED
+     FICHA CITADA — texto exacto (hasta «Fin de la ficha citada.»):
+     <contenido exacto; añadir LF solo para separar el footer>
+     Fin de la ficha citada.
+     RESPUESTA TRANSCRITA — texto exacto (hasta «Fin de la respuesta.»):
+     <respuesta exacta; añadir LF solo para separar el footer>
+     Fin de la respuesta.
+     La persona usuaria declara que ha transcrito esta respuesta y su localizador sobre esta versión exacta.
+     Este registro no autentica al staff, no cambia la composición y no implica publicación, canon, aprendizaje ni utilizabilidad.
+     APPROVED acredita aprobación transcrita; REJECTED también abarca rechazo o cambios solicitados, cuyo detalle queda en la respuesta literal.
+     Escribe exactamente: REGISTRAR-RESPUESTA-STAFF APPROVED|REJECTED character-sheet vN NONCE
+     >␠
+     ```
+
+     En el bloque, `␠` representa un único espacio ASCII. Para cero citas,
+     `Corpus citado (0):` no lleva líneas posteriores. `phrase_prefix` exacto es
+     `REGISTRAR-RESPUESTA-STAFF <STATUS> character-sheet v<N>`. Los bytes finales son `> ` sin LF.
+     La barrera A solo frena el camino automatizado: ni el recibo ni el nombre del comando prueban
+     que contestó el staff; quien opera es la persona usuaria que transcribe.
+
+     **CLI exacta.** Añadir:
+
+     ```text
+     character draft create --instance RUTA --character-id ID --version N --composition-sha256 HASH --input RUTA
+     character draft list --instance RUTA --character-id ID
+     character draft show --instance RUTA --character-id ID --version N
+     character staff record --instance RUTA --character-id ID --version N --status {APPROVED,REJECTED} --input RUTA
+     ```
+
+     Todo es obligatorio; versión positiva y hash minúsculo canónico. `staff record` rechaza el flag
+     global `--json` con `INVALID_STATE`: `las respuestas de staff transcritas no admiten --json:
+     ejecuta el comando en tu terminal y responde a la confirmación`; los otros tres lo admiten.
+     No añadir `publish`, `confirm-publication`, `export`, `send` ni sinónimo.
+
+     Una línea resumen es exactamente `character-sheet vN | ACTIVE|STALE | CURRENT|SUPERSEDED |
+     PENDING_HUMAN_REVIEW|APPROVED|REJECTED | NOT_CONFIRMED | composición=HASH | sha256=HASH |
+     bytes=SIZE | corpus=K`. Texto:
+
+     - create: `Ficha creada:` o `Ficha ya existente:` seguido del resumen, luego
+       `Revisión del personaje: R.` y el bloque `Ficha para copia manual (no acredita publicación,
+       hasta «Fin de la ficha.»):` / `Fin de la ficha.`;
+     - list: una línea por versión; si estuviera vacío, `No hay fichas para «CHARACTER_ID».`;
+     - show: resumen; `Respuesta del staff: ninguna.` o
+       `Respuesta del staff: STATUS | respuesta=HASH | registro=HASH | locator=<JSON string> |
+       observada=ISO.`, las líneas de concepto/corpus y los bloques exactos de ficha y, si existe,
+       respuesta. El encabezado de copia deja claro que stdout sirve para copiar/pegar manualmente,
+       no confirma que se haya publicado;
+     - staff record: `Respuesta del staff registrada:` o `Respuesta del staff ya registrada:`,
+       `character-sheet vN | STATUS | respuesta=HASH | registro=HASH`, después el resumen efectivo y
+       `Revisión del personaje: R.`.
+
+     JSON de éxito usa claves raíz exactas:
+
+     - create: `ok`, `action="character.draft.create"`, `character_id`, `created`, `draft`
+       (registro de vista completo), `instance`, `state_revision`;
+     - list: `ok`, `action="character.draft.list"`, `character_id`, `drafts` (resúmenes),
+       `instance`, `state_revision`;
+     - show: `ok`, `action="character.draft.show"`, `character_id`, `draft` (registro de vista
+       completo), `instance`, `staff_response` (registro persistido o `null`), `state_revision`.
+
+     El resumen JSON contiene exactamente `composition_sha256`, `corpus_ref_count`, `current`,
+     `draft_id`, `draft_sha256`, `lifecycle`, `publication_status`, `review_status`, `utf8_size`,
+     `version`. La vista completa añade `concept`, `content`, `context_refs`, `corpus_refs`,
+     `review_evidence`, `source_refs` y `stale_reason`; no incluye una supuesta identidad de staff.
+     Mantener errores `{"ok":false,"code","message"}`, `_write_exact` y códigos 0/2/3/4/5:
+     parser → 2; entrada/fecha/texto/formato de hash/estado/no encontrado → 3; hash bien formado
+     que no corresponde a la ficha, identidad/versión/base/revisión/lock/carrera → 4; E/S → 5.
+
+     **Tests.** `test_character_draft.py`: validación e inmutabilidad; Markdown Unicode, CRLF/LF/no
+     LF/controles; refs derivadas sin citas, con citas repetidas entre pasos y orden estable; hashes,
+     tamaños, locators percent-encoded y `SourceRef`; formas persistidas exactas; decoder de cuatro
+     y seis claves y rechazo de cinco/extras; reencode byte a byte de estados 4d1/4d2; revisión como
+     suma de cinco historiales de eventos y manipulación de cada campo/hash/ref/evidencia.
+
+     Probar reproducción con ficha v1 pendiente, respuesta aprobada/rechazada, aprobación tardía
+     sobre ficha stale, propuesta aprobada o concepto nuevo que vuelve stale sin escribir, v2 que
+     sustituye v1, prioridad de razón, conservación de `NOT_CONFIRMED` y que staff jamás cambia
+     `EffectiveComposition`. Cubrir idempotencia/mtime, versión repetida/saltada, base vieja, retry
+     tras reinicio, entrada externa/link, cita que deja de resolver, lock/guard/junction swap,
+     replace fallido, fallo de liberación y carreras sin pérdida.
+
+     `test_staff_review_cli.py`: parser y cuatro comandos; create/list/show texto y JSON exactos;
+     bloque de copia exacto; archivo vacío/BOM/UTF-8/controles; JSON staff con claves extra/faltantes/
+     duplicadas, fecha sin zona/no canónica, locator y hash discordante; prompt completo con cero y
+     varias citas, ficha/respuesta larga, marcadores y LF/no LF; frase, nonce de un intento, EOF,
+     case, espacios, Ctrl+C, no TTY, stdin o stdout redirigido y `--json` sin mutación. Probar ambos
+     resultados, «cambios solicitados» como `REJECTED` con texto literal, retry sin prompt,
+     respuesta distinta, cambio de input/estado durante prompt, códigos y ausencia de subcomando de
+     publicación. Las suites 4d prueban además que conceptos/propuestas preservan ambos historiales
+     y que sus prompts/salidas no cambian; las plantillas v1 continúan byte a byte.
+
+     **Criterios de aceptación.** La ficha es texto libre genérico y cada versión queda ligada a la
+     composición, concepto y candidatos aprobados exactos de su alta. Nace `ACTIVE` +
+     `PENDING_HUMAN_REVIEW` + `NOT_CONFIRMED`; cambios posteriores solo derivan `STALE` y una nueva
+     versión sustituye a la anterior sin borrar historia. La persona usuaria, no una identidad de
+     staff autenticada, transcribe texto/locator/fecha y supera barrera A para registrar
+     `APPROVED`/`REJECTED` sobre hash y versión exactos. Staff no modifica composición, no aprueba
+     propuestas de diseño, no publica, no canoniza, no enseña ni vuelve utilizable nada. La salida
+     permite copia manual; no hay comando ni estado alcanzable de publicación. Sin red, modelo,
+     SQLite, contenido temático, nuevo sobre, nueva plantilla ni cambio de schema.
+
+     Verificación exacta desde PowerShell:
+
+     ```powershell
+     py -3.11 -B -m unittest tests.test_character_draft tests.test_staff_review_cli tests.test_character_models tests.test_character_state tests.test_character_cli tests.test_character_proposals tests.test_character_proposal_cli tests.test_instance -v
+     py -3.11 -B -m unittest tests.test_review_models tests.test_assimilation_decisions tests.test_assimilation_decision_cli -v
+     py -3.11 -B -m unittest discover -s tests -v
+     py -3.11 -B -m core.runtime.cli --json character effective show --instance '<RUTA_INSTANCIA>' --character-id 'ejemplo'
+     py -3.11 -B -m core.runtime.cli character draft create --instance '<RUTA_INSTANCIA>' --character-id 'ejemplo' --version 1 --composition-sha256 '<HASH_EFECTIVO>' --input '<FICHA_MD_EXTERNA>'
+     py -3.11 -B -m core.runtime.cli character draft show --instance '<RUTA_INSTANCIA>' --character-id 'ejemplo' --version 1
+     py -3.11 -B -m core.runtime.cli character staff record --instance '<RUTA_INSTANCIA>' --character-id 'ejemplo' --version 1 --status APPROVED --input '<RESPUESTA_STAFF_JSON_EXTERNA>'
+     rg -n "publish|confirm.publication|PublicationStatus.PUBLISHED|confirm_publication" core/runtime/cli.py core/runtime/character.py core/character
+     rg -n "Nozomu|Naruto|Jcink|narutorol|account 59|275" core/character core/runtime/character.py tests/test_character_draft.py tests/test_staff_review_cli.py
+     git diff --check
+     git diff --name-only 130d0bf -- reference core/runtime/templates tests/expected_instance_templates.py
+     git status --short
+     ```
+
+     La validación funcional usa una instancia temporal y entradas externas: crear v1 sobre el hash
+     mostrado, copiar su bloque sin efectuar publicación, importar después un concepto v2 para verla
+     `STALE` sin nueva revisión, crear v2 sobre la nueva composición y registrar en TTY real una
+     respuesta atribuida al staff. Reiniciar entre fases, repetir create/record para comprobar no-op,
+     verificar que ambas versiones/respuesta sobreviven y que composición, publicación, corpus y
+     plantillas no cambiaron. Ambos `rg` y el diff de rutas congeladas deben quedar vacíos.
 4f. [ ] **Recorrido vertical y contrato integrado.** Alcance:
     `tests/fixtures/vertical-neutral/` solo para JSON/Markdown de entrada neutros,
     `tests/test_vertical_slice.py` y correcciones estrictamente necesarias en archivos 4a–4e.
@@ -2648,10 +2992,11 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
     workspace → cuatro clases de candidato →
     decisiones y cierre exactos → instancia → declaración humana de concepto → dos propuestas
     completas sobre la base exacta (una aceptada y otra rechazada/obsoleta) → composición efectiva
-    → `DraftVersion` pendiente de staff. Criterio: el recorrido sobrevive reinicio entre fases, las
-    repeticiones no cambian historial, solo concepto declarado + corpus/propuestas aprobados
-    alimentan la ficha, instrucciones v1 no divergen y ninguna ruta invoca modelo, red, publicación
-    o contenido temático.
+    → ficha v1 pendiente → concepto v2 y `STALE` derivado → ficha v2 → respuesta de staff
+    transcrita sobre v2. Criterio: el recorrido sobrevive reinicio entre fases, las repeticiones no
+    cambian historial, solo concepto declarado + corpus/propuestas aprobados forman las referencias
+    de la ficha, la respuesta no altera composición ni publicación, instrucciones v1 no divergen y
+    ninguna ruta invoca modelo, red, publicación o contenido temático.
 5. [ ] **Asimilación completa y recuperación dirigida.** Añadir versiones/supersesión, vigencia,
    índice determinista y contratos `core/rules`/`core/world`, incluido `ABSENT`. Criterio:
    pendiente/rechazado no es consultable, conflictos devuelven `REQUIERE CONFIRMACIÓN` y la consulta
@@ -2701,10 +3046,16 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
 
 ## Riesgos y dudas abiertas
 
-No hay dudas que deba decidir el usuario para implementar 4d2. El detalle adopta las decisiones ya
-aprobadas: propuestas completas y paralelas, obsolescencia derivada sin borrar historial, cadena
-efectiva reproducible, citas resueltas solo contra corpus vigente aprobado y barrera A con su límite
-ya aceptado. No se cambia la política de instrucciones v1.
+No hay dudas bloqueantes que deba decidir el usuario para implementar 4e. El plan recomienda y fija:
+Markdown libre sin campos de foro; una serie `character-sheet` versionada; `STALE` derivado, no
+persistido; respuesta transcrita por la persona con texto, locator y fecha aportados; cambios
+solicitados representados como `REJECTED` más respuesta literal; salida de copia manual sin
+publicación; y eventos 4e en el mismo estado del personaje para conservar una sola autoridad y un
+solo cerrojo. Estas elecciones reutilizan los ejes existentes y evitan confundir revisión de diseño,
+staff y publicación. Si se desea distinguir `CHANGES_REQUESTED` como estado consultable —en vez de
+detalle literal bajo `REJECTED`— debe decidirse antes de implementar porque ampliaría el enum
+compartido `ReviewStatus`, sus transiciones y contratos anteriores; no se recomienda para este
+subincremento mínimo. No se cambia la política de instrucciones v1.
 
 1. **Antes del incremento 14: ¿cuándo y cómo elegir el segundo caso de generalidad?**
    - A: mantener la elección aplazada y, al llegar al incremento 14, escoger un foro real no Naruto
@@ -3240,7 +3591,12 @@ ya aceptado. No se cambia la política de instrucciones v1.
   `effective show --json`, `proposal add --json` (`created=true`, `PENDING`), `approve` sin TTY
   rechazado con código 3 sin escribir y `show --json` (`PENDING`, revisión 2). `rg` y el diff de
   rutas congeladas desde `67a7284` sin salida; `git diff --check` limpio.
-- Validación funcional: PENDIENTE (aprobación real en TTY; ver «Cómo verificarlo» del plan).
+- Validación funcional: el 12-10-2026 el usuario aprobó `ajuste-respeto v1` e importó el
+  concepto v2 en la terminal integrada de VS Code sobre `%TEMP%\roleplay-prueba-4d2`
+  (preparada por Claude con v1 importada por terminal simulada y dos propuestas). Claude lo
+  verificó: decisión APPROVED en la revisión 4 y concepto v2 con recibo `TTY_NONCE_V1`,
+  revisión 5, v2 idéntico al archivo, `ajuste-mundo` OBSOLETE, la aprobada con
+  `aplicada=NO` y composición efectiva en la raíz de v2 (0 pasos).
 - Desviaciones y decisiones de detalle:
   - `CharacterProposal` lleva `character_id` como primer campo (no se persiste; lo inyecta el
     decodificador), porque `result_composition_sha256` lo incluye y es `init=False`.
@@ -3288,3 +3644,69 @@ ya aceptado. No se cambia la política de instrucciones v1.
     (importar un concepto con propuestas citadas no pasaba el resolvedor) detectado por los
     tests nuevos, un test 4d1 que fijaba una revisión arbitraria, un test propio con una
     aserción por subcadena, y un heredoc fallido sin efectos.
+
+### Incremento 4e — ficha mínima y respuesta del staff
+- Rama: `feature/incremento-4-rebanada-vertical` (base `130d0bf`; estado de trabajo sin commit).
+  Plan detallado por Codex (hilo `01a131c8-38ca-74b3-8c0c-8d4df35e910c`).
+- Decisión del usuario (12-10-2026): «cambios solicitados» se registra como `REJECTED` con el
+  texto literal de la respuesta; no se añade `CHANGES_REQUESTED`.
+- Cambios hechos: `core/character/models.py` (`CharacterDraftRecord`, `StaffResponse`,
+  `CharacterDraftView`, resultados, reproducción de fichas y respuestas, codec de cuatro o seis
+  claves, serializadores), `core/character/__init__.py`; `core/runtime/character.py`
+  (`create_draft`, `list_drafts`, `get_draft`, `record_staff_response`, más
+  `draft_reference_lines`, `sheet_block` y `response_block` para prompt y CLI; `_read_input`
+  generalizado con `_read_external`), `core/runtime/cli.py` (`character draft create|list|show`,
+  `character staff record`) y `core/runtime/__init__.py`. Tests nuevos
+  `tests/test_{character_draft,staff_review_cli}.py`. `instance.py` y las suites 4d no
+  necesitaron cambios.
+- Resultado de los tests: suites 4e → 31 OK; suite completa → 468 OK en `py -3.11` y `py -3.14`,
+  sin omitidos (tras la corrección de REV4E-01: 32 y 469). Prueba por subprocess sobre una instancia temporal (ya borrada):
+  `effective show --json`, `draft create` (`ACTIVE | CURRENT | PENDING_HUMAN_REVIEW |
+  NOT_CONFIRMED`), `draft show --json` y `staff record` sin TTY rechazado con código 3 sin
+  escribir. `rg` de nombres del legado vacío; diff de rutas congeladas y de `core/review` desde
+  `130d0bf` vacío; `git diff --check` limpio.
+- Validación funcional: PENDIENTE (registro en TTY real; ver el plan).
+- Desviaciones y decisiones de detalle:
+  - `CharacterDraftRecord` lleva `character_id` y `forum_id`, y `StaffResponse` lleva
+    `character_id`, como primeros campos no persistidos (los inyecta el decodificador), igual
+    que `CharacterProposal` en 4d2: hacen falta para validar contexto, locators y evidencia en el
+    propio modelo. `response_sha256` es derivado (`init=False`), no un argumento.
+  - Auxiliares públicos añadidos: `DRAFT_ID`, `applied_corpus_refs`, `draft_context_refs`,
+    `corpus_source_ref`, `make_draft_record`, `make_staff_response`, `check_locator`,
+    `check_observed_at`, `parse_observed_at`, `draft_record`, `staff_response_record`,
+    `draft_summary`, `draft_view_record`, `source_record`; `CharacterState.draft_view(n)`.
+  - El decodificador rechaza la forma de seis claves con `drafts` y `staff_responses` ambos
+    vacíos (el encoder nunca la produce), para que cada estado tenga una sola forma canónica.
+  - Un archivo de entrada inexistente (ficha o respuesta) da `INVALID_STATE`/3, como
+    `concept import` en 4d1 (el plan listaba E/S → 5 en general). `--composition-sha256` se
+    valida en el core (3), no en el parser.
+  - `create_draft` considera reintento idéntico la misma versión con el mismo hash de
+    composición y el mismo contenido, aunque la composición vigente haya cambiado después.
+  - Orden de `record_staff_response`: TTY → estado → IDs → instancia → lectura y validación del
+    JSON externo → ficha y `draft_sha256` (`CONFLICT` si no coincide) → idempotencia/conflicto →
+    cerrojo libre → frase → relectura de bytes del JSON → `_write_event`.
+  - El `rg` de publicación del plan no queda vacío: coinciden el auxiliar de 4d1 `_publish`
+    (publicación atómica de la carpeta del personaje en disco, de `workspace.py`) y docstrings
+    que dicen que nada publica. No hay comando, función ni estado alcanzable de publicación.
+- Revisión de Codex: un hallazgo, REV4E-01 (Baja): `CharacterDraftView` aceptaba combinaciones
+  imposibles de vigencia y razón de obsolescencia. Corregido con `_check_stale_reason`
+  (sustituida → `SUPERSEDED_BY:character-sheet:v<N>` con N mayor; vigente → sin razón o cambio
+  exacto de su composición) y la regresión `test_views_reject_impossible_stale_reasons`.
+  Verificación en el mismo hilo: resuelto y 4e aprobado. Archivada en
+  `docs/analisis/incremento-4e-revision.md`.
+- Métricas por agente (solo telemetría verificable; ausente = NO DISPONIBLE):
+  - Codex (`gpt-5.6-sol`, high), contadores de `~/.codex/sessions` (hilos exclusivos de 4e,
+    totales = incremento de la tarea):
+    - Análisis `01a131c8-38ca-74b3-8c0c-8d4df35e910c` (1 encargo: detalle de 4e): entrada
+      2.009.757 (caché leída 1.890.944), salida 28.479 (razonamiento 15.476).
+    - Revisión `01a131f0-0339-7b81-ba6e-a3f0aff99ef0` (2 encargos: revisión + 1 verificación):
+      entrada 4.241.252 (caché leída 3.954.432), salida 19.935 (razonamiento 10.652).
+    - Escritura de caché 0; errores/cancelaciones 0; coste o cuota NO DISPONIBLE.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde «Listo, vamos con la 4e» hasta antes
+    del commit; incluye la verificación de la prueba manual de 4d2; 30 respuestas de API
+    deduplicadas por id): entrada 60, salida 82.081, caché leída 8.179.838, caché escrita
+    113.823. Coste NO DISPONIBLE.
+  - Retrabajo: una ronda de corrección (1 hallazgo). Antes de la revisión: tres expectativas de
+    test propias (archivo intruso que invalida la instancia, versión no pasada al JSON de
+    respuesta, código 3 frente a 5); una rama creada por error y borrada sin commits; un
+    heredoc fallido sin efectos.

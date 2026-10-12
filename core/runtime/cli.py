@@ -14,6 +14,8 @@ from pathlib import Path
 
 from adapters.manual import ManualAdapterError, load_manual_dossier
 from core.character.models import (
+    DRAFT_ID,
+    CharacterDraftView,
     CharacterError,
     CharacterProposal,
     ConceptVersion,
@@ -23,7 +25,10 @@ from core.character.models import (
     concept_record,
     concept_summary,
     decision_record,
+    draft_summary,
+    draft_view_record,
     proposal_record,
+    staff_response_record,
 )
 from core.review.models import ReviewStatus
 from core.review.models import ReviewStatus
@@ -42,14 +47,21 @@ from core.runtime.assimilation import (
 from core.runtime.character import (
     add_proposal,
     citation_lines,
+    create_draft,
+    draft_reference_lines,
     get_concept,
+    get_draft,
     get_effective_composition,
     get_proposal,
     import_concept,
     list_concepts,
+    list_drafts,
     list_proposals,
     proposal_blocks,
     record_proposal_decision,
+    record_staff_response,
+    response_block,
+    sheet_block,
 )
 from core.runtime.instance import (
     ApprovedCorpusEntry,
@@ -259,6 +271,45 @@ def _build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--proposal-id", required=True)
         sub.add_argument("--version", required=True, type=_positive_int)
         sub.set_defaults(handler=handler, action_name=f"character.proposal.{name}")
+    draft = character_groups.add_parser(
+        "draft", help="ficha del personaje (Markdown libre; el core no comprueba que cumpla las "
+                      "normas)")
+    draft_actions = draft.add_subparsers(dest="draft_action", required=True, metavar="acción")
+    draft_create = draft_actions.add_parser(
+        "create", help="registra una versión de la ficha sobre la composición efectiva vigente; "
+                       "no publica nada")
+    _instance_argument(draft_create)
+    draft_create.add_argument("--character-id", required=True)
+    draft_create.add_argument("--version", required=True, type=_positive_int)
+    draft_create.add_argument("--composition-sha256", required=True,
+                              help="hash de «character effective show»")
+    draft_create.add_argument("--input", required=True, type=Path,
+                              help="archivo Markdown, fuera del checkout y de la instancia")
+    draft_create.set_defaults(handler=_draft_create, action_name="character.draft.create")
+    draft_list = draft_actions.add_parser("list", help="lista las versiones de la ficha")
+    _instance_argument(draft_list)
+    draft_list.add_argument("--character-id", required=True)
+    draft_list.set_defaults(handler=_draft_list, action_name="character.draft.list")
+    draft_show = draft_actions.add_parser(
+        "show", help="muestra una versión de la ficha para copiarla a mano (no acredita "
+                     "publicación)")
+    _instance_argument(draft_show)
+    draft_show.add_argument("--character-id", required=True)
+    draft_show.add_argument("--version", required=True, type=_positive_int)
+    draft_show.set_defaults(handler=_draft_show, action_name="character.draft.show")
+    staff = character_groups.add_parser("staff", help="respuestas del staff transcritas por ti")
+    staff_actions = staff.add_subparsers(dest="staff_action", required=True, metavar="acción")
+    staff_record = staff_actions.add_parser(
+        "record", help="registra la respuesta que dio el staff a una versión de la ficha; pide "
+                       "teclear una frase con un código (no autentica al staff)")
+    _instance_argument(staff_record)
+    staff_record.add_argument("--character-id", required=True)
+    staff_record.add_argument("--version", required=True, type=_positive_int)
+    staff_record.add_argument("--status", required=True, choices=("APPROVED", "REJECTED"),
+                              help="REJECTED también abarca «cambios solicitados»")
+    staff_record.add_argument("--input", required=True, type=Path,
+                              help="JSON con draft_sha256, locator, observed_at y response")
+    staff_record.set_defaults(handler=_staff_record, action_name="character.staff.record")
     return parser
 
 
@@ -851,6 +902,94 @@ def _proposal_decide(args: argparse.Namespace, review_status: ReviewStatus) -> i
     _line(f"Composición efectiva: {result.effective.composition_sha256}.")
     _line(f"Revisión del personaje: {result.character.state_revision}.")
     return EXIT_OK
+
+
+def _draft_create(args: argparse.Namespace) -> int:
+    result = create_draft(args.instance, expected_core_root=_checkout(),
+                          character_id=args.character_id, version=args.version,
+                          composition_sha256=args.composition_sha256, input_path=args.input)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "character_id": args.character_id,
+               "created": result.created, "draft": draft_view_record(result.draft),
+               "instance": str(result.character.character_root.parent.parent),
+               "state_revision": result.character.state_revision})
+        return EXIT_OK
+    prefix = "Ficha creada" if result.created else "Ficha ya existente"
+    _line(f"{prefix}: {_draft_line(result.draft)}")
+    _line(f"Revisión del personaje: {result.character.state_revision}.")
+    _write_exact(sheet_block(result.draft))
+    return EXIT_OK
+
+
+def _draft_list(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    views = list_drafts(instance, character_id=args.character_id)
+    revision = _character_revision(instance, args.character_id)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "character_id": args.character_id,
+               "drafts": [draft_summary(v) for v in views],
+               "instance": str(instance.instance_root), "state_revision": revision})
+        return EXIT_OK
+    if not views:
+        _line(f"No hay fichas para «{args.character_id}».")
+    for view in views:
+        _line(_draft_line(view))
+    return EXIT_OK
+
+
+def _draft_show(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    view = get_draft(instance, character_id=args.character_id, version=args.version)
+    revision = _character_revision(instance, args.character_id)
+    response = view.staff_response
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "character_id": args.character_id,
+               "draft": draft_view_record(view), "instance": str(instance.instance_root),
+               "staff_response": None if response is None else staff_response_record(response),
+               "state_revision": revision})
+        return EXIT_OK
+    _line(_draft_line(view))
+    if response is None:
+        _line("Respuesta del staff: ninguna.")
+    else:
+        _line(f"Respuesta del staff: {response.review_status.value} | "
+              f"respuesta={response.response_sha256} | registro={response.staff_review_sha256} | "
+              f"locator={json.dumps(response.evidence.locator, ensure_ascii=False)} | "
+              f"observada={response.evidence.observed_at.isoformat()}.")
+    for line in draft_reference_lines(instance, view):
+        _line(line)
+    _write_exact(sheet_block(view))
+    if response is not None:
+        _write_exact(response_block(response.response))
+    return EXIT_OK
+
+
+def _staff_record(args: argparse.Namespace) -> int:
+    if args.json:
+        raise CharacterError("INVALID_STATE", "las respuestas de staff transcritas no admiten "
+                                              "--json: ejecuta el comando en tu terminal y "
+                                              "responde a la confirmación")
+    result = record_staff_response(args.instance, expected_core_root=_checkout(),
+                                   character_id=args.character_id, version=args.version,
+                                   review_status=ReviewStatus(args.status), input_path=args.input,
+                                   terminal=_SystemTerminal())
+    prefix = ("Respuesta del staff registrada" if result.created
+              else "Respuesta del staff ya registrada")
+    response = result.response
+    _line(f"{prefix}: {DRAFT_ID} v{response.draft_version} | {response.review_status.value} | "
+          f"respuesta={response.response_sha256} | registro={response.staff_review_sha256}")
+    _line(_draft_line(result.draft))
+    _line(f"Revisión del personaje: {result.character.state_revision}.")
+    return EXIT_OK
+
+
+def _draft_line(view: CharacterDraftView) -> str:
+    effective = view.effective
+    return (f"{DRAFT_ID} v{view.version} | {effective.lifecycle.value} | "
+            f"{'CURRENT' if view.current else 'SUPERSEDED'} | {effective.review_status.value} | "
+            f"{effective.publication_status.value} | "
+            f"composición={view.record.composition_sha256} | sha256={view.record.draft_sha256} | "
+            f"bytes={view.record.utf8_size} | corpus={len(view.record.corpus_refs)}")
 
 
 def _proposal_line(view: ProposalView) -> str:

@@ -1,4 +1,5 @@
-"""Character state inside a forum instance: human concepts, agent proposals and human decisions.
+"""Character state inside a forum instance: human concepts, agent proposals, human decisions,
+character sheets and transcribed staff responses.
 
 The concept is free Markdown kept character by character. Every concept version and every
 decision on a proposal is adopted by a person through barrier A (a typed phrase in an interactive
@@ -7,9 +8,11 @@ are complete alternative compositions written by the agent; they never change an
 person approves them, and approving only composes the character design: it is not staff
 approval, learning, usability, publication or canon.
 
-The state is an event log: every concept, proposal and decision takes exactly one revision of
-the state envelope. The effective composition is derived by replaying that log; it is never
-stored, so there is a single authority.
+The state is an event log: every concept, proposal, decision, sheet version and staff response
+takes exactly one revision of the state envelope. The effective composition and the sheet
+lifecycle (ACTIVE/STALE) are derived by replaying that log; they are never stored, so there is a
+single authority. A staff response is transcribed by the person: it authenticates no staff
+member and never changes the composition, publishes, canonizes or makes anything usable.
 
 Imports from `core.runtime` are deferred to function bodies: `core.runtime` imports this module.
 """
@@ -20,13 +23,22 @@ import hashlib
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 from core.memory.provenance import SourceRef
-from core.review.models import ReviewStatus
+from core.review.models import (
+    DraftLifecycle,
+    DraftVersion,
+    PublicationStatus,
+    ReviewStatus,
+    approve,
+    mark_stale,
+    reject,
+)
 
 if TYPE_CHECKING:
     from core.runtime.assimilation import AssimilationCandidate, HumanConfirmationReceipt
@@ -34,8 +46,10 @@ if TYPE_CHECKING:
 _CHARACTER_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _FORBIDDEN_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+_LOCATOR_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 _CODES = frozenset({"INVALID_STATE", "CONFLICT", "UNSAFE_DESTINATION", "IO"})
 _CONTENT_KEYS = frozenset({"character_id", "concepts", "proposal_decisions", "proposals"})
+_SHEET_CONTENT_KEYS = frozenset({"drafts", "staff_responses"})
 _CONCEPT_KEYS = frozenset({"authorship", "concept_sha256", "evidence", "receipt", "text",
                            "utf8_size", "version"})
 _EVIDENCE_KEYS = frozenset({"locator", "section_or_passage", "sha256", "source_id"})
@@ -48,6 +62,19 @@ _PROPOSAL_KEYS = frozenset({"base_composition_sha256", "citations", "concept", "
 _DECISION_KEYS = frozenset({"base_composition_sha256", "decision_id", "decision_revision",
                             "evidence", "proposal_id", "proposal_sha256", "proposal_version",
                             "receipt", "result_composition_sha256", "review_status"})
+
+_SOURCE_KEYS = frozenset({"ic_date", "locator", "observed_at", "section_or_passage", "sha256",
+                          "source_id"})
+_DRAFT_KEYS = frozenset({"composition_sha256", "concept", "content", "context_refs",
+                         "corpus_refs", "created_revision", "draft_id", "draft_sha256",
+                         "lifecycle", "publication_evidence", "publication_status",
+                         "review_evidence", "review_status", "source_refs", "stale_reason",
+                         "utf8_size", "version"})
+_STAFF_KEYS = frozenset({"composition_sha256", "draft_id", "draft_sha256", "draft_version",
+                         "evidence", "receipt", "response", "response_sha256", "review_revision",
+                         "review_status", "staff_review_sha256"})
+
+DRAFT_ID = "character-sheet"
 
 CandidateResolver = Callable[[str, int], "AssimilationCandidate"]
 
@@ -358,12 +385,198 @@ class ProposalView:
             _invalid("solo una propuesta aprobada puede estar aplicada")
 
 
+# --- Character sheets and staff responses (4e) ------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class CharacterDraftRecord:
+    """A character sheet version written by the agent, bound to the exact effective composition.
+
+    The sheet is free Markdown: no fields, template or forum structure are imposed. The core
+    binds hashes and references; it does not judge whether each sentence follows the forum
+    rules. `character_id` and `forum_id` are not persisted: the decoder injects them.
+    """
+
+    character_id: str
+    forum_id: str
+    created_revision: int
+    composition_sha256: str
+    concept: ConceptRef
+    corpus_refs: tuple[CorpusCandidateRef, ...]
+    draft: DraftVersion
+    draft_sha256: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        check_character_id(self.character_id)
+        if not isinstance(self.forum_id, str) or not self.forum_id.strip():
+            _invalid("la ficha necesita el foro de su instancia")
+        _check_positive("created_revision", self.created_revision)
+        _check_sha256("composition_sha256", self.composition_sha256)
+        if not isinstance(self.concept, ConceptRef):
+            _invalid("la ficha debe citar un concepto")
+        if not isinstance(self.corpus_refs, tuple) or not all(
+            isinstance(r, CorpusCandidateRef) for r in self.corpus_refs
+        ):
+            _invalid("las referencias de corpus de la ficha son inválidas")
+        if len({r.key for r in self.corpus_refs}) != len(self.corpus_refs):
+            _invalid("la ficha repite una referencia de corpus")
+        draft = self.draft
+        if not isinstance(draft, DraftVersion) or draft.draft_id != DRAFT_ID:
+            _invalid(f"la ficha debe ser un DraftVersion «{DRAFT_ID}»")
+        _check_free_text("la ficha", draft.content)
+        if ((draft.lifecycle, draft.review_status, draft.publication_status)
+                != (DraftLifecycle.ACTIVE, ReviewStatus.PENDING_HUMAN_REVIEW,
+                    PublicationStatus.NOT_CONFIRMED)
+                or draft.stale_reason is not None or draft.review_evidence is not None
+                or draft.publication_evidence is not None):
+            _invalid("una ficha nace ACTIVE, PENDING_HUMAN_REVIEW y NOT_CONFIRMED")
+        if draft.context_refs != draft_context_refs(self.character_id, self.composition_sha256,
+                                                    self.concept, self.corpus_refs):
+            _invalid("el contexto de la ficha no corresponde a sus referencias")
+        if draft.source_refs[1:] != tuple(corpus_source_ref(self.forum_id, r)
+                                          for r in self.corpus_refs):
+            _invalid("las fuentes de la ficha no corresponden a sus referencias")
+        object.__setattr__(self, "draft_sha256", _hash(_draft_core(self)))
+
+    @property
+    def version(self) -> int:
+        return self.draft.version
+
+    @property
+    def utf8_size(self) -> int:
+        return len(self.draft.content.encode("utf-8"))
+
+
+@dataclass(frozen=True, slots=True)
+class StaffResponse:
+    """A response attributed to the staff and transcribed by the person, with barrier A.
+
+    It authenticates no staff member: neither the receipt nor the locator prove who answered.
+    APPROVED records a transcribed approval; REJECTED also covers rejections and requested
+    changes, whose detail stays in the literal response. `character_id` is not persisted.
+    """
+
+    character_id: str
+    review_revision: int
+    draft_version: int
+    draft_sha256: str
+    composition_sha256: str
+    review_status: ReviewStatus
+    response: str
+    receipt: HumanConfirmationReceipt
+    evidence: SourceRef
+    response_sha256: str = field(init=False)
+    staff_review_sha256: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        from core.runtime.assimilation import HumanConfirmationReceipt
+
+        check_character_id(self.character_id)
+        _check_positive("review_revision", self.review_revision)
+        _check_positive("draft_version", self.draft_version)
+        _check_sha256("draft_sha256", self.draft_sha256)
+        _check_sha256("composition_sha256", self.composition_sha256)
+        _check_decision_status(self.review_status)
+        _check_free_text("la respuesta del staff", self.response)
+        if not isinstance(self.receipt, HumanConfirmationReceipt):
+            _invalid("la respuesta necesita un recibo de confirmación humana")
+        response_sha256 = hashlib.sha256(self.response.encode("utf-8")).hexdigest()
+        object.__setattr__(self, "response_sha256", response_sha256)
+        evidence = self.evidence
+        if not isinstance(evidence, SourceRef):
+            _invalid("la respuesta necesita evidencia SourceRef")
+        check_locator(evidence.locator)
+        check_observed_at(evidence.observed_at)
+        if ((evidence.source_id, evidence.section_or_passage, evidence.sha256, evidence.ic_date)
+                != (f"staff-response:{self.character_id}:v{self.draft_version}",
+                    f"{DRAFT_ID}:{self.character_id}:v{self.draft_version}", response_sha256,
+                    None)):
+            _invalid("la evidencia no corresponde a la respuesta transcrita")
+        object.__setattr__(self, "staff_review_sha256", _hash(_staff_core(self)))
+
+    def matches(self, record: CharacterDraftRecord) -> bool:
+        return (self.character_id == record.character_id
+                and self.draft_version == record.version
+                and self.draft_sha256 == record.draft_sha256
+                and self.composition_sha256 == record.composition_sha256)
+
+
+@dataclass(frozen=True, slots=True)
+class CharacterDraftView:
+    """A sheet version as it stands now: the record plus derived review and lifecycle.
+
+    `effective` applies the staff response (approve/reject) and, when it applies, `mark_stale`;
+    the record is never mutated. Publication stays NOT_CONFIRMED: nothing publishes.
+    """
+
+    record: CharacterDraftRecord
+    effective: DraftVersion
+    staff_response: StaffResponse | None
+    current: bool
+    base: EffectiveComposition  # the composition replayed at the sheet's revision
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.record, CharacterDraftRecord) or not isinstance(
+            self.effective, DraftVersion
+        ) or not isinstance(self.current, bool):
+            _invalid("vista de ficha inválida")
+        expected = self.record.draft
+        try:
+            if self.staff_response is not None:
+                if not isinstance(self.staff_response, StaffResponse) or not (
+                    self.staff_response.matches(self.record)
+                ):
+                    _invalid("la respuesta no corresponde a esta ficha")
+                transition = (approve if self.staff_response.review_status
+                              is ReviewStatus.APPROVED else reject)
+                expected = transition(expected, self.record.version,
+                                      self.staff_response.evidence)
+            if self.effective.lifecycle is DraftLifecycle.STALE:
+                expected = mark_stale(expected, self.effective.stale_reason)
+        except CharacterError:
+            raise
+        except ValueError as exc:
+            _invalid(f"vista de ficha incoherente: {exc}")
+        if self.effective != expected:
+            _invalid("la vista de la ficha no corresponde a su registro y su respuesta")
+        _check_stale_reason(self.record, self.current, self.effective.stale_reason)
+        if not isinstance(self.base, EffectiveComposition) or (
+            self.base.character_id, self.base.concept, self.base.composition_sha256
+        ) != (self.record.character_id, self.record.concept, self.record.composition_sha256):
+            _invalid("la base de la ficha no es la composición que cita")
+
+    @property
+    def version(self) -> int:
+        return self.record.version
+
+
+_SUPERSEDED = re.compile(rf"SUPERSEDED_BY:{DRAFT_ID}:v([1-9][0-9]*)")
+_COMPOSITION_CHANGED = re.compile(r"EFFECTIVE_COMPOSITION_CHANGED:([0-9a-f]{64})->([0-9a-f]{64})")
+
+
+def _check_stale_reason(record: CharacterDraftRecord, current: bool,
+                        reason: str | None) -> None:
+    """A superseded version names a later one; a current one is stale only by composition."""
+    if not current:
+        match = _SUPERSEDED.fullmatch(reason or "")
+        if match is None or int(match.group(1)) <= record.version:
+            _invalid("una versión sustituida debe estar STALE por una versión posterior")
+        return
+    if reason is None:
+        return
+    match = _COMPOSITION_CHANGED.fullmatch(reason)
+    if (match is None or match.group(1) != record.composition_sha256
+            or match.group(2) == record.composition_sha256):
+        _invalid("la versión vigente solo queda STALE porque cambió su composición")
+
+
 @dataclass(frozen=True, slots=True)
 class CharacterReplay:
-    """Result of replaying the event log: the effective composition and every proposal view."""
+    """Result of replaying the event log: effective composition, proposal and sheet views."""
 
     effective: EffectiveComposition
     views: tuple[ProposalView, ...]
+    draft_views: tuple[CharacterDraftView, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -372,6 +585,8 @@ class CharacterState:
     concepts: tuple[ConceptVersion, ...]
     proposals: tuple[CharacterProposal, ...] = ()
     proposal_decisions: tuple[CharacterProposalDecision, ...] = ()
+    drafts: tuple[CharacterDraftRecord, ...] = ()
+    staff_responses: tuple[StaffResponse, ...] = ()
     replay: CharacterReplay = field(init=False, compare=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -395,12 +610,25 @@ class CharacterState:
             _invalid("las decisiones deben ser una tupla de CharacterProposalDecision")
         if any(p.character_id != self.character_id for p in self.proposals):
             _invalid("una propuesta pertenece a otro personaje")
+        if not isinstance(self.drafts, tuple) or not all(
+            isinstance(d, CharacterDraftRecord) for d in self.drafts
+        ):
+            _invalid("las fichas deben ser una tupla de CharacterDraftRecord")
+        if not isinstance(self.staff_responses, tuple) or not all(
+            isinstance(r, StaffResponse) for r in self.staff_responses
+        ):
+            _invalid("las respuestas del staff deben ser una tupla de StaffResponse")
+        if any(d.character_id != self.character_id for d in self.drafts) or any(
+            r.character_id != self.character_id for r in self.staff_responses
+        ):
+            _invalid("una ficha o respuesta pertenece a otro personaje")
         object.__setattr__(self, "replay", _replay(self))
 
     @property
     def revision(self) -> int:
-        """Events in the log: one revision per concept, proposal and decision."""
-        return len(self.concepts) + len(self.proposals) + len(self.proposal_decisions)
+        """Events in the log: one revision per concept, proposal, decision, sheet and response."""
+        return (len(self.concepts) + len(self.proposals) + len(self.proposal_decisions)
+                + len(self.drafts) + len(self.staff_responses))
 
     def current_concept(self) -> ConceptVersion:
         return self.concepts[-1]
@@ -418,6 +646,27 @@ class CharacterState:
     def view(self, proposal_id: str, version: int) -> ProposalView | None:
         for view in self.replay.views:
             if view.proposal.key == (proposal_id, version):
+                return view
+        return None
+
+    def current_draft(self) -> CharacterDraftRecord | None:
+        return self.drafts[-1] if self.drafts else None
+
+    def draft_at(self, version: int) -> CharacterDraftRecord | None:
+        for record in self.drafts:
+            if record.version == version:
+                return record
+        return None
+
+    def staff_response_for(self, record: CharacterDraftRecord) -> StaffResponse | None:
+        for response in self.staff_responses:
+            if response.draft_version == record.version:
+                return response
+        return None
+
+    def draft_view(self, version: int) -> CharacterDraftView | None:
+        for view in self.replay.draft_views:
+            if view.version == version:
                 return view
         return None
 
@@ -451,6 +700,21 @@ class ProposalDecisionResult:
     effective: EffectiveComposition
 
 
+@dataclass(frozen=True, slots=True)
+class DraftCreateResult:
+    character: LoadedCharacter
+    draft: CharacterDraftView
+    created: bool
+
+
+@dataclass(frozen=True, slots=True)
+class StaffResponseResult:
+    character: LoadedCharacter
+    draft: CharacterDraftView
+    response: StaffResponse
+    created: bool
+
+
 # --- Replay -----------------------------------------------------------------------------------
 
 
@@ -461,23 +725,33 @@ def concept_root(character_id: str, concept: ConceptVersion) -> EffectiveComposi
     return EffectiveComposition(character_id, concept.ref, concept.text, sha, ())
 
 
+def applied_corpus_refs(composition: EffectiveComposition) -> tuple[CorpusCandidateRef, ...]:
+    """Corpus refs of every applied proposal, deduplicated by first appearance, in order."""
+    refs: dict[tuple[str, int], CorpusCandidateRef] = {}
+    for step in composition.applied_proposals:
+        for ref in step.proposal.citations:
+            refs.setdefault(ref.key, ref)
+    return tuple(refs.values())
+
+
 def _replay(state: CharacterState) -> CharacterReplay:
     total = state.revision
     explicit: dict[int, tuple[str, object]] = {}
-    for proposal in state.proposals:
-        explicit.setdefault(proposal.created_revision, ("proposal", proposal))
-    for decision in state.proposal_decisions:
-        if decision.decision_revision in explicit:
-            _invalid(f"la revisión {decision.decision_revision} está repetida")
-        explicit[decision.decision_revision] = ("decision", decision)
-    if len(explicit) != len(state.proposals) + len(state.proposal_decisions):
-        _invalid("dos propuestas comparten revisión")
+    for kind, items, attribute in (
+        ("proposal", state.proposals, "created_revision"),
+        ("decision", state.proposal_decisions, "decision_revision"),
+        ("draft", state.drafts, "created_revision"),
+        ("staff", state.staff_responses, "review_revision"),
+    ):
+        revisions = [getattr(item, attribute) for item in items]
+        if revisions != sorted(revisions):
+            _invalid("los eventos de cada historial deben estar en orden de revisión")
+        for item, revision in zip(items, revisions):
+            if revision in explicit:
+                _invalid(f"la revisión {revision} está repetida")
+            explicit[revision] = (kind, item)
     if any(not 1 <= revision <= total for revision in explicit):
-        _invalid("una revisión de propuesta o decisión está fuera del historial")
-    created = [p.created_revision for p in state.proposals]
-    decided = [d.decision_revision for d in state.proposal_decisions]
-    if created != sorted(created) or decided != sorted(decided):
-        _invalid("las propuestas y decisiones deben estar en orden de revisión")
+        _invalid("una revisión de evento está fuera del historial")
     concept_revisions = [r for r in range(1, total + 1) if r not in explicit]
     events = dict(explicit)
     for revision, concept in zip(concept_revisions, state.concepts):
@@ -489,6 +763,9 @@ def _replay(state: CharacterState) -> CharacterReplay:
     seen: dict[tuple[str, int], CharacterProposal] = {}
     bases: dict[tuple[str, int], EffectiveComposition] = {}
     decisions: dict[tuple[str, int], CharacterProposalDecision] = {}
+    drafts: dict[int, CharacterDraftRecord] = {}
+    draft_bases: dict[int, EffectiveComposition] = {}
+    responses: dict[int, StaffResponse] = {}
     for revision in range(1, total + 1):
         kind, item = events[revision]
         if kind == "concept":
@@ -509,6 +786,31 @@ def _replay(state: CharacterState) -> CharacterReplay:
             latest[proposal.proposal_id] = proposal.version
             seen[proposal.key] = proposal
             bases[proposal.key] = effective
+        elif kind == "draft":
+            record = item
+            where = f"{DRAFT_ID} v{record.version}"
+            if current is None or effective is None:
+                _invalid(f"{where} es anterior al primer concepto")
+            if (record.composition_sha256 != effective.composition_sha256
+                    or record.concept != current.ref):
+                _invalid(f"{where} no cita la composición efectiva de su momento")
+            if record.corpus_refs != applied_corpus_refs(effective):
+                _invalid(f"{where} no cita exactamente el corpus de las propuestas aplicadas")
+            if record.draft.source_refs[0] != current.evidence:
+                _invalid(f"{where} no cita la evidencia del concepto vigente")
+            if record.version != len(drafts) + 1:
+                _invalid(f"la ficha salta a la versión {record.version}")
+            drafts[record.version] = record
+            draft_bases[record.version] = effective
+        elif kind == "staff":
+            response = item
+            record = drafts.get(response.draft_version)
+            if record is None or not response.matches(record):
+                _invalid(f"la respuesta del staff a v{response.draft_version} no corresponde a "
+                         "una ficha anterior exacta")
+            if response.draft_version in responses:
+                _invalid(f"la ficha v{response.draft_version} tiene dos respuestas del staff")
+            responses[response.draft_version] = response
         else:
             decision = item
             proposal = seen.get(decision.proposal_key)
@@ -541,7 +843,31 @@ def _replay(state: CharacterState) -> CharacterReplay:
             status = ProposalStatus.OBSOLETE
         views.append(ProposalView(proposal, status, decision, proposal.key in applied,
                                   bases[proposal.key]))
-    return CharacterReplay(effective, tuple(views))
+    return CharacterReplay(effective, tuple(views),
+                           _draft_views(state.drafts, responses, draft_bases, effective))
+
+
+def _draft_views(records: tuple[CharacterDraftRecord, ...], responses: dict[int, StaffResponse],
+                 bases: dict[int, EffectiveComposition],
+                 effective: EffectiveComposition) -> tuple[CharacterDraftView, ...]:
+    """Derive review and lifecycle: only the highest version is current; nothing is persisted."""
+    last = len(records)
+    views = []
+    for record in records:
+        response = responses.get(record.version)
+        draft = record.draft
+        if response is not None:
+            transition = approve if response.review_status is ReviewStatus.APPROVED else reject
+            draft = transition(draft, record.version, response.evidence)
+        if record.version != last:
+            draft = mark_stale(draft, f"SUPERSEDED_BY:{DRAFT_ID}:v{last}")
+        elif record.composition_sha256 != effective.composition_sha256:
+            draft = mark_stale(draft, f"EFFECTIVE_COMPOSITION_CHANGED:"
+                                      f"{record.composition_sha256}->"
+                                      f"{effective.composition_sha256}")
+        views.append(CharacterDraftView(record, draft, response, record.version == last,
+                                        bases[record.version]))
+    return tuple(views)
 
 
 # --- Factories and codec ----------------------------------------------------------------------
@@ -596,13 +922,111 @@ def make_proposal_decision(*, forum_id: str, character_id: str, proposal: Charac
                                      evidence)
 
 
+def draft_context_refs(character_id: str, composition_sha256: str, concept: ConceptRef,
+                       corpus_refs: tuple[CorpusCandidateRef, ...]) -> tuple[str, ...]:
+    return (f"character:{character_id}:composition:{composition_sha256}",
+            f"character:{character_id}:concept:v{concept.version}:{concept.concept_sha256}",
+            *(f"corpus:{r.candidate_id}:v{r.version}:{r.candidate_sha256}" for r in corpus_refs))
+
+
+def corpus_source_ref(forum_id: str, ref: CorpusCandidateRef) -> SourceRef:
+    segments = "/".join(quote(s, safe="") for s in (ref.candidate_id, f"v{ref.version}"))
+    return SourceRef(
+        source_id=f"corpus-candidate:{ref.candidate_id}:v{ref.version}",
+        locator=f"instance://{quote(forum_id, safe='')}/corpus/candidates/{segments}",
+        sha256=ref.candidate_sha256,
+        section_or_passage=f"candidate:{ref.candidate_id}:v{ref.version}",
+    )
+
+
+def make_draft_record(*, forum_id: str, character_id: str, version: int, created_revision: int,
+                      composition_sha256: str, concept: ConceptVersion,
+                      corpus_refs: tuple[CorpusCandidateRef, ...],
+                      content: str) -> CharacterDraftRecord:
+    """Build a sheet version: content exact, sources = concept evidence + one ref per candidate."""
+    check_character_id(character_id)
+    _check_free_text("la ficha", content)
+    _check_sha256("composition_sha256", composition_sha256)
+    if not isinstance(concept, ConceptVersion):
+        _invalid("la ficha necesita el concepto exacto")
+    refs = tuple(corpus_refs)
+    if not all(isinstance(r, CorpusCandidateRef) for r in refs):
+        _invalid("las referencias de corpus de la ficha son inválidas")
+    try:
+        draft = DraftVersion(
+            DRAFT_ID, version, content,
+            (concept.evidence, *(corpus_source_ref(forum_id, r) for r in refs)),
+            draft_context_refs(character_id, composition_sha256, concept.ref, refs))
+    except CharacterError:
+        raise
+    except ValueError as exc:
+        _invalid(f"ficha inválida: {exc}")
+    return CharacterDraftRecord(character_id, forum_id, created_revision, composition_sha256,
+                                concept.ref, refs, draft)
+
+
+def make_staff_response(*, character_id: str, record: CharacterDraftRecord, review_revision: int,
+                        review_status: ReviewStatus, response: str, locator: str,
+                        observed_at: datetime,
+                        receipt: HumanConfirmationReceipt) -> StaffResponse:
+    """Build a transcribed staff response; the evidence states, it does not authenticate."""
+    if not isinstance(record, CharacterDraftRecord):
+        _invalid("la respuesta necesita la ficha exacta")
+    _check_free_text("la respuesta del staff", response)
+    check_locator(locator)
+    check_observed_at(observed_at)
+    evidence = SourceRef(
+        source_id=f"staff-response:{character_id}:v{record.version}",
+        locator=locator,
+        sha256=hashlib.sha256(response.encode("utf-8")).hexdigest(),
+        section_or_passage=f"{DRAFT_ID}:{character_id}:v{record.version}",
+        observed_at=observed_at,
+    )
+    return StaffResponse(character_id, review_revision, record.version, record.draft_sha256,
+                         record.composition_sha256, review_status, response, receipt, evidence)
+
+
+def check_locator(value: object) -> str:
+    """A declared locator (URL or manual reference): one line, never opened or verified."""
+    if not isinstance(value, str) or not value.strip():
+        _invalid("el locator no puede estar vacío")
+    if _LOCATOR_CONTROL.search(value) or value.startswith("\ufeff"):
+        _invalid("el locator no admite saltos de línea ni caracteres de control")
+    return value
+
+
+def check_observed_at(value: object) -> datetime:
+    if not isinstance(value, datetime) or value.utcoffset() is None:
+        _invalid("observed_at debe ser una fecha y hora con zona horaria")
+    return value
+
+
+def parse_observed_at(value: object) -> datetime:
+    """Strict ISO 8601 with offset, already in the canonical form `isoformat()` returns."""
+    if not isinstance(value, str):
+        _invalid("observed_at debe ser texto ISO 8601 con zona horaria")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        _invalid("observed_at no es una fecha ISO 8601 válida")
+    check_observed_at(parsed)
+    if parsed.isoformat() != value:
+        _invalid(f"observed_at debe escribirse en forma canónica: {parsed.isoformat()}")
+    return parsed
+
+
 def encode_character_content(state: CharacterState) -> dict[str, object]:
-    return {
+    """Four keys while there are no sheets (4d states re-encode byte for byte); six after."""
+    content: dict[str, object] = {
         "character_id": state.character_id,
         "concepts": [_concept_record(state.character_id, c) for c in state.concepts],
         "proposal_decisions": [decision_record(d) for d in state.proposal_decisions],
         "proposals": [proposal_record(p) for p in state.proposals],
     }
+    if state.drafts or state.staff_responses:
+        content["drafts"] = [draft_record(d) for d in state.drafts]
+        content["staff_responses"] = [staff_response_record(r) for r in state.staff_responses]
+    return content
 
 
 def decode_character_state(content: object, *, forum_id: str, revision: int,
@@ -616,8 +1040,17 @@ def decode_character_state(content: object, *, forum_id: str, revision: int,
 
     if type(revision) is not int or revision < 1:
         _invalid("la revisión del personaje debe ser un entero positivo")
-    if not isinstance(content, dict) or set(content) != _CONTENT_KEYS:
+    if not isinstance(content, dict) or set(content) not in (
+        _CONTENT_KEYS, _CONTENT_KEYS | _SHEET_CONTENT_KEYS
+    ):
         _invalid("el estado del personaje no tiene exactamente las claves esperadas")
+    sheets = set(content) != _CONTENT_KEYS
+    if sheets:
+        for name in _SHEET_CONTENT_KEYS:
+            if not isinstance(content[name], list):
+                _invalid(f"{name} debe ser una lista")
+        if not content["drafts"] and not content["staff_responses"]:
+            _invalid("drafts y staff_responses vacíos no se guardan (forma no canónica)")
     character_id = check_character_id(content["character_id"])
     for name in ("concepts", "proposals", "proposal_decisions"):
         if not isinstance(content[name], list):
@@ -656,12 +1089,7 @@ def decode_character_state(content: object, *, forum_id: str, revision: int,
         citations = record["citations"]
         if not isinstance(citations, list):
             _invalid(f"{where}: citations debe ser una lista")
-        refs = []
-        for item in citations:
-            if not isinstance(item, dict) or set(item) != _CITATION_KEYS:
-                _invalid(f"{where}: cita con claves inesperadas")
-            refs.append(CorpusCandidateRef(item["candidate_id"], item["version"],
-                                           item["candidate_sha256"]))
+        refs = _decode_corpus_refs(citations, where, candidate_resolver)
         proposal = CharacterProposal(character_id, record["proposal_id"], record["version"],
                                      record["created_revision"],
                                      ConceptRef(concept_ref["version"],
@@ -670,17 +1098,6 @@ def decode_character_state(content: object, *, forum_id: str, revision: int,
                                      record["rationale"], tuple(refs))
         if proposal_record(proposal) != record:
             _invalid(f"{where}: se modificó fuera del core (hashes o tamaño distintos)")
-        for ref in proposal.citations:
-            if candidate_resolver is None:
-                _invalid(f"{where}: no se pueden verificar sus citas del corpus")
-            try:
-                candidate = candidate_resolver(ref.candidate_id, ref.version)
-            except ValueError as exc:
-                _invalid(f"{where}: la cita {ref.candidate_id} v{ref.version} no es una versión "
-                         f"vigente aprobada ({getattr(exc, 'reason', exc)})")
-            if candidate.candidate_sha256 != ref.candidate_sha256:
-                _invalid(f"{where}: la cita {ref.candidate_id} v{ref.version} no coincide con el "
-                         "corpus")
         proposals.append(proposal)
 
     by_key = {p.key: p for p in proposals}
@@ -706,7 +1123,60 @@ def decode_character_state(content: object, *, forum_id: str, revision: int,
             _invalid(f"{where}: se modificó fuera del core (hash o evidencia distintos)")
         decisions.append(decision)
 
-    state = CharacterState(character_id, tuple(concepts), tuple(proposals), tuple(decisions))
+    drafts = []
+    staff = []
+    if sheets:
+        by_concept = {c.version: c for c in concepts}
+        for position, record in enumerate(content["drafts"], start=1):
+            where = f"ficha {position}"
+            if not isinstance(record, dict) or set(record) != _DRAFT_KEYS:
+                _invalid(f"{where}: claves inesperadas")
+            concept_ref = record["concept"]
+            if not isinstance(concept_ref, dict) or set(concept_ref) != _CONCEPT_REF_KEYS:
+                _invalid(f"{where}: concepto citado con claves inesperadas")
+            concept = by_concept.get(_check_positive("la versión del concepto citado",
+                                                     concept_ref["version"]))
+            if concept is None:
+                _invalid(f"{where}: cita un concepto inexistente")
+            if not isinstance(record["corpus_refs"], list):
+                _invalid(f"{where}: corpus_refs debe ser una lista")
+            draft = make_draft_record(
+                forum_id=forum_id, character_id=character_id, version=record["version"],
+                created_revision=record["created_revision"],
+                composition_sha256=record["composition_sha256"], concept=concept,
+                corpus_refs=_decode_corpus_refs(record["corpus_refs"], where,
+                                                candidate_resolver),
+                content=record["content"])
+            if draft_record(draft) != record:
+                _invalid(f"{where}: se modificó fuera del core (hashes, fuentes o ejes distintos)")
+            drafts.append(draft)
+        by_version = {d.version: d for d in drafts}
+        for position, record in enumerate(content["staff_responses"], start=1):
+            where = f"respuesta del staff {position}"
+            if not isinstance(record, dict) or set(record) != _STAFF_KEYS:
+                _invalid(f"{where}: claves inesperadas")
+            try:
+                status = ReviewStatus(record["review_status"])
+            except (ValueError, TypeError):
+                _invalid(f"{where}: estado desconocido")
+            draft = by_version.get(_check_positive("draft_version", record["draft_version"]))
+            if draft is None:
+                _invalid(f"{where}: no corresponde a ninguna ficha")
+            evidence = record["evidence"]
+            if not isinstance(evidence, dict) or set(evidence) != _SOURCE_KEYS:
+                _invalid(f"{where}: evidencia con claves inesperadas")
+            response = make_staff_response(
+                character_id=character_id, record=draft,
+                review_revision=record["review_revision"], review_status=status,
+                response=record["response"], locator=evidence["locator"],
+                observed_at=parse_observed_at(evidence["observed_at"]),
+                receipt=receipt_of(record["receipt"], where))
+            if staff_response_record(response) != record:
+                _invalid(f"{where}: se modificó fuera del core (hashes o evidencia distintos)")
+            staff.append(response)
+
+    state = CharacterState(character_id, tuple(concepts), tuple(proposals), tuple(decisions),
+                           tuple(drafts), tuple(staff))
     if state.revision != revision:
         _invalid("la revisión del personaje no corresponde a su historial")
     return state
@@ -760,6 +1230,121 @@ def composition_record(composition: EffectiveComposition) -> dict[str, object]:
         "text": composition.text,
         "utf8_size": composition.utf8_size,
     }
+
+
+def draft_record(record: CharacterDraftRecord) -> dict[str, object]:
+    return {**_draft_core(record), "draft_sha256": record.draft_sha256}
+
+
+def staff_response_record(response: StaffResponse) -> dict[str, object]:
+    return {**_staff_core(response), "staff_review_sha256": response.staff_review_sha256}
+
+
+def draft_summary(view: CharacterDraftView) -> dict[str, object]:
+    effective = view.effective
+    return {
+        "composition_sha256": view.record.composition_sha256,
+        "corpus_ref_count": len(view.record.corpus_refs),
+        "current": view.current,
+        "draft_id": effective.draft_id,
+        "draft_sha256": view.record.draft_sha256,
+        "lifecycle": effective.lifecycle.value,
+        "publication_status": effective.publication_status.value,
+        "review_status": effective.review_status.value,
+        "utf8_size": view.record.utf8_size,
+        "version": view.version,
+    }
+
+
+def draft_view_record(view: CharacterDraftView) -> dict[str, object]:
+    effective = view.effective
+    return {
+        **draft_summary(view),
+        "concept": view.record.concept.as_json(),
+        "content": effective.content,
+        "context_refs": list(effective.context_refs),
+        "corpus_refs": [r.as_json() for r in view.record.corpus_refs],
+        "review_evidence": _optional_source(effective.review_evidence),
+        "source_refs": [source_record(s) for s in effective.source_refs],
+        "stale_reason": effective.stale_reason,
+    }
+
+
+def source_record(ref: SourceRef) -> dict[str, object]:
+    """The full six-key form of a SourceRef (sheets and staff responses)."""
+    return {
+        "ic_date": ref.ic_date,
+        "locator": ref.locator,
+        "observed_at": None if ref.observed_at is None else ref.observed_at.isoformat(),
+        "section_or_passage": ref.section_or_passage,
+        "sha256": ref.sha256,
+        "source_id": ref.source_id,
+    }
+
+
+def _optional_source(ref: SourceRef | None) -> dict[str, object] | None:
+    return None if ref is None else source_record(ref)
+
+
+def _draft_core(record: CharacterDraftRecord) -> dict[str, object]:
+    draft = record.draft
+    return {
+        "composition_sha256": record.composition_sha256,
+        "concept": record.concept.as_json(),
+        "content": draft.content,
+        "context_refs": list(draft.context_refs),
+        "corpus_refs": [r.as_json() for r in record.corpus_refs],
+        "created_revision": record.created_revision,
+        "draft_id": draft.draft_id,
+        "lifecycle": draft.lifecycle.value,
+        "publication_evidence": _optional_source(draft.publication_evidence),
+        "publication_status": draft.publication_status.value,
+        "review_evidence": _optional_source(draft.review_evidence),
+        "review_status": draft.review_status.value,
+        "source_refs": [source_record(s) for s in draft.source_refs],
+        "stale_reason": draft.stale_reason,
+        "utf8_size": record.utf8_size,
+        "version": draft.version,
+    }
+
+
+def _staff_core(response: StaffResponse) -> dict[str, object]:
+    return {
+        "composition_sha256": response.composition_sha256,
+        "draft_id": DRAFT_ID,
+        "draft_sha256": response.draft_sha256,
+        "draft_version": response.draft_version,
+        "evidence": source_record(response.evidence),
+        "receipt": _receipt_record(response.receipt),
+        "response": response.response,
+        "response_sha256": response.response_sha256,
+        "review_revision": response.review_revision,
+        "review_status": response.review_status.value,
+    }
+
+
+def _decode_corpus_refs(items: object, where: str,
+                        resolver: CandidateResolver | None) -> tuple[CorpusCandidateRef, ...]:
+    """Corpus refs persisted by a proposal or a sheet, each resolved against the instance."""
+    if not isinstance(items, list):
+        _invalid(f"{where}: las referencias de corpus deben ser una lista")
+    refs = []
+    for item in items:
+        if not isinstance(item, dict) or set(item) != _CITATION_KEYS:
+            _invalid(f"{where}: cita con claves inesperadas")
+        ref = CorpusCandidateRef(item["candidate_id"], item["version"], item["candidate_sha256"])
+        if resolver is None:
+            _invalid(f"{where}: no se pueden verificar sus citas del corpus")
+        try:
+            candidate = resolver(ref.candidate_id, ref.version)
+        except ValueError as exc:
+            _invalid(f"{where}: la cita {ref.candidate_id} v{ref.version} no es una versión "
+                     f"vigente aprobada ({getattr(exc, 'reason', exc)})")
+        if candidate.candidate_sha256 != ref.candidate_sha256:
+            _invalid(f"{where}: la cita {ref.candidate_id} v{ref.version} no coincide con el "
+                     "corpus")
+        refs.append(ref)
+    return tuple(refs)
 
 
 def _proposal_core(proposal: CharacterProposal) -> dict[str, object]:

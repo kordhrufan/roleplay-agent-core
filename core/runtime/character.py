@@ -1,10 +1,17 @@
-"""Character operations on a forum instance: human concepts (4d1) and agent proposals (4d2).
+"""Character operations on a forum instance: human concepts (4d1), agent proposals (4d2),
+character sheets and transcribed staff responses (4e).
 
 Importing a concept and deciding on a proposal are human actions under barrier A: the exact
 texts, hashes and sizes are shown and the person types a phrase with a one-time code. That
 records explicit adoption by a person; it does not prove who wrote the text, and a fake terminal
 or pseudo terminal bypasses it. Adding a proposal is not a human action and changes nothing
 until a person approves it; approving only composes the character design.
+
+A sheet is free Markdown written by the agent and bound to the exact effective composition; the
+core binds hashes and references, it does not judge whether each sentence follows the forum
+rules. Recording a staff response is a human action: the person transcribes the literal answer,
+its locator and date. It authenticates no staff member, never changes the composition and
+nothing here publishes: the sheet is printed only for manual copying.
 """
 
 from __future__ import annotations
@@ -16,26 +23,35 @@ from dataclasses import replace
 from pathlib import Path
 
 from core.character.models import (
+    DRAFT_ID,
+    CharacterDraftView,
     CharacterError,
     CharacterProposal,
     CharacterState,
     ConceptImportResult,
     ConceptVersion,
     CorpusCandidateRef,
+    DraftCreateResult,
     EffectiveComposition,
     LoadedCharacter,
     ProposalAddResult,
     ProposalDecisionResult,
     ProposalStatus,
     ProposalView,
+    StaffResponseResult,
+    applied_corpus_refs,
     check_character_id,
     check_concept_text,
+    check_locator,
     decode_character_state,
     encode_character_content,
     make_concept_version,
+    make_draft_record,
     make_proposal_decision,
+    make_staff_response,
+    parse_observed_at,
 )
-from core.character.models import _check_free_text, _check_id, _check_sha256
+from core.character.models import _check_free_text, _check_id, _check_positive, _check_sha256
 from core.review.models import ReviewStatus
 from core.runtime.assimilation import (
     AssimilationError,
@@ -58,6 +74,7 @@ from core.runtime.persistence import (
     atomic_write_bytes,
     encode_state,
     load_state,
+    parse_strict_json,
 )
 from core.runtime.workspace import (
     WorkspaceError,
@@ -78,6 +95,16 @@ _CITATION_INPUT_KEYS = frozenset({"candidate_id", "version"})
 _PROPOSAL_VERB = {ReviewStatus.APPROVED: "APROBAR", ReviewStatus.REJECTED: "RECHAZAR"}
 _NOTICE = ("Esta decisión solo compone el diseño del personaje; no es aprobación de staff, "
            "aprendizaje, utilizabilidad, publicación ni canon.")
+_STAFF_INPUT_KEYS = frozenset({"draft_sha256", "locator", "observed_at", "response"})
+_STAFF_NOTICE = (
+    "La persona usuaria declara que ha transcrito esta respuesta y su localizador sobre esta "
+    "versión exacta.\n"
+    "Este registro no autentica al staff, no cambia la composición y no implica publicación, "
+    "canon, aprendizaje ni utilizabilidad.\n"
+    "APPROVED acredita aprobación transcrita; REJECTED también abarca rechazo o cambios "
+    "solicitados, cuyo detalle queda en la respuesta literal.\n")
+_CONCEPT_FILE = ("el archivo del concepto", "el concepto")
+_DRAFT_FILE = ("el archivo de la ficha", "la ficha")
 
 
 def import_concept(instance_root: Path, *, expected_core_root: Path, character_id: str,
@@ -165,6 +192,70 @@ def proposal_blocks(view: ProposalView) -> str:
                      "Fin de la base.")
             + _block("PROPUESTA — texto completo que se aprueba/rechaza (hasta «Fin de la "
                      "propuesta.»):", view.proposal.text, "Fin de la propuesta."))
+
+
+def create_draft(instance_root: Path, *, expected_core_root: Path, character_id: str,
+                 version: int, composition_sha256: str, input_path: Path) -> DraftCreateResult:
+    """Record sheet version `version` from an external Markdown file. Not a human action.
+
+    `composition_sha256` must be the current effective composition (`character effective
+    show`). The core binds hashes and references; it does not check the content against the
+    forum rules.
+    """
+    return _wrap("crear la ficha", _create_draft, Path(instance_root), Path(expected_core_root),
+                 character_id, version, composition_sha256, Path(input_path))
+
+
+def list_drafts(instance: LoadedInstance, *,
+                character_id: str) -> tuple[CharacterDraftView, ...]:
+    """Every sheet version, oldest first, with derived review and lifecycle."""
+    return _character(instance, character_id).state.replay.draft_views
+
+
+def get_draft(instance: LoadedInstance, *, character_id: str, version: int) -> CharacterDraftView:
+    view = _character(instance, character_id).state.draft_view(version)
+    if view is None:
+        raise CharacterError("INVALID_STATE", f"«{character_id}» no tiene la versión {version} de "
+                                              "la ficha")
+    return view
+
+
+def record_staff_response(instance_root: Path, *, expected_core_root: Path, character_id: str,
+                          version: int, review_status: ReviewStatus, input_path: Path,
+                          terminal: Terminal) -> StaffResponseResult:
+    """Record a staff response transcribed by the person, after the exact phrase.
+
+    Barrier A blocks the automated command path but does not authenticate a person, and nothing
+    here proves that the staff answered: the person declares the transcription.
+    """
+    return _wrap("registrar la respuesta del staff", _record_staff_response, Path(instance_root),
+                 Path(expected_core_root), character_id, version, review_status,
+                 Path(input_path), terminal)
+
+
+def draft_reference_lines(instance: LoadedInstance, view: CharacterDraftView) -> tuple[str, ...]:
+    """The concept and corpus a sheet cites, each resolved again against the instance."""
+    record = view.record
+    concept_evidence = record.draft.source_refs[0]
+    lines = [f"Concepto citado: v{record.concept.version} | "
+             f"sha256={record.concept.concept_sha256} | evidencia={concept_evidence.sha256}",
+             f"Corpus citado ({len(record.corpus_refs)}):"]
+    for index, ref in enumerate(record.corpus_refs, start=1):
+        candidate = _resolve(instance, ref.candidate_id, ref.version)
+        lines.append(f"Cita {index}: {candidate.candidate_id} v{candidate.version} | "
+                     f"sha256={candidate.candidate_sha256} | APPROVED")
+    return tuple(lines)
+
+
+def sheet_block(view: CharacterDraftView) -> str:
+    """The sheet exactly, for manual copying; printing it does not record any publication."""
+    return _block("Ficha para copia manual (no acredita publicación, hasta «Fin de la ficha.»):",
+                  view.effective.content, "Fin de la ficha.")
+
+
+def response_block(text: str) -> str:
+    return _block("RESPUESTA TRANSCRITA — texto exacto (hasta «Fin de la respuesta.»):", text,
+                  "Fin de la respuesta.")
 
 
 def find_character(instance: LoadedInstance, character_id: str) -> LoadedCharacter | None:
@@ -339,8 +430,26 @@ def _reload(instance: LoadedInstance, character_id: str) -> LoadedCharacter:
     return _character(reloaded, character_id)
 
 
-def _read_input(input_path: Path, instance_root: Path, core_root: Path) -> tuple[bytes, str]:
+def _read_input(input_path: Path, instance_root: Path, core_root: Path,
+                labels: tuple[str, str] = _CONCEPT_FILE) -> tuple[bytes, str]:
     """A regular file outside the checkout and the instance, UTF-8 without BOM."""
+    raw = _read_external(input_path, instance_root, core_root, labels[0])
+    file_label, text_label = labels
+    if raw.startswith(_UTF8_BOM):
+        raise CharacterError("INVALID_STATE", f"{text_label} empieza con BOM; guárdalo como UTF-8 "
+                                              "sin BOM")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CharacterError("INVALID_STATE", f"{file_label} no es UTF-8 válido") from exc
+    if labels == _CONCEPT_FILE:
+        return raw, check_concept_text(text)
+    return raw, _check_free_text(text_label, text)
+
+
+def _read_external(input_path: Path, instance_root: Path, core_root: Path,
+                   file_label: str) -> bytes:
+    """The bytes of a regular file outside the checkout and the instance, with no link."""
     path = Path(input_path).absolute()
     linked = _linked_component(path)
     if linked is not None:
@@ -351,17 +460,9 @@ def _read_input(input_path: Path, instance_root: Path, core_root: Path) -> tuple
     real = _identity(path)
     for name, root in (("el checkout del core", core_root), ("la instancia", instance_root)):
         if _contains(_identity(root), real):
-            raise CharacterError("INVALID_STATE", f"el archivo del concepto no puede estar dentro de "
+            raise CharacterError("INVALID_STATE", f"{file_label} no puede estar dentro de "
                                                   f"{name}; guárdalo fuera")
-    raw = path.read_bytes()
-    if raw.startswith(_UTF8_BOM):
-        raise CharacterError("INVALID_STATE", "el concepto empieza con BOM; guárdalo como UTF-8 "
-                                              "sin BOM")
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise CharacterError("INVALID_STATE", "el archivo del concepto no es UTF-8 válido") from exc
-    return raw, check_concept_text(text)
+    return path.read_bytes()
 
 
 def _prompt(character_id: str, version: int, text: str) -> str:
@@ -582,3 +683,150 @@ def _proposal_prompt(instance: LoadedInstance, character: LoadedCharacter, view:
 
 def _block(header: str, text: str, footer: str) -> str:
     return f"{header}\n{text if text.endswith(chr(10)) else text + chr(10)}{footer}\n"
+
+
+# --- Sheets and staff responses ---------------------------------------------------------------
+
+
+def _create_draft(instance_root: Path, core_root: Path, character_id: str, version: int,
+                  composition_sha256: str, input_path: Path) -> DraftCreateResult:
+    check_character_id(character_id)
+    _check_positive("la versión de la ficha", version)
+    _check_sha256("composition_sha256", composition_sha256)
+    instance = load_instance(instance_root, expected_core_root=core_root)
+    character = _character(instance, character_id)
+    _, content = _read_input(input_path, instance.instance_root, core_root, _DRAFT_FILE)
+    state = character.state
+    existing = state.draft_at(version)
+    if existing is not None:
+        if (existing.composition_sha256, existing.draft.content) == (composition_sha256, content):
+            return DraftCreateResult(character, state.draft_view(version), False)
+        raise CharacterError("CONFLICT", f"la versión {version} de la ficha ya existe con otro "
+                                         "contenido o sobre otra composición; crea la versión "
+                                         f"{len(state.drafts) + 1}")
+    if version != len(state.drafts) + 1:
+        raise CharacterError("CONFLICT", f"la siguiente versión de la ficha es la "
+                                         f"{len(state.drafts) + 1}, no la {version}")
+    effective = state.replay.effective
+    if composition_sha256 != effective.composition_sha256:
+        raise CharacterError("CONFLICT", "composition_sha256 no es la composición efectiva "
+                                         "vigente; consulta «character effective show»")
+    refs = _check_refs(instance, applied_corpus_refs(effective))
+    previous = state.current_draft()
+    if previous is not None and (previous.composition_sha256, previous.corpus_refs,
+                                 previous.draft.content) == (composition_sha256, refs, content):
+        raise CharacterError("CONFLICT", f"la versión {version} de la ficha repite la anterior")
+    record = make_draft_record(forum_id=instance.config.forum_id, character_id=character_id,
+                               version=version, created_revision=state.revision + 1,
+                               composition_sha256=composition_sha256,
+                               concept=state.current_concept(), corpus_refs=refs,
+                               content=content)
+
+    def build(again: LoadedInstance, current: LoadedCharacter) -> CharacterState:
+        _check_refs(again, refs)
+        return replace(current.state, drafts=(*current.state.drafts, record))
+
+    reloaded = _write_event(instance, character, build)
+    return DraftCreateResult(reloaded, reloaded.state.draft_view(version), True)
+
+
+def _record_staff_response(instance_root: Path, core_root: Path, character_id: str, version: int,
+                           review_status: ReviewStatus, input_path: Path,
+                           terminal: Terminal) -> StaffResponseResult:
+    _require_interactive(terminal)
+    if not isinstance(review_status, ReviewStatus) or review_status not in _PROPOSAL_VERB:
+        raise CharacterError("INVALID_STATE", "el resultado transcrito debe ser APPROVED o "
+                                              "REJECTED")
+    check_character_id(character_id)
+    _check_positive("la versión de la ficha", version)
+    instance = load_instance(instance_root, expected_core_root=core_root)
+    character = _character(instance, character_id)
+    raw = _read_external(input_path, instance.instance_root, core_root,
+                         "el archivo de la respuesta del staff")
+    draft_sha256, locator, observed_at, response = _parse_staff_input(raw, input_path)
+    view = get_draft(instance, character_id=character_id, version=version)
+    record = view.record
+    if draft_sha256 != record.draft_sha256:
+        raise CharacterError("CONFLICT", f"draft_sha256 no corresponde a la ficha v{version}; "
+                                         "consulta «character draft show»")
+    state = character.state
+    existing = view.staff_response
+    if existing is not None:
+        if (existing.review_status, existing.response, existing.evidence.locator,
+                existing.evidence.observed_at.isoformat()) == (
+            review_status, response, locator, observed_at.isoformat()
+        ):
+            return StaffResponseResult(character, view, existing, False)
+        raise CharacterError("CONFLICT", f"la ficha v{version} ya tiene una respuesta del staff "
+                                         f"({existing.review_status.value}) con otro contenido; "
+                                         "no se reescribe el historial")
+    state_path = character.character_root / CHARACTER_STATE
+    _require_unlocked(state_path, "este personaje")
+    receipt = confirm_human_action(
+        terminal,
+        phrase_prefix=f"REGISTRAR-RESPUESTA-STAFF {review_status.value} {DRAFT_ID} v{version}",
+        prompt=_staff_prompt(instance, character, view, review_status, response, locator,
+                             observed_at))
+    if _read_external(input_path, instance.instance_root, core_root,
+                      "el archivo de la respuesta del staff") != raw:
+        raise CharacterError("CONFLICT", "el archivo de la respuesta cambió mientras se "
+                                         "confirmaba; no se ha guardado nada")
+    staff = make_staff_response(character_id=character_id, record=record,
+                                review_revision=state.revision + 1, review_status=review_status,
+                                response=response, locator=locator, observed_at=observed_at,
+                                receipt=receipt)
+
+    def build(again: LoadedInstance, current: LoadedCharacter) -> CharacterState:
+        return replace(current.state,
+                       staff_responses=(*current.state.staff_responses, staff))
+
+    reloaded = _write_event(instance, character, build)
+    return StaffResponseResult(reloaded, reloaded.state.draft_view(version), staff, True)
+
+
+def _check_refs(instance: LoadedInstance, refs: tuple[CorpusCandidateRef, ...]
+                ) -> tuple[CorpusCandidateRef, ...]:
+    """Every ref must still be the current approved candidate with the same hash."""
+    for ref in refs:
+        if _resolve(instance, ref.candidate_id, ref.version).candidate_sha256 != (
+            ref.candidate_sha256
+        ):
+            raise CharacterError("INVALID_STATE", f"{ref.candidate_id} v{ref.version} ya no "
+                                                  "coincide con el corpus aprobado")
+    return refs
+
+
+def _parse_staff_input(raw: bytes, input_path: Path):
+    value = parse_strict_json(raw, Path(input_path).as_posix())
+    if not isinstance(value, dict) or set(value) != _STAFF_INPUT_KEYS:
+        raise CharacterError("INVALID_STATE", "la respuesta del staff debe tener exactamente las "
+                                              "claves " + ", ".join(sorted(_STAFF_INPUT_KEYS)))
+    draft_sha256 = _check_sha256("draft_sha256", value["draft_sha256"])
+    locator = check_locator(value["locator"])
+    observed_at = parse_observed_at(value["observed_at"])
+    response = _check_free_text("la respuesta del staff", value["response"])
+    return draft_sha256, locator, observed_at, response
+
+
+def _staff_prompt(instance: LoadedInstance, character: LoadedCharacter, view: CharacterDraftView,
+                  review_status: ReviewStatus, response: str, locator: str, observed_at) -> str:
+    record = view.record
+    data = response.encode("utf-8")
+    lines = [
+        "REGISTRO HUMANO DE RESPUESTA ATRIBUIDA AL STAFF",
+        f"Personaje: {character.state.character_id}",
+        f"Ficha: {DRAFT_ID} v{record.version}",
+        f"Vigencia actual: {view.effective.lifecycle.value}",
+        f"Resultado transcrito: {review_status.value}",
+        f"Ficha SHA-256: {record.draft_sha256}",
+        f"Composición citada SHA-256: {record.composition_sha256}",
+        f"Respuesta SHA-256: {hashlib.sha256(data).hexdigest()}",
+        f"Respuesta bytes UTF-8: {len(data)}",
+        f"Locator declarado: {locator}",
+        f"Observada en: {observed_at.isoformat()}",
+        *draft_reference_lines(instance, view),
+    ]
+    return ("".join(f"{line}\n" for line in lines)
+            + _block("FICHA CITADA — texto exacto (hasta «Fin de la ficha citada.»):",
+                     record.draft.content, "Fin de la ficha citada.")
+            + response_block(response) + _STAFF_NOTICE)
