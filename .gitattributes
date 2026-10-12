@@ -1,2 +1,4 @@
 packages/**/manifest.json text eol=lf
 tests/fixtures/packages/**/manifest.json text eol=lf
+core/runtime/templates/** text eol=lf
+tests/fixtures/** text eol=lf
