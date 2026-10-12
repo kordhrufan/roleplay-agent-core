@@ -14,10 +14,11 @@ import os
 import re
 import secrets
 import string
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from core.character.models import (
+    CandidateResolver,
     CharacterError,
     LoadedCharacter,
     check_character_id,
@@ -516,14 +517,23 @@ def _load_instance(physical: Path, logical_root: Path,
                                 (CLAUDE_FILE, CLAUDE_TEMPLATE, claude_raw)):
         if render_instructions(template, config) != raw:
             _invalid(f"{name} no corresponde a su plantilla")
-    characters = _load_characters(physical, logical_root, config.forum_id)
-    return LoadedInstance(config, logical_root, dossier, revision, state.candidates,
-                          state.decisions, state.closure, characters)
+    provisional = LoadedInstance(config, logical_root, dossier, revision, state.candidates,
+                                 state.decisions, state.closure, ())
+
+    def resolve(candidate_id: str, version: int) -> AssimilationCandidate:
+        return get_approved_candidate(provisional, candidate_id=candidate_id,
+                                      version=version).candidate
+
+    characters = _load_characters(physical, logical_root, config.forum_id, resolve)
+    return replace(provisional, characters=characters)
 
 
-def _load_characters(physical: Path, logical_root: Path,
-                     forum_id: str) -> tuple[LoadedCharacter, ...]:
-    """The only mutable namespace: `characters/<id>/state.json` (+ an optional lock)."""
+def _load_characters(physical: Path, logical_root: Path, forum_id: str,
+                     resolve: CandidateResolver) -> tuple[LoadedCharacter, ...]:
+    """The only mutable namespace: `characters/<id>/state.json` (+ an optional lock).
+
+    `resolve` accepts only current APPROVED candidates of this instance's closed snapshot.
+    """
     folder = physical / CHARACTERS_DIR
     if not os.path.lexists(folder):
         return ()
@@ -547,7 +557,8 @@ def _load_characters(physical: Path, logical_root: Path,
             if _is_link(child) or not child.is_file():
                 _invalid(f"{where}/{name} no es un archivo normal")
         revision, content = load_state(entry / CHARACTER_STATE)
-        state = decode_character_state(content, forum_id=forum_id, revision=revision)
+        state = decode_character_state(content, forum_id=forum_id, revision=revision,
+                                       candidate_resolver=resolve)
         if state.character_id != entry.name:
             _invalid(f"{where} contiene el personaje «{state.character_id}»")
         loaded.append(LoadedCharacter(logical_root / CHARACTERS_DIR / entry.name, revision,

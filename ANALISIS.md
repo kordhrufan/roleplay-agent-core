@@ -6,10 +6,10 @@ Generalizar Nozomu Agent como `roleplay-agent-core`: un núcleo reutilizable par
 foro de rol, configurable por personaje, mundo, sistema, plataforma e instancia. Este documento
 define la extracción y un plan para Claude; no implementa código ni altera el legado.
 
-Versión base del detalle del sub-incremento 4d: commits `f5a0f97` (4c2 aprobado) y `45f667a`
-(`.gitattributes` fija LF en plantillas/fixtures), a 2026-10-12, rama
-`feature/incremento-4-rebanada-vertical`, sin cambios de trabajo al iniciar este análisis. `main`
-permanece en `96eca81`; los incrementos 1–3 siguen en ramas apiladas sin fusionar.
+Versión base del detalle del sub-incremento 4d2: commit `67a7284` (4d1 aprobado), a 2026-10-12,
+rama `feature/incremento-4-rebanada-vertical`. El único cambio de trabajo al iniciar este análisis
+es la nota de validación funcional de 4d1 al final de este documento; debe conservarse intacta.
+`main` permanece en `96eca81`; los incrementos 1–3 siguen en ramas apiladas sin fusionar.
 `reference/migration-source/` es la copia inmutable inspeccionada. La auditoría anterior se trata
 como hipótesis histórica porque declara que su fuente estaba vacía; no se usa como prueba de la
 implementación actual.
@@ -109,7 +109,7 @@ implementación actual.
 - `core/runtime/{instance,workspace,cli}.py` — 4c2 aprobado: instancia cerrada autocontenida,
   plantillas congeladas, consultas del corpus aprobado, creación Windows con publicación segura y
   recarga que rechaza cualquier entrada no declarada.
-- Las quince suites actuales suman 349 pruebas aprobadas en clon limpio que los incrementos
+- Las dieciocho suites actuales suman 391 pruebas aprobadas tras 4d1 que los incrementos
   siguientes deben conservar.
 
 ### Hallazgos de contraste
@@ -2252,33 +2252,387 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
      El import se valida manualmente en TTY real; list/show se repiten tras reiniciar y apartar el
      workspace. El `rg` y el diff de rutas congeladas terminan sin salida.
 
-4d2. [ ] **Propuestas citadas y composición efectiva (detalle posterior).** Objetivo: permitir al
-     agente proponer una composición completa alternativa y al humano aprobarla/rechazarla con
-     barrera A, sin alterar conceptos ni confundir aceptación con staff. Archivos:
-     `core/character/models.py`, `core/runtime/{character,instance,cli,__init__}.py` y
-     `tests/test_{character_proposals,character_proposal_cli}.py`; tampoco toca plantillas.
+4d2. [x] **Propuestas citadas y composición efectiva (detallado).** Objetivo: permitir que el
+     agente registre alternativas completas, referidas a la composición vigente y al corpus cerrado
+     aprobado, y que la persona las apruebe o rechace con barrera A. La aceptación solo compone el
+     diseño del personaje: no modifica el concepto humano, el corpus ni ningún eje de staff,
+     aprendizaje, utilizabilidad, publicación o canon.
 
-     Añadirá `ConceptRef` (versión/hash del concepto humano vigente), `CorpusCandidateRef`
-     (candidate_id, versión y hash resueltos solo mediante `get_approved_candidate`),
-     `CharacterProposal`, `CharacterProposalDecision` y `EffectiveComposition`. Entrada del agente:
-     JSON cerrado con `proposal_id`, `version`, `base_composition_sha256`, `text` completo de la
-     composición propuesta, `rationale` y lista no vacía de `{candidate_id, version}`; el core añade
-     el ConceptRef vigente y hashes. No usa parches: el prompt muestra texto completo/base/hash para
-     que la persona sepa exactamente qué acepta.
+     **Alcance cerrado.** Modificar `core/character/{models,__init__}.py` y
+     `core/runtime/{character,instance,cli,__init__}.py`; crear
+     `tests/test_{character_proposals,character_proposal_cli}.py` y ajustar únicamente las
+     aserciones de compatibilidad necesarias en `tests/test_{character_models,character_state,
+     character_cli,instance}.py`. No modificar `assimilation.py`, `persistence.py`, `workspace.py`,
+     review, adaptadores, paquetes, las cuatro plantillas v1,
+     `tests/expected_instance_templates.py` ni `reference/`. Reutilizar sin duplicar
+     `ReviewStatus`, `HumanConfirmationReceipt`, `Terminal`, `confirm_human_action`,
+     `_corpus_lock(..., guard=...)`, `_require_unlocked`, `_path_guard`, `load_strict_json`,
+     `encode_state`, `atomic_write_bytes` y `get_approved_candidate`.
 
-     Comandos previstos: `character effective show`, `character proposal add|list|show` y
-     `character proposal approve|reject`; add queda pendiente y approve/reject usan frases
-     `APROBAR-PROPUESTA ID vN NONCE`/`RECHAZAR-PROPUESTA ...`. La composición inicial es el último
-     concepto humano. Una aprobación solo se aplica si proposal es versión vigente y su base es la
-     composición efectiva actual; reemplaza el texto efectivo por el texto completo propuesto.
-     Rechazar no cambia nada; aceptar vuelve obsoletas las propuestas paralelas sobre la base vieja.
-     Un concepto humano nuevo reinicia la composición desde ese texto y deja fuera de la cadena las
-     propuestas ligadas a conceptos anteriores, sin borrar historial.
+     **Modelos inmutables y vocabulario.** En `core/character/models.py`, todos
+     `frozen=True, slots=True`, añadir:
 
-     Criterio: propuesta pendiente/rechazada/obsoleta nunca entra en la composición; cada paso
-     aprobado forma una cadena de hashes reproducible y citada solo a concepto humano + corpus
-     vigente aprobado; aceptación no significa aprobación de staff, aprendizaje, uso, publicación
-     ni canon. El detalle posterior fijará JSON, outputs y carreras sin cambiar estas decisiones.
+     - `ConceptRef(version: int, concept_sha256: str)`; versión positiva y hash de 64 hex
+       minúsculas. Siempre debe resolver al `ConceptVersion` exacto del mismo personaje.
+     - `CorpusCandidateRef(candidate_id: str, version: int, candidate_sha256: str)`; ID con la
+       regex ya usada, versión positiva y hash canónico. No guarda estado de revisión: al crear y
+       recargar se resuelve la pareja solo mediante `get_approved_candidate`, que acredita que es
+       la versión vigente `APPROVED` del snapshot inmutable.
+     - `CharacterProposal(proposal_id: str, version: int, created_revision: int,
+       concept: ConceptRef, base_composition_sha256: str, text: str, rationale: str,
+       citations: tuple[CorpusCandidateRef, ...], proposal_sha256: str = init=False,
+       result_composition_sha256: str = init=False, utf8_size: int = init=False)`.
+       `proposal_id` usa la misma regex; versión/revisión son enteros positivos; texto y rationale
+       son UTF-8 no vacíos, sin BOM/NUL ni controles salvo TAB/CR/LF, y se conservan carácter por
+       carácter. Las citas son una tupla no vacía, ordenada por el autor y sin repetir
+       `(candidate_id, version)`; su orden forma parte de la identidad.
+     - `CharacterProposalDecision(decision_id: str, decision_revision: int, proposal_id: str,
+       proposal_version: int, proposal_sha256: str, base_composition_sha256: str,
+       result_composition_sha256: str, review_status: ReviewStatus,
+       receipt: HumanConfirmationReceipt, evidence: SourceRef)`; solo `APPROVED` o `REJECTED`, y
+       `decision_id` exacta `proposal:<proposal_id>:v<version>`.
+     - `ProposalStatus(str, Enum)` exactamente `PENDING`, `APPROVED`, `REJECTED`, `OBSOLETE`.
+       Es una vista, no se persiste. `ProposalView(proposal, status, decision,
+       applied_to_effective)` exige coherencia: `APPROVED`/`REJECTED` tienen la decisión homónima;
+       `PENDING`/`OBSOLETE` no tienen decisión; solo una aprobada puede estar aplicada.
+     - `AppliedProposal(proposal: CharacterProposal, decision: CharacterProposalDecision)` exige
+       la misma clave/hash/base/resultado y decisión `APPROVED`.
+     - `EffectiveComposition(character_id: str, concept: ConceptRef, text: str,
+       composition_sha256: str, applied_proposals: tuple[AppliedProposal, ...])`; conserva el
+       texto completo y la cadena aprobada con su evidencia humana, en orden. Añadir resultados
+       `ProposalAddResult(character, proposal, created)` y
+       `ProposalDecisionResult(character, decision, created, effective)`.
+
+     `CharacterState.proposals` pasa a `tuple[CharacterProposal, ...]` y
+     `proposal_decisions` a `tuple[CharacterProposalDecision, ...]`; deja de rechazarlas. Conserva
+     `concepts` y sus bytes sin cambio. Añadir `current_proposal(proposal_id)` y
+     `decision_for(proposal)`. Reexportar los nuevos modelos y operaciones desde ambos
+     `__init__.py`, sin retirar exports de 4d1.
+
+     **Hashes y cadena efectiva.** No persistir un bloque `effective`: es una vista derivada para
+     no crear una segunda autoridad. Usar `canonical_json_bytes(..., pretty=False)` y estas formas
+     exactas:
+
+     1. La raíz de cada concepto es SHA-256 de
+        `{"character_id": ID, "concept": CONCEPT_REF, "text": TEXTO_CONCEPTO}`.
+     2. `proposal_sha256` es SHA-256 del registro de propuesta con las claves
+        `base_composition_sha256`, `citations`, `concept`, `created_revision`, `proposal_id`,
+        `rationale`, `text`, `utf8_size`, `version`; excluye los dos hashes derivados.
+     3. `result_composition_sha256` es SHA-256 de
+        `{"base_composition_sha256": BASE, "character_id": ID, "concept": CONCEPT_REF,
+        "proposal": {"proposal_id": ID_PROPUESTA, "proposal_sha256": HASH,
+        "version": N}, "text": TEXTO_PROPUESTO}`.
+
+     `CONCEPT_REF` tiene exactamente `concept_sha256`, `version`; cada cita persistida,
+     `candidate_id`, `candidate_sha256`, `version`. Una aprobación válida sustituye el texto por el
+     `text` completo de la propuesta y el hash efectivo por `result_composition_sha256`; no mezcla
+     campos ni aplica un parche. El siguiente paso debe citar ese hash como base. Aunque dos textos
+     coincidan, la cadena no puede volver accidentalmente a un hash anterior porque incluye base y
+     propuesta exactas.
+
+     **Orden de eventos y validación al recargar.** Cada alta real consume exactamente una revisión
+     del sobre. `created_revision`/`decision_revision` las hacen auditables sin cambiar el JSON de
+     conceptos de 4d1. Exigir que `revision == len(concepts) + len(proposals) +
+     len(proposal_decisions)`, que las revisiones explícitas sean únicas y estén en `1..revision`;
+     las posiciones restantes corresponden, en orden, a los conceptos v1..vN. Reproducir el evento
+     de revisión 1 a N:
+
+     - un concepto pasa a ser vigente y reinicia su cadena en la raíz anterior;
+     - una propuesta debe citar el concepto vigente y la composición efectiva de ese instante,
+       resolver todas sus citas aprobadas y ser la siguiente versión contigua de su ID;
+     - una decisión debe aparecer después de su propuesta y ser la única para esa clave;
+     - `APPROVED` exige que, en ese instante, la propuesta sea la versión mayor de su ID, cite el
+       concepto vigente y tenga por base la composición efectiva actual; entonces avanza la cadena;
+     - `REJECTED` puede registrar cualquier propuesta exacta anterior aún sin decisión, incluso si
+       ya está obsoleta, y nunca cambia la cadena.
+
+     Una edición, referencia no resuelta, revisión duplicada/fuera de orden, decisión opuesta,
+     aprobación con base vieja o hash derivado discordante es `INVALID_STATE` al cargar. Esta
+     reproducción también permite reconstruir la base completa que se mostró al decidir.
+
+     El estado final de cada propuesta se deriva, sin reescribir historial: si tiene decisión es
+     `APPROVED` o `REJECTED`; sin decisión solo es `PENDING` cuando pertenece al concepto vigente,
+     es la versión mayor actual de su ID y su base coincide con la composición efectiva final; en
+     cualquier otro caso es `OBSOLETE`. Una aprobada de un concepto anterior conserva
+     `status=APPROVED` como hecho histórico, pero `applied_to_effective=false`; solo los pasos
+     aprobados reproducidos desde el último concepto tienen `applied_to_effective=true`.
+
+     **Compatibilidad 4d1 y codec.** Mantener las cuatro claves de `content`. Sustituir solo los
+     arrays reservados por registros reales; un estado 4d1 con ambos `[]` carga sin migración ni
+     reescritura, con `revision == len(concepts)`, y produce la raíz del último concepto. La forma
+     de cada concepto y su evidencia no cambia. `encode_character_content` serializa los dos
+     historiales; `decode_character_state` conserva `forum_id` y `revision` y añade el keyword
+     opcional exacto
+     `candidate_resolver: Callable[[str, int], AssimilationCandidate] | None = None`. Si los arrays
+     están vacíos puede omitirse; si hay una cita debe existir y devolver el candidato exacto
+     aprobado o se rechaza el estado. En `instance.py`, crear
+     primero un `LoadedInstance` provisional con `characters=()` y pasar a `_load_characters` un
+     resolver que invoque `get_approved_candidate(...).candidate`; así no se crea un ciclo de
+     imports ni una segunda definición de «aprobado». `import_concept` conserva propuestas y
+     decisiones al añadir el concepto y su nueva revisión pasa a ser el siguiente evento; no las
+     borra ni las muta.
+
+     **JSON de entrada y persistido.** `character proposal add` lee con `load_strict_json` un objeto
+     con exactamente:
+
+     ```json
+     {
+       "proposal_id": "ajuste-inicial",
+       "version": 1,
+       "base_composition_sha256": "<64 hex de character effective show>",
+       "text": "Texto completo de la composición propuesta",
+       "rationale": "Motivo del ajuste y relación con las citas",
+       "citations": [
+         {"candidate_id": "creacion-limites", "version": 1}
+       ]
+     }
+     ```
+
+     No admite hashes de candidato, concepto, propuesta o resultado, estado, decisión, revisión,
+     receipt, evidence ni offsets. Rechazar claves extra/faltantes, duplicadas, BOM, JSON/UTF-8 no
+     válido, constantes no estándar, recursión, tipos inexactos y lista vacía. El core toma el
+     concepto vigente, exige que `base_composition_sha256` sea la composición efectiva actual y
+     llama a `get_approved_candidate` por cada referencia; no acepta pendiente, rechazada ni
+     sustituida. Una `UNCERTAINTY` aprobada se puede citar, pero sigue rotulada
+     `REQUIERE CONFIRMACIÓN` y aceptarla no la convierte en literal.
+
+     Cada elemento de `content.proposals` tiene exactamente:
+
+     ```json
+     {
+       "base_composition_sha256": "<hash base>",
+       "citations": [{"candidate_id": "creacion-limites", "candidate_sha256": "<hash candidato>", "version": 1}],
+       "concept": {"concept_sha256": "<hash concepto>", "version": 1},
+       "created_revision": 2,
+       "proposal_id": "ajuste-inicial",
+       "proposal_sha256": "<hash del registro>",
+       "rationale": "Motivo del ajuste y relación con las citas",
+       "result_composition_sha256": "<hash de la composición resultante>",
+       "text": "Texto completo de la composición propuesta",
+       "utf8_size": 43,
+       "version": 1
+     }
+     ```
+
+     Cada elemento de `content.proposal_decisions` tiene exactamente:
+
+     ```json
+     {
+       "base_composition_sha256": "<hash base>",
+       "decision_id": "proposal:ajuste-inicial:v1",
+       "decision_revision": 3,
+       "evidence": {
+         "locator": "instance://foro-neutral/characters/ejemplo/proposals/ajuste-inicial/v1/decision",
+         "section_or_passage": "proposal:ajuste-inicial:v1",
+         "sha256": "<hash del payload de evidencia>",
+         "source_id": "human-proposal-decision:ejemplo:ajuste-inicial:v1"
+       },
+       "proposal_id": "ajuste-inicial",
+       "proposal_sha256": "<hash de propuesta>",
+       "proposal_version": 1,
+       "receipt": {"confirmation_sha256": "<hash de frase>", "method": "TTY_NONCE_V1"},
+       "result_composition_sha256": "<hash resultante>",
+       "review_status": "APPROVED"
+     }
+     ```
+
+     El payload de evidencia contiene exactamente `character_id` y todas las claves persistidas de
+     la decisión salvo `evidence`; su SHA-256 es canónico compacto. Percent-encodear los segmentos
+     del locator. No guardar nonce, frase, hora, usuario, path del input, texto duplicado de la base,
+     estado derivado ni una supuesta decisión de staff.
+
+     **Operaciones e idempotencia.** En `core/runtime/character.py` añadir firmas públicas exactas:
+
+     ```python
+     def add_proposal(instance_root: Path, *, expected_core_root: Path,
+                      character_id: str, value: object) -> ProposalAddResult: ...
+     def list_proposals(instance: LoadedInstance, *,
+                        character_id: str) -> tuple[ProposalView, ...]: ...
+     def get_proposal(instance: LoadedInstance, *, character_id: str,
+                      proposal_id: str, version: int) -> ProposalView: ...
+     def get_effective_composition(instance: LoadedInstance, *,
+                                   character_id: str) -> EffectiveComposition: ...
+     def record_proposal_decision(instance_root: Path, *, expected_core_root: Path,
+                                  character_id: str, proposal_id: str, version: int,
+                                  review_status: ReviewStatus,
+                                  terminal: Terminal) -> ProposalDecisionResult: ...
+     ```
+
+     `add_proposal` no es acción humana y admite otras propuestas pendientes: se pueden registrar
+     varios IDs —o una versión siguiente de un ID— sobre la misma base. Repetir la misma clave con
+     la misma entrada semántica y referencias resueltas devuelve `created=False` sin lock/escritura
+     ni cambio de mtime; misma clave con otro contenido, salto de versión, o una nueva versión que
+     repita la anterior ignorando `version`, `created_revision` y hashes derivados es `CONFLICT`.
+     Un alta real toma el lock por personaje, con el `guard` de 4d1 antes/al tomar/antes de escribir,
+     recarga instancia y estado, vuelve a resolver las citas/base y escribe revisión +1. No hace
+     falta bloquear mientras se lee el input; un cambio antes de adquirir el lock se detecta por
+     revisión/base.
+
+     `record_proposal_decision` exige primero terminal interactiva y `APPROVED|REJECTED`; valida e
+     identifica la propuesta antes del prompt y llama a `_require_unlocked`. Un retry idéntico
+     devuelve la decisión existente sin nonce ni escritura; la decisión opuesta es `CONFLICT`.
+     Para una aprobación nueva exige `status=PENDING`; para un rechazo admite `PENDING` u
+     `OBSOLETE`. Tras la frase toma el mismo lock+guard, recarga y repite todas las condiciones;
+     cualquier cambio es `CONFLICT`. Añade una sola decisión con revisión +1. Fallos de escritura y
+     liberación conservan exactamente las garantías y mensajes del cerrojo 4d1.
+
+     Al aprobar una propuesta, las demás pendientes que compartían la base pasan a `OBSOLETE` por
+     cálculo, sin añadir decisiones falsas ni reescribirlas. Al importar un concepto humano nuevo,
+     toda la cadena efectiva se reinicia en ese texto; propuestas anteriores siguen en los arrays y
+     las no decididas pasan a `OBSOLETE`. Rechazar no cambia hash/texto efectivo ni el estado de las
+     demás. Para recuperar una alternativa obsoleta, el agente crea una versión nueva completa
+     basada en el hash efectivo vigente; nunca se «reactiva» el registro viejo.
+
+     **Prompt exacto y textos largos.** Para aprobar/rechazar mostrar siempre la base citada y la
+     propuesta completas, sin diff, truncado, paginador, prefijos por línea ni normalización. Para
+     que un texto largo siga siendo navegable, preceder cada bloque con su rol, hash y tamaño y
+     cerrarlo con un marcador distinto; la propuesta queda inmediatamente después de la base. Si
+     un texto no termina en LF, añadir solo el LF visual antes del footer. `CITAS` conserva el orden
+     y cada línea resuelve clase/dominio/estado/hash; una incertidumbre añade el sufijo indicado.
+     El prompt exacto es:
+
+     ```text
+     DECISIÓN HUMANA SOBRE PROPUESTA
+     Personaje: CHARACTER_ID
+     Propuesta: PROPOSAL_ID vN
+     Estado antes de decidir: PENDING|OBSOLETE
+     Decisión: APROBAR|RECHAZAR
+     Concepto humano citado: vC
+     Concepto SHA-256: CONCEPT_HASH
+     Base vigente ahora: SÍ|NO
+     Base composición SHA-256: BASE_HASH
+     Resultado composición SHA-256: RESULT_HASH
+     Propuesta SHA-256: PROPOSAL_HASH
+     Base bytes UTF-8: BASE_SIZE
+     Propuesta bytes UTF-8: PROPOSED_SIZE
+     Citas aprobadas (K):
+     Cita 1: CANDIDATE_ID vV | CLASS | DOMAIN | APPROVED | sha256=CANDIDATE_HASH[ | REQUIERE CONFIRMACIÓN]
+     Motivo exacto (hasta «Fin del motivo.»):
+     RATIONALE
+     Fin del motivo.
+     BASE CITADA — texto exacto (hasta «Fin de la base.»):
+     BASE_TEXT
+     Fin de la base.
+     PROPUESTA — texto completo que se aprueba/rechaza (hasta «Fin de la propuesta.»):
+     PROPOSED_TEXT
+     Fin de la propuesta.
+     Esta decisión solo compone el diseño del personaje; no es aprobación de staff, aprendizaje, utilizabilidad, publicación ni canon.
+     Escribe exactamente: APROBAR-PROPUESTA|RECHAZAR-PROPUESTA PROPOSAL_ID vN NONCE
+     >␠
+     ```
+
+     En una aprobación, `Estado=PENDING` y `Base vigente ahora=SÍ`; un rechazo puede mostrar
+     `OBSOLETE`/`NO`. `␠` es un espacio ASCII y no hay LF final. Usar `confirm_human_action` con
+     `phrase_prefix="APROBAR-PROPUESTA <id> v<n>"` o
+     `"RECHAZAR-PROPUESTA <id> v<n>"`; un intento, comparación byte a byte y mismo límite de
+     barrera A. Esta presentación duplica visualmente dos textos largos de forma deliberada: los
+     encabezados, hashes, tamaños y footers permiten distinguirlos, mientras que truncar o mostrar
+     solo un parche impediría saber qué texto completo se acepta.
+
+     **CLI exacta.** Añadir, con todos los argumentos mostrados obligatorios:
+
+     ```text
+     character effective show --instance RUTA --character-id ID
+     character proposal add --instance RUTA --character-id ID --input ARCHIVO_JSON
+     character proposal list --instance RUTA --character-id ID
+     character proposal show --instance RUTA --character-id ID --proposal-id ID --version N
+     character proposal approve --instance RUTA --character-id ID --proposal-id ID --version N
+     character proposal reject --instance RUTA --character-id ID --proposal-id ID --version N
+     ```
+
+     `add/list/show/effective show` admiten `--json`; `approve/reject` lo rechazan antes del prompt
+     con `INVALID_STATE`/3 y mensaje exacto `las decisiones humanas sobre propuestas no admiten
+     --json: ejecuta el comando en tu terminal y responde a la confirmación`. No hay `--yes`,
+     `--force`, nonce, respuesta por archivo/argumento/env ni selección implícita de versión.
+
+     Salida texto:
+
+     - add: `Propuesta añadida:` o `Propuesta ya existente:`, seguida de
+       `ID vN | PENDING|OBSOLETE | concepto=vC:HASH | base=HASH | resultado=HASH |
+       sha256=HASH | citas=K | aplicada=NO`, y `Revisión del personaje: R.`;
+     - list: una línea con esa forma por propuesta, en orden de inserción; vacío,
+       `No hay propuestas para «CHARACTER_ID».`; decisiones cambian el estado y
+       `aplicada=SÍ|NO`;
+     - show: la línea, `Decisión: ninguna (estado PENDING|OBSOLETE).` o
+       `Decisión: APPROVED|REJECTED (evidencia=HASH).`, las líneas de cita del prompt, bloque de
+       motivo, bloque completo de base y bloque completo de propuesta con los mismos footers;
+     - effective show: `Composición efectiva: CHARACTER_ID | concepto=vC:HASH |
+       sha256=COMPOSITION_HASH | pasos=K | bytes=SIZE`; una línea por paso
+       `Paso I: ID vN | propuesta=HASH | resultado=HASH | evidencia=HASH`; después el bloque
+       `Texto efectivo (exacto, hasta «Fin de la composición efectiva.»):`;
+     - decisión: `Propuesta aprobada|rechazada:` o
+       `Propuesta ya aprobada|ya rechazada: ID vN | sha256=HASH`,
+       `Composición efectiva: HASH.` y `Revisión del personaje: R.`.
+
+     JSON de éxito, con claves de raíz exactas:
+
+     - add: `ok`, `action="character.proposal.add"`, `character_id`, `created`, `instance`,
+       `proposal` (resumen), `state_revision`;
+     - list: `ok`, `action="character.proposal.list"`, `character_id`, `instance`, `proposals`
+       (resúmenes), `state_revision`;
+     - show: `ok`, `action="character.proposal.show"`, `applied_to_effective`, `base`
+       (`EffectiveComposition` completa en el instante de alta), `character_id`, `decision`
+       (registro persistido o `null`), `instance`, `proposal` (registro persistido), `status`,
+       `state_revision`;
+     - effective show: `ok`, `action="character.effective.show"`, `character_id`, `composition`,
+       `instance`, `state_revision`.
+
+     Un resumen de propuesta tiene exactamente `applied_to_effective`,
+     `base_composition_sha256`, `citation_count`, `concept`, `decision` (`null|APPROVED|REJECTED`),
+     `proposal_id`, `proposal_sha256`, `result_composition_sha256`, `status`, `version`.
+     `composition` tiene exactamente `applied_proposals` (cada paso: `decision_evidence_sha256`,
+     `proposal_id`, `proposal_sha256`, `result_composition_sha256`, `version`),
+     `composition_sha256`, `concept`, `text`, `utf8_size`. Mantener `_write_exact`, `_emit`,
+     `{"ok":false,"code","message"}` y códigos 0/2/3/4/5. Entrada/modelo/hash/cita/no encontrado
+     → 3; identidad/versión/base/revisión/lock/carrera → 4; E/S → 5.
+
+     **Tests.** `test_character_proposals.py`: validación/inmutabilidad de todos los modelos;
+     hashes con Unicode, CRLF y sin LF; JSON de entrada/persistido exactos; evidencia/locator;
+     citas vacías, duplicadas, pendientes, rechazadas, sustituidas, aprobadas e incertidumbre;
+     compatibilidad byte a byte con estados 4d1 vacíos; revisión como event log y toda manipulación;
+     raíz, dos aprobaciones encadenadas y reinicio por concepto; varias pendientes admitidas;
+     versión nueva y aprobación paralela vuelven obsoletas sin borrar; rechazo vigente/obsoleto;
+     aprobado histórico no aplicado; idempotencia/mtime y conflictos; prompt completo exacto con
+     base/propuesta largas, marcadores, hashes, LF/no LF, citas y frases; no TTY, error, EOF, case,
+     espacios, Ctrl+C y cambio durante el prompt; lock/guard/junction swaps, fallo de liberación,
+     replace fallido y concurrencia sin pérdida.
+
+     `test_character_proposal_cli.py`: parser y obligatoriedad; los seis comandos; add/list/show y
+     effective en texto/JSON con payload completo y LF/UTF-8 exactos; vacío, IDs/versiones/base
+     desconocidos y cuatro estados; dos altas pendientes, aprobación de una y obsolescencia de la
+     otra; concepto nuevo reinicia effective; `--json`, stdin/stdout no TTY y ausencia de bypass en
+     decisiones; códigos 2/3/4/5 y subprocess no interactivo sin mutación. Las suites existentes
+     prueban además que importar un concepto conserva historiales, que `load_instance` usa solo
+     candidatos vigentes aprobados y que prompts 4c1/4d1 y plantillas v1 siguen byte a byte.
+
+     **Criterios de aceptación.** El agente puede añadir varias propuestas completas sin decidirlas;
+     solo una frase humana exacta puede crear una decisión. Únicamente aprobaciones que eran
+     vigentes y estaban basadas en la composición efectiva del momento avanzan una cadena
+     reproducible. Propuestas pendientes, rechazadas u obsoletas jamás aportan texto; un concepto
+     nuevo es siempre la nueva raíz sin borrar historia. Toda cita se resuelve mediante
+     `get_approved_candidate`; entrada, estado y prompt contienen texto/hashes exactos. No hay
+     parche, modelo, red, SQLite, cambio de plantilla, staff, aprendizaje, uso, publicación ni canon.
+
+     Verificación exacta desde PowerShell:
+
+     ```powershell
+     py -3.11 -B -m unittest tests.test_character_proposals tests.test_character_proposal_cli tests.test_character_models tests.test_character_state tests.test_character_cli tests.test_instance -v
+     py -3.11 -B -m unittest tests.test_assimilation_decisions tests.test_assimilation_decision_cli -v
+     py -3.11 -B -m unittest discover -s tests -v
+     py -3.11 -B -m core.runtime.cli --json character effective show --instance '<RUTA_INSTANCIA>' --character-id 'ejemplo'
+     py -3.11 -B -m core.runtime.cli --json character proposal add --instance '<RUTA_INSTANCIA>' --character-id 'ejemplo' --input '<PROPUESTA_JSON>'
+     py -3.11 -B -m core.runtime.cli character proposal approve --instance '<RUTA_INSTANCIA>' --character-id 'ejemplo' --proposal-id 'ajuste-inicial' --version 1
+     py -3.11 -B -m core.runtime.cli --json character proposal show --instance '<RUTA_INSTANCIA>' --character-id 'ejemplo' --proposal-id 'ajuste-inicial' --version 1
+     rg -n "Nozomu|Naruto|Jcink|narutorol|account 59|275" core/character core/runtime/character.py tests/test_character_proposals.py tests/test_character_proposal_cli.py
+     git diff --check
+     git diff --name-only 67a7284 -- reference core/runtime/templates tests/expected_instance_templates.py
+     git status --short
+     ```
+
+     La validación funcional usa una instancia temporal externa: crear dos propuestas sobre la
+     misma base, aprobar una en TTY real, comprobar que la otra queda `OBSOLETE`, importar un
+     concepto v2, confirmar que effective vuelve a su raíz y verificar que todo el historial sigue
+     visible. El `rg` y el diff de rutas congeladas deben terminar sin salida.
 4e. [ ] **Ficha mínima y respuesta del staff.** Alcance: `core/character/models.py`,
     `core/runtime/{character,instance,cli}.py` y `tests/test_{character_draft,staff_review_cli}.py`;
     las instrucciones v1 siguen congeladas. Crear desde contenido manual del agente un
@@ -2347,19 +2701,10 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
 
 ## Riesgos y dudas abiertas
 
-No hay dudas que bloqueen 4d1. Se adoptan las opciones conservadoras: instrucciones v1 congeladas
-y un schema nuevo para cambios futuros; `work/integrity.json` solo para estáticos y namespace
-`characters/` cerrado con sobres/lock por personaje; concepto Markdown declarado personalmente con
-barrera A; propuesta futura como texto completo citado, no parche. El borrado completo de un
-directorio de personaje no puede distinguirse globalmente de «nunca existió» sin un índice central:
-`instance status` valida todos los presentes y una consulta por ID detecta la ausencia. Se acepta en
-esta persistencia provisional para evitar una falsa transacción entre índice y estados; SQLite del
-incremento 9 dará inventario transaccional.
-
-La barrera sigue sin demostrar humanidad o autoría frente a un agente hostil que importe la API con
-un `Terminal` falso, maneje una pseudo-TTY o modifique el core. En 4d1 significa «la persona vio y
-adoptó este texto exacto como su concepto», no una prueba forense de quién pulsó cada tecla. Una
-garantía fuerte exigiría identidad/credencial o un proceso externo, fuera de esta rebanada.
+No hay dudas que deba decidir el usuario para implementar 4d2. El detalle adopta las decisiones ya
+aprobadas: propuestas completas y paralelas, obsolescencia derivada sin borrar historial, cadena
+efectiva reproducible, citas resueltas solo contra corpus vigente aprobado y barrera A con su límite
+ya aceptado. No se cambia la política de instrucciones v1.
 
 1. **Antes del incremento 14: ¿cuándo y cómo elegir el segundo caso de generalidad?**
    - A: mantener la elección aplazada y, al llegar al incremento 14, escoger un foro real no Naruto
@@ -2836,8 +3181,9 @@ garantía fuerte exigiría identidad/credencial o un proceso externo, fuera de e
     cerrojo.
   - Resultado tras las correcciones: 42 tests de 4d1 y 391 en total, OK en `py -3.11` y
     `py -3.14`, sin omitidos.
-- Validación funcional pendiente: `character concept import` en una terminal integrada real
-  (la shell de Claude no es interactiva).
+- Validación funcional: el 12-10-2026 el usuario ejecutó `character concept import` en la
+  terminal integrada de VS Code sobre `%TEMP%\roleplay-prueba-4d1`. Claude lo verificó: `aria v1`
+  con recibo `TTY_NONCE_V1`, revisión 1 y texto idéntico al archivo de entrada.
 - Decisiones de detalle que el plan no fijaba:
   - Cerrojo: en lugar de copiar la semántica de 4c1, `_corpus_lock` y `_require_unlocked`
     reciben un `subject` («el corpus» por defecto, «este personaje» aquí) y se reutilizan; los
@@ -2876,3 +3222,69 @@ garantía fuerte exigiría identidad/credencial o un proceso externo, fuera de e
   - Retrabajo: dos rondas de corrección (2 hallazgos, uno en dos pasos); dos tests con
     particularidades de Windows (mayúsculas en nombres, saltos de `write_text`) corregidos
     antes de la revisión; reemplazos por línea de comandos fallidos sin efectos.
+
+### Incremento 4d2 — propuestas citadas y composición efectiva
+- Rama: `feature/incremento-4-rebanada-vertical` (base `67a7284`; estado de trabajo sin commit).
+- Cambios hechos: `core/character/models.py` (modelos de propuesta, decisión, vista, paso
+  aplicado y composición efectiva; reproducción de la cadena de eventos en
+  `CharacterState`; codec con `candidate_resolver`), `core/character/__init__.py`;
+  `core/runtime/character.py` (`add_proposal`, `list_proposals`, `get_proposal`,
+  `get_effective_composition`, `record_proposal_decision`, más `citation_lines` y
+  `proposal_blocks` para prompt y CLI), `core/runtime/instance.py` (instancia provisional y
+  resolvedor vía `get_approved_candidate`), `core/runtime/cli.py` (`character effective show`,
+  `character proposal add|list|show|approve|reject`) y `core/runtime/__init__.py`. Tests nuevos
+  `tests/test_character_{proposals,proposal_cli}.py`; ajustes de compatibilidad en
+  `tests/test_character_{models,state}.py`.
+- Resultado de los tests: suites de 4d2 → 45 OK; suite completa → 436 OK en `py -3.11` y
+  `py -3.14`, sin omitidos (tras la corrección de REV4D2-01: 46 y 437). Prueba por subprocess sobre una instancia temporal (ya borrada):
+  `effective show --json`, `proposal add --json` (`created=true`, `PENDING`), `approve` sin TTY
+  rechazado con código 3 sin escribir y `show --json` (`PENDING`, revisión 2). `rg` y el diff de
+  rutas congeladas desde `67a7284` sin salida; `git diff --check` limpio.
+- Validación funcional: PENDIENTE (aprobación real en TTY; ver «Cómo verificarlo» del plan).
+- Desviaciones y decisiones de detalle:
+  - `CharacterProposal` lleva `character_id` como primer campo (no se persiste; lo inyecta el
+    decodificador), porque `result_composition_sha256` lo incluye y es `init=False`.
+  - `ProposalView` añade `base`: la composición efectiva en el instante del alta, que el prompt
+    y `proposal show` muestran completa y que el JSON de `show` exige.
+  - `CharacterState` añade `replay` (`CharacterReplay(effective, views)`, `init=False`,
+    excluido de la igualdad), `revision` (longitud del registro de eventos) y `view(id, n)`;
+    la reproducción se ejecuta al construir el estado, así que un registro inválido no puede
+    existir en memoria. `concept_root`, `make_proposal_decision`, `proposal_record`,
+    `decision_record` y `composition_record` son auxiliares públicos.
+  - `ReviewStatus` se importa arriba en `models.py`: `core.review.models` no importa
+    `core.runtime`, así que no hay ciclo.
+  - `_append_concept` usa ahora el mismo escritor de eventos que propuestas y decisiones
+    (`_write_event`: cerrojo + `guard` antes, al tomar y antes de escribir; recarga la instancia
+    completa bajo el cerrojo, con el resolvedor de citas). Sin ello, importar un concepto con
+    propuestas citadas fallaba. El test 4d1 del cambio de junction antes de escribir intercepta
+    ahora `encode_state` en lugar de `load_state` (mismo instante: tras la relectura y antes del
+    último `guard`). El mensaje de conflicto 4d1 no cambia.
+  - `proposal show` incluye la cabecera `Citas aprobadas (K):` antes de las líneas de cita, igual
+    que el prompt. El JSON de `proposal add` informa `instance` como la raíz lógica de la
+    instancia.
+  - En `add`, las validaciones de entrada (ID, versión, hash con formato, textos) dan
+    `INVALID_STATE` antes de comprobar identidad, versión y base (`CONFLICT`). Repetir la clave
+    con la misma entrada compara base, texto, motivo y citas resueltas.
+  - En `approve`/`reject`, una propuesta o versión inexistente se rechaza antes del prompt
+    (`INVALID_STATE`); una decisión opuesta, aprobar algo no `PENDING` o cualquier cambio bajo el
+    cerrojo es `CONFLICT`.
+- Revisión de Codex: un hallazgo, REV4D2-01 (Baja): `ProposalView` aceptaba una decisión o una
+  base ajenas a su propuesta. Corregido con validación de tipo, `decision.matches(proposal)` y
+  base del mismo personaje, concepto y hash, más la regresión
+  `test_views_reject_a_foreign_decision_or_base`. Verificación en el mismo hilo: resuelto y 4d2
+  aprobado. Archivada en `docs/analisis/incremento-4d2-revision.md`.
+- Métricas por agente (solo telemetría verificable; ausente = NO DISPONIBLE):
+  - Codex (`gpt-5.6-sol`, high), contadores de `~/.codex/sessions` (hilos exclusivos de 4d2,
+    totales = incremento de la tarea):
+    - Análisis `01a1319f-76c3-7312-886a-45d699c33428` (1 encargo: detalle de 4d2): entrada
+      3.281.871 (caché leída 3.140.608), salida 26.116 (razonamiento 13.733).
+    - Revisión `01a131b7-fc84-7902-883d-caf9b8f63da3` (2 encargos: revisión + 1 verificación):
+      entrada 4.762.289 (caché leída 4.616.448), salida 17.671 (razonamiento 9.609).
+    - Escritura de caché 0; errores/cancelaciones 0; coste o cuota NO DISPONIBLE.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde «Vale, confirmo, puedes proseguir»
+    hasta antes del commit; 71 respuestas de API deduplicadas por id): entrada 142, salida
+    106.966, caché leída 14.923.883, caché escrita 203.846. Coste NO DISPONIBLE.
+  - Retrabajo: una ronda de corrección (1 hallazgo). Antes de la revisión: un bug propio
+    (importar un concepto con propuestas citadas no pasaba el resolvedor) detectado por los
+    tests nuevos, un test 4d1 que fijaba una revisión arbitraria, un test propio con una
+    aserción por subcadena, y un heredoc fallido sin efectos.

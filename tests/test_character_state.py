@@ -310,16 +310,16 @@ class ImportTest(CharacterCase):
     def test_junction_swap_right_before_writing_writes_nothing_outside(self):
         self.import_()
         self.write_input("versión dos\n")
-        real_load_state = character_module.load_state
+        real_encode_state = character_module.encode_state
         swapped = {}
 
-        def racing_load_state(path):
-            result = real_load_state(path)
+        def racing_encode_state(content, *, revision):
+            result = real_encode_state(content, revision=revision)
             if "aside" not in swapped:
                 swapped["aside"] = self.swap_for_junction()
             return result
 
-        with mock.patch.object(character_module, "load_state", racing_load_state):
+        with mock.patch.object(character_module, "encode_state", racing_encode_state):
             with self.assertRaises(CharacterError) as ctx:
                 self.import_(version=2)
         self.assertIn(ctx.exception.code, ("UNSAFE_DESTINATION", "CONFLICT"))

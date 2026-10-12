@@ -13,7 +13,19 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from adapters.manual import ManualAdapterError, load_manual_dossier
-from core.character.models import CharacterError, ConceptVersion, concept_record, concept_summary
+from core.character.models import (
+    CharacterError,
+    CharacterProposal,
+    ConceptVersion,
+    EffectiveComposition,
+    ProposalView,
+    composition_record,
+    concept_record,
+    concept_summary,
+    decision_record,
+    proposal_record,
+)
+from core.review.models import ReviewStatus
 from core.review.models import ReviewStatus
 from core.runtime.assimilation import (
     AssimilationCandidate,
@@ -27,7 +39,18 @@ from core.runtime.assimilation import (
     close_assimilation,
     record_candidate_decision,
 )
-from core.runtime.character import get_concept, import_concept, list_concepts
+from core.runtime.character import (
+    add_proposal,
+    citation_lines,
+    get_concept,
+    get_effective_composition,
+    get_proposal,
+    import_concept,
+    list_concepts,
+    list_proposals,
+    proposal_blocks,
+    record_proposal_decision,
+)
 from core.runtime.instance import (
     ApprovedCorpusEntry,
     InstanceError,
@@ -200,6 +223,42 @@ def _build_parser() -> argparse.ArgumentParser:
     concept_show.add_argument("--character-id", required=True)
     concept_show.add_argument("--version", required=True, type=_positive_int)
     concept_show.set_defaults(handler=_concept_show, action_name="character.concept.show")
+    effective = character_groups.add_parser("effective", help="composición efectiva del personaje")
+    effective_actions = effective.add_subparsers(dest="effective_action", required=True,
+                                                 metavar="acción")
+    effective_show = effective_actions.add_parser(
+        "show", help="muestra la composición efectiva: el concepto vigente más las propuestas "
+                     "aprobadas sobre él")
+    _instance_argument(effective_show)
+    effective_show.add_argument("--character-id", required=True)
+    effective_show.set_defaults(handler=_effective_show, action_name="character.effective.show")
+    proposal = character_groups.add_parser("proposal", help="propuestas del agente")
+    proposal_actions = proposal.add_subparsers(dest="proposal_action", required=True,
+                                               metavar="acción")
+    proposal_add = proposal_actions.add_parser(
+        "add", help="registra una propuesta completa desde un JSON; no cambia nada hasta que la "
+                    "apruebes")
+    _instance_argument(proposal_add)
+    proposal_add.add_argument("--character-id", required=True)
+    proposal_add.add_argument("--input", required=True, type=Path, help="archivo JSON")
+    proposal_add.set_defaults(handler=_proposal_add, action_name="character.proposal.add")
+    proposal_list = proposal_actions.add_parser("list", help="lista las propuestas y su estado")
+    _instance_argument(proposal_list)
+    proposal_list.add_argument("--character-id", required=True)
+    proposal_list.set_defaults(handler=_proposal_list, action_name="character.proposal.list")
+    for name, handler, help_text in (
+        ("show", _proposal_show, "muestra una propuesta con su base y su texto completos"),
+        ("approve", _proposal_approve, "aprueba una propuesta; pide teclear una frase con un "
+                                       "código"),
+        ("reject", _proposal_reject, "rechaza una propuesta; pide teclear una frase con un "
+                                     "código"),
+    ):
+        sub = proposal_actions.add_parser(name, help=help_text)
+        _instance_argument(sub)
+        sub.add_argument("--character-id", required=True)
+        sub.add_argument("--proposal-id", required=True)
+        sub.add_argument("--version", required=True, type=_positive_int)
+        sub.set_defaults(handler=handler, action_name=f"character.proposal.{name}")
     return parser
 
 
@@ -683,6 +742,144 @@ def _concept_show(args: argparse.Namespace) -> int:
     _line(f"Evidencia: {concept.evidence.sha256}")
     _exact_block("Texto (exacto, hasta «Fin del concepto.»):", concept.text, "Fin del concepto.")
     return EXIT_OK
+
+
+def _effective_show(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    composition = get_effective_composition(instance, character_id=args.character_id)
+    revision = _character_revision(instance, args.character_id)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "character_id": args.character_id,
+               "composition": composition_record(composition),
+               "instance": str(instance.instance_root), "state_revision": revision})
+        return EXIT_OK
+    _line(f"Composición efectiva: {args.character_id} | {_concept_ref(composition)} | "
+          f"sha256={composition.composition_sha256} | "
+          f"pasos={len(composition.applied_proposals)} | bytes={composition.utf8_size}")
+    for index, step in enumerate(composition.applied_proposals, start=1):
+        _line(f"Paso {index}: {step.proposal.proposal_id} v{step.proposal.version} | "
+              f"propuesta={step.proposal.proposal_sha256} | "
+              f"resultado={step.proposal.result_composition_sha256} | "
+              f"evidencia={step.decision.evidence.sha256}")
+    _exact_block("Texto efectivo (exacto, hasta «Fin de la composición efectiva.»):",
+                 composition.text, "Fin de la composición efectiva.")
+    return EXIT_OK
+
+
+def _proposal_add(args: argparse.Namespace) -> int:
+    value = load_strict_json(args.input)
+    result = add_proposal(args.instance, expected_core_root=_checkout(),
+                          character_id=args.character_id, value=value)
+    proposal = result.proposal
+    view = result.character.state.view(proposal.proposal_id, proposal.version)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "character_id": args.character_id,
+               "created": result.created,
+               "instance": str(result.character.character_root.parent.parent),
+               "proposal": _proposal_summary(view),
+               "state_revision": result.character.state_revision})
+        return EXIT_OK
+    prefix = "Propuesta añadida" if result.created else "Propuesta ya existente"
+    _line(f"{prefix}: {_proposal_line(view)}")
+    _line(f"Revisión del personaje: {result.character.state_revision}.")
+    return EXIT_OK
+
+
+def _proposal_list(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    views = list_proposals(instance, character_id=args.character_id)
+    revision = _character_revision(instance, args.character_id)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "character_id": args.character_id,
+               "instance": str(instance.instance_root),
+               "proposals": [_proposal_summary(v) for v in views], "state_revision": revision})
+        return EXIT_OK
+    if not views:
+        _line(f"No hay propuestas para «{args.character_id}».")
+    for view in views:
+        _line(_proposal_line(view))
+    return EXIT_OK
+
+
+def _proposal_show(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    view = get_proposal(instance, character_id=args.character_id,
+                        proposal_id=args.proposal_id, version=args.version)
+    revision = _character_revision(instance, args.character_id)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name,
+               "applied_to_effective": view.applied_to_effective,
+               "base": composition_record(view.base), "character_id": args.character_id,
+               "decision": None if view.decision is None else decision_record(view.decision),
+               "instance": str(instance.instance_root), "proposal": proposal_record(view.proposal),
+               "status": view.status.value, "state_revision": revision})
+        return EXIT_OK
+    _line(_proposal_line(view))
+    if view.decision is None:
+        _line(f"Decisión: ninguna (estado {view.status.value}).")
+    else:
+        _line(f"Decisión: {view.decision.review_status.value} "
+              f"(evidencia={view.decision.evidence.sha256}).")
+    for line in citation_lines(instance, view.proposal):
+        _line(line)
+    _write_exact(proposal_blocks(view))
+    return EXIT_OK
+
+
+def _proposal_approve(args: argparse.Namespace) -> int:
+    return _proposal_decide(args, ReviewStatus.APPROVED)
+
+
+def _proposal_reject(args: argparse.Namespace) -> int:
+    return _proposal_decide(args, ReviewStatus.REJECTED)
+
+
+def _proposal_decide(args: argparse.Namespace, review_status: ReviewStatus) -> int:
+    if args.json:
+        raise CharacterError("INVALID_STATE", "las decisiones humanas sobre propuestas no admiten "
+                                              "--json: ejecuta el comando en tu terminal y "
+                                              "responde a la confirmación")
+    result = record_proposal_decision(args.instance, expected_core_root=_checkout(),
+                                      character_id=args.character_id,
+                                      proposal_id=args.proposal_id, version=args.version,
+                                      review_status=review_status, terminal=_SystemTerminal())
+    word = "aprobada" if review_status is ReviewStatus.APPROVED else "rechazada"
+    prefix = f"Propuesta {word}" if result.created else f"Propuesta ya {word}"
+    decision = result.decision
+    _line(f"{prefix}: {decision.proposal_id} v{decision.proposal_version} | "
+          f"sha256={decision.proposal_sha256}")
+    _line(f"Composición efectiva: {result.effective.composition_sha256}.")
+    _line(f"Revisión del personaje: {result.character.state_revision}.")
+    return EXIT_OK
+
+
+def _proposal_line(view: ProposalView) -> str:
+    proposal = view.proposal
+    return (f"{proposal.proposal_id} v{proposal.version} | {view.status.value} | "
+            f"{_concept_ref(proposal)} | base={proposal.base_composition_sha256} | "
+            f"resultado={proposal.result_composition_sha256} | "
+            f"sha256={proposal.proposal_sha256} | citas={len(proposal.citations)} | "
+            f"aplicada={'SÍ' if view.applied_to_effective else 'NO'}")
+
+
+def _proposal_summary(view: ProposalView) -> dict[str, object]:
+    proposal = view.proposal
+    return {
+        "applied_to_effective": view.applied_to_effective,
+        "base_composition_sha256": proposal.base_composition_sha256,
+        "citation_count": len(proposal.citations),
+        "concept": proposal.concept.as_json(),
+        "decision": None if view.decision is None else view.decision.review_status.value,
+        "proposal_id": proposal.proposal_id,
+        "proposal_sha256": proposal.proposal_sha256,
+        "result_composition_sha256": proposal.result_composition_sha256,
+        "status": view.status.value,
+        "version": proposal.version,
+    }
+
+
+def _concept_ref(item: EffectiveComposition | CharacterProposal) -> str:
+    return f"concepto=v{item.concept.version}:{item.concept.concept_sha256}"
 
 
 def _character_revision(instance: LoadedInstance, character_id: str) -> int:

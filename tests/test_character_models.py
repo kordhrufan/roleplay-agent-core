@@ -95,7 +95,7 @@ class CharacterStateTest(unittest.TestCase):
                 with self.assertRaises(CharacterError):
                     CharacterState("aria", concepts)
 
-    def test_reserved_tuples_must_be_empty(self):
+    def test_histories_must_hold_their_models(self):
         with self.assertRaises(CharacterError):
             CharacterState("aria", (concept(),), proposals=("x",))
         with self.assertRaises(CharacterError):
@@ -113,7 +113,7 @@ class CodecTest(unittest.TestCase):
         self.assertEqual(set(self.content["concepts"][0]),
                          {"authorship", "concept_sha256", "evidence", "receipt", "text",
                           "utf8_size", "version"})
-        self.assertEqual(decode_character_state(self.content, forum_id="foro", revision=3),
+        self.assertEqual(decode_character_state(self.content, forum_id="foro", revision=2),
                          self.state)
 
     def test_decode_rejects_tampering(self):
@@ -136,12 +136,12 @@ class CodecTest(unittest.TestCase):
                 content = copy.deepcopy(self.content)
                 change(content)
                 with self.assertRaises(CharacterError):
-                    decode_character_state(content, forum_id="foro", revision=3)
+                    decode_character_state(content, forum_id="foro", revision=2)
 
     def test_decode_checks_forum_and_revision(self):
         with self.assertRaises(CharacterError):
-            decode_character_state(self.content, forum_id="otro-foro", revision=3)
-        for revision in (0, -1, True):
+            decode_character_state(self.content, forum_id="otro-foro", revision=2)
+        for revision in (0, -1, True, 1, 3):
             with self.subTest(revision=revision):
                 with self.assertRaises(CharacterError):
                     decode_character_state(self.content, forum_id="foro", revision=revision)
