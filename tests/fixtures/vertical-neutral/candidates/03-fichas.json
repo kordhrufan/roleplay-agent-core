@@ -1,0 +1,17 @@
+{
+  "candidate_id": "fichas",
+  "version": 1,
+  "domain": "RULES",
+  "class": "LITERAL",
+  "text": "Cada ficha incluye nombre",
+  "scope": "foro",
+  "citations": [
+    {
+      "dossier_section": "character_creation",
+      "source_id": "manual-foro",
+      "source_version": "1",
+      "declared_passage": "Fichas",
+      "quote": "Cada ficha incluye nombre"
+    }
+  ]
+}

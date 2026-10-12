@@ -2985,7 +2985,7 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
      respuesta atribuida al staff. Reiniciar entre fases, repetir create/record para comprobar no-op,
      verificar que ambas versiones/respuesta sobreviven y que composición, publicación, corpus y
      plantillas no cambiaron. Ambos `rg` y el diff de rutas congeladas deben quedar vacíos.
-4f. [ ] **Recorrido vertical y contrato integrado.** Alcance:
+4f. [x] **Recorrido vertical y contrato integrado.** Alcance:
     `tests/fixtures/vertical-neutral/` solo para JSON/Markdown de entrada neutros,
     `tests/test_vertical_slice.py` y correcciones estrictamente necesarias en archivos 4a–4e.
     Copiar los inputs fixture a temporales externos antes de importarlos. Recorrer: expediente →
@@ -3665,7 +3665,13 @@ subincremento mínimo. No se cambia la política de instrucciones v1.
   NOT_CONFIRMED`), `draft show --json` y `staff record` sin TTY rechazado con código 3 sin
   escribir. `rg` de nombres del legado vacío; diff de rutas congeladas y de `core/review` desde
   `130d0bf` vacío; `git diff --check` limpio.
-- Validación funcional: PENDIENTE (registro en TTY real; ver el plan).
+- Validación funcional: el 12-10-2026 el usuario registró en la terminal integrada de VS Code
+  una respuesta `REJECTED` («cambios solicitados») sobre `character-sheet v1` e importó el
+  concepto v2, en `%TEMP%\roleplay-prueba-4e` (preparada por Claude con terminal simulada:
+  concepto v1, una propuesta aprobada y la ficha v1). Claude lo verificó: respuesta en la
+  revisión 5 y concepto v2 en la 6, ambos con recibo `TTY_NONCE_V1`; texto, locator y fecha
+  idénticos al JSON; v2 idéntico al archivo; la ficha v1 `STALE | CURRENT | REJECTED |
+  NOT_CONFIRMED` con razón `EFFECTIVE_COMPOSITION_CHANGED`, persistida aún como `ACTIVE`.
 - Desviaciones y decisiones de detalle:
   - `CharacterDraftRecord` lleva `character_id` y `forum_id`, y `StaffResponse` lleva
     `character_id`, como primeros campos no persistidos (los inyecta el decodificador), igual
@@ -3710,3 +3716,52 @@ subincremento mínimo. No se cambia la política de instrucciones v1.
     test propias (archivo intruso que invalida la instancia, versión no pasada al JSON de
     respuesta, código 3 frente a 5); una rama creada por error y borrada sin commits; un
     heredoc fallido sin efectos.
+
+### Incremento 4f — recorrido vertical y contrato integrado
+- Rama: `feature/incremento-4-rebanada-vertical` (base `24874f3`; estado de trabajo sin commit).
+  Sin análisis nuevo de Codex: la entrada 4f del plan (ajustada por Codex en 4e) basta para un
+  subincremento solo de pruebas.
+- Cambios hechos: `tests/fixtures/vertical-neutral/` (ocho candidatos de las cuatro clases,
+  conceptos v1/v2, dos propuestas, fichas v1/v2, respuesta del staff y `LEEME.md`) y
+  `tests/test_vertical_slice.py`. No hizo falta corregir ningún archivo de 4a–4e.
+- Diseño del recorrido: el expediente es `tests/fixtures/dossiers/minimal-neutral`; expediente y
+  entradas se copian a una carpeta temporal externa, y los marcadores
+  `__BASE_COMPOSITION_SHA256__`/`__DRAFT_SHA256__` se sustituyen en copias con los hashes que
+  devuelve la CLI. Cada paso del agente es un proceso nuevo de `core.runtime.cli --json`
+  (reinicio entre fases); los pasos humanos (decisiones, cierre, conceptos, decisiones de
+  propuestas y respuesta del staff) van por la API con terminal simulada, porque una TTY real no
+  se puede automatizar, y recargan el estado del disco. «Sin red, modelo ni base de datos» se
+  vigila sobre la ejecución con audit hooks de Python (eventos de red, procesos, SQLite, HTTP y
+  navegador): en cada hijo, un intento deja un marcador y termina con `os._exit(97)`, que ningún
+  `except` oculta; en los pasos humanos, un hook del padre (inerte fuera de `watched()`) lo
+  registra y se comprueba después. Cada
+  repetición (init, candidato, decisión, cierre, instancia, concepto, propuesta, rechazo, ficha y
+  respuesta) se comprueba byte a byte sobre todo el workspace y la instancia.
+- Contratos comprobados: corpus sin el candidato rechazado; ficha v1 citando solo el corpus de
+  la propuesta aplicada; v1 `STALE` por composición sin nueva revisión y después por
+  sustitución; propuestas `APPROVED` (no aplicada tras el concepto v2) y `REJECTED`; respuesta
+  del staff que no cambia la composición ni la publicación (`NOT_CONFIRMED`); archivos estáticos
+  de la instancia intactos y `characters/ejemplo/state.json` como único archivo nuevo;
+  `AGENTS.md`/`CLAUDE.md` iguales a las plantillas v1 congeladas; ningún texto del legado.
+  `GuardTest` demuestra que los vigilantes detectan un intento capturado por el propio código.
+- Resultado de los tests: 5 tests nuevos; suite completa → 474 OK en `py -3.11` y `py -3.14`,
+  sin omitidos. Sin cambios en `core/`, `reference/` ni `tests/expected_instance_templates.py`
+  desde `24874f3`; `git diff --check` limpio; fixtures con LF.
+- Revisión de Codex (hilo `01a13200-00e0-7b03-8679-c6f17f9292d4`): un hallazgo, REV4F-01 (Media):
+  la lista negra global de imports de `core/` no equivalía al contrato (prohibía dependencias
+  opcionales futuras no recorridas y no veía invocaciones dinámicas ni excepciones capturadas).
+  Sustituida por la vigilancia con audit hooks descrita arriba y por `GuardTest`. Verificación en
+  el mismo hilo: resuelto y 4f aprobado. Archivada en `docs/analisis/incremento-4f-revision.md`.
+- Métricas por agente (solo telemetría verificable; ausente = NO DISPONIBLE):
+  - Codex (`gpt-5.6-sol`, high), revisión `01a13200-…` (2 encargos: revisión + 1 verificación):
+    entrada 2.149.852 (caché leída 2.055.424), salida 20.372 (razonamiento 13.925); escritura de
+    caché 0; errores/cancelaciones 0; sin hilo de análisis; coste o cuota NO DISPONIBLE.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde «Listo, prosigue con 4F» hasta antes
+    del commit; incluye la verificación de la prueba manual de 4e; 17 respuestas de API
+    deduplicadas por id): entrada 34, salida 28.511, caché leída 6.025.128, caché escrita
+    38.064. Coste NO DISPONIBLE.
+  - Retrabajo: una ronda de corrección (1 hallazgo); antes de la revisión, una clave JSON mal
+    supuesta en el test (`entries` en lugar de `candidates`).
+- Incremento 4 completo (4a–4f). Validación funcional de 4f: no aplica más allá de las de 4c1,
+  4d1, 4d2 y 4e, ya hechas en TTY real; el recorrido completo en un foro real queda para cuando
+  el usuario aporte su expediente.

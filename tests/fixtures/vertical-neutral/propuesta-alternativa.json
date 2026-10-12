@@ -1,0 +1,17 @@
+{
+  "proposal_id": "origen",
+  "version": 1,
+  "base_composition_sha256": "__BASE_COMPOSITION_SHA256__",
+  "text": "# Personaje de ejemplo\nViajera nacida en la región costera del norte.\n",
+  "rationale": "Ancla el origen en la ambientación aprobada.",
+  "citations": [
+    {
+      "candidate_id": "mundo",
+      "version": 1
+    },
+    {
+      "candidate_id": "costa",
+      "version": 1
+    }
+  ]
+}

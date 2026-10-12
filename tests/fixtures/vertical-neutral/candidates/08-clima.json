@@ -1,0 +1,17 @@
+{
+  "candidate_id": "clima",
+  "version": 1,
+  "domain": "WORLD",
+  "class": "UNCERTAINTY",
+  "text": "No consta el clima de la costa norte.",
+  "scope": "foro",
+  "citations": [
+    {
+      "dossier_section": "setting",
+      "source_id": "mundo-base",
+      "source_version": "2",
+      "declared_passage": null,
+      "quote": "- Costa norte"
+    }
+  ]
+}

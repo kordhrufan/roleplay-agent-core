@@ -1,0 +1,17 @@
+{
+  "candidate_id": "formato",
+  "version": 1,
+  "domain": "RULES",
+  "class": "LITERAL",
+  "text": "Los posts se escriben en tercera persona",
+  "scope": "foro",
+  "citations": [
+    {
+      "dossier_section": "platform_format",
+      "source_id": "formato-posts",
+      "source_version": "1",
+      "declared_passage": "Formato",
+      "quote": "Los posts se escriben en tercera persona"
+    }
+  ]
+}

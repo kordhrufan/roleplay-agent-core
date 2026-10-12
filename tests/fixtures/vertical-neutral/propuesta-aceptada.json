@@ -1,0 +1,17 @@
+{
+  "proposal_id": "convivencia",
+  "version": 1,
+  "base_composition_sha256": "__BASE_COMPOSITION_SHA256__",
+  "text": "# Personaje de ejemplo\nViajera de la costa norte que trata con respeto al resto de participantes.\n",
+  "rationale": "Incorpora la norma de convivencia aprobada; el clima sigue sin confirmar.",
+  "citations": [
+    {
+      "candidate_id": "normas",
+      "version": 1
+    },
+    {
+      "candidate_id": "clima",
+      "version": 1
+    }
+  ]
+}

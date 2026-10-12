@@ -1,0 +1,17 @@
+{
+  "candidate_id": "normas",
+  "version": 1,
+  "domain": "RULES",
+  "class": "LITERAL",
+  "text": "Trata con respeto al resto de participantes",
+  "scope": "foro",
+  "citations": [
+    {
+      "dossier_section": "forum_rules",
+      "source_id": "manual-foro",
+      "source_version": "1",
+      "declared_passage": "Convivencia",
+      "quote": "Trata con respeto al resto de participantes"
+    }
+  ]
+}

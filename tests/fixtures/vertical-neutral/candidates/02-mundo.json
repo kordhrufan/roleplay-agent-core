@@ -1,0 +1,17 @@
+{
+  "candidate_id": "mundo",
+  "version": 1,
+  "domain": "WORLD",
+  "class": "LITERAL",
+  "text": "# Mundo base",
+  "scope": "foro",
+  "citations": [
+    {
+      "dossier_section": "setting",
+      "source_id": "mundo-base",
+      "source_version": "2",
+      "declared_passage": null,
+      "quote": "# Mundo base"
+    }
+  ]
+}

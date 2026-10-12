@@ -1,0 +1,17 @@
+{
+  "candidate_id": "turnos",
+  "version": 1,
+  "domain": "RULES",
+  "class": "PROPOSAL",
+  "text": "Proponer turnos semanales de escritura.",
+  "scope": "foro",
+  "citations": [
+    {
+      "dossier_section": "forum_rules",
+      "source_id": "manual-foro",
+      "source_version": "1",
+      "declared_passage": "Convivencia",
+      "quote": "turno"
+    }
+  ]
+}

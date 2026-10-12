@@ -1,0 +1,17 @@
+{
+  "candidate_id": "staff",
+  "version": 1,
+  "domain": "RULES",
+  "class": "LITERAL",
+  "text": "Las fichas se publican",
+  "scope": "foro",
+  "citations": [
+    {
+      "dossier_section": "staff_review",
+      "source_id": "revision-staff",
+      "source_version": "1",
+      "declared_passage": null,
+      "quote": "Las fichas se publican"
+    }
+  ]
+}
