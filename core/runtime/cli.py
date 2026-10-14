@@ -68,9 +68,11 @@ from core.runtime.instance import (
     InstanceError,
     LoadedInstance,
     approved_corpus,
+    closed_corpus_of,
     create_instance,
     get_approved_candidate,
     load_instance,
+    update_instance,
 )
 from core.runtime.persistence import PersistenceError, load_strict_json
 from core.runtime.workspace import (
@@ -207,6 +209,12 @@ def _build_parser() -> argparse.ArgumentParser:
     instance_init.add_argument("--output", required=True, type=Path,
                                help="carpeta de la instancia")
     instance_init.set_defaults(handler=_instance_init, action_name="instance.init")
+    instance_update = instance_actions.add_parser(
+        "update", help="adopta el snapshot cerrado de un workspace de ampliación; pide teclear una "
+                       "frase con un código (no autentica a la persona)")
+    _instance_argument(instance_update)
+    _workspace_argument(instance_update)
+    instance_update.set_defaults(handler=_instance_update, action_name="instance.update")
     instance_status = instance_actions.add_parser("status", help="comprueba la integridad")
     _instance_argument(instance_status)
     instance_status.set_defaults(handler=_instance_status, action_name="instance.status")
@@ -220,6 +228,10 @@ def _build_parser() -> argparse.ArgumentParser:
     corpus_show.add_argument("--candidate-id", required=True)
     corpus_show.add_argument("--version", required=True, type=_positive_int)
     corpus_show.set_defaults(handler=_instance_corpus_show, action_name="instance.corpus.show")
+    corpus_history = corpus_actions.add_parser("history", help="cadena de snapshots cerrados")
+    _instance_argument(corpus_history)
+    corpus_history.set_defaults(handler=_instance_corpus_history,
+                                action_name="instance.corpus.history")
 
     character = commands.add_parser("character", help="personajes de la instancia")
     character_groups = character.add_subparsers(dest="character_group", required=True,
@@ -753,6 +765,60 @@ def _instance_status(args: argparse.Namespace) -> int:
     else:
         _line(f"Instancia íntegra del foro «{forum_id}» en {root} (revisión del corpus "
               f"{instance.corpus_revision}; snapshot sha256={snapshot}).")
+    return EXIT_OK
+
+
+def _instance_update(args: argparse.Namespace) -> int:
+    if args.json:
+        raise InstanceError("INVALID_STATE", "la actualización de una instancia no admite --json: "
+                                             "ejecuta el comando en tu terminal y responde a la "
+                                             "confirmación")
+    result = update_instance(args.instance, workspace_root=args.workspace,
+                             core_root=_checkout(), terminal=_SystemTerminal())
+    instance = result.instance
+    snapshot = instance.config.corpus.snapshot_sha256
+    detail = (f"expediente {instance.config.dossier_version} | personajes "
+              f"{len(instance.characters)}.")
+    if result.updated:
+        _line(f"Instancia actualizada: {instance.config.forum_id} | snapshot "
+              f"{result.previous_snapshot_sha256} -> {snapshot} | {detail}")
+    else:
+        _line(f"Instancia ya actualizada: {instance.config.forum_id} | snapshot {snapshot} | "
+              f"{detail}")
+    return EXIT_OK
+
+
+def _instance_corpus_history(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    chain = closed_corpus_of(instance)
+    rows = []
+    previous = None
+    for snapshot in chain.snapshots:
+        start_c = 0 if previous is None else previous.candidate_count
+        start_d = 0 if previous is None else previous.decision_count
+        rows.append((snapshot, snapshot.candidate_count - start_c,
+                     snapshot.decision_count - start_d))
+        previous = snapshot
+    if args.json:
+        _emit({"ok": True, "action": args.action_name,
+               "current_snapshot_sha256": chain.current.snapshot_sha256,
+               "instance": str(instance.instance_root),
+               "snapshots": [{
+                   "candidate_count": s.candidate_count, "candidate_delta": dc,
+                   "corpus_revision": s.corpus_revision, "decision_count": s.decision_count,
+                   "decision_delta": dd, "dossier_snapshot_sha256": s.dossier.snapshot_sha256,
+                   "dossier_version": s.dossier.dossier_version, "format": s.format,
+                   "ordinal": s.ordinal, "parent_snapshot_sha256": s.parent_snapshot_sha256,
+                   "snapshot_sha256": s.snapshot_sha256,
+               } for s, dc, dd in rows]})
+        return EXIT_OK
+    for s, dc, dd in rows:
+        parent = "null" if s.parent_snapshot_sha256 is None else s.parent_snapshot_sha256
+        _line(f"ronda {s.ordinal} | {s.format} | "
+              f"expediente={json.dumps(s.dossier.dossier_version, ensure_ascii=False)} | "
+              f"dossier_sha256={s.dossier.snapshot_sha256} | snapshot={s.snapshot_sha256} | "
+              f"padre={parent} | candidatos={s.candidate_count} (+{dc}) | "
+              f"decisiones={s.decision_count} (+{dd})")
     return EXIT_OK
 
 

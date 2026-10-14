@@ -68,6 +68,7 @@ from core.runtime.instance import (
     LoadedInstance,
     get_approved_candidate,
     load_instance,
+    require_no_update,
 )
 from core.runtime.persistence import (
     PersistenceError,
@@ -305,6 +306,7 @@ def _import_concept(instance_root: Path, core_root: Path, character_id: str, ver
     elif version != 1:
         raise CharacterError("CONFLICT", f"«{character_id}» todavía no existe: su primer concepto es "
                                          "la versión 1")
+    require_no_update(instance.instance_root)
 
     receipt = confirm_human_action(terminal, phrase_prefix=f"DECLARAR-CONCEPTO {character_id} "
                                                            f"v{version}",
@@ -339,6 +341,16 @@ def _create_character(instance: LoadedInstance, character_id: str,
     folder.mkdir(exist_ok=True)
     if _is_link(folder) or not folder.is_dir():
         raise CharacterError("UNSAFE_DESTINATION", f"{folder} no es una carpeta normal")
+    root = instance.instance_root
+    # characters/.<id>.create.lock: `instance update` refuses to start while it exists, and
+    # this publication refuses to go on while an update lock exists (checked under the lock).
+    with _corpus_lock(folder / f".{character_id}.create", f"la creación de «{character_id}»",
+                      guard=lambda: require_no_update(root)):
+        return _publish_character(instance, character_id, concept, state, data, folder)
+
+
+def _publish_character(instance: LoadedInstance, character_id: str, concept: ConceptVersion,
+                       state: CharacterState, data: bytes, folder: Path) -> ConceptImportResult:
     target = folder / character_id
     initial = _destination_state(target)
     if initial is not None:
@@ -352,6 +364,7 @@ def _create_character(instance: LoadedInstance, character_id: str,
             stream.flush()
             os.fsync(stream.fileno())
         _check_staged(staging, instance.config.forum_id, state)
+        require_no_update(instance.instance_root)
         try:
             _publish(staging, target, initial)
         except _ConcurrentDestination as race:
@@ -390,15 +403,18 @@ def _append_concept(instance: LoadedInstance, existing: LoadedCharacter,
 
 
 def _path_guard(character_root: Path):
-    """A check that the character folder is still the same plain folder, with no link on the way.
+    """A check that the character folder is still the same plain folder, with no link on the way,
+    and that no `instance update` is replacing the instance's static files.
 
     It runs before taking the lock, right after taking it and right before writing; the remaining
     window between the last check and the atomic replace cannot be closed without handle-relative
     file APIs, which the standard library does not offer on Windows.
     """
     identity = _folder_identity(character_root)
+    instance_root = character_root.parent.parent
 
     def guard() -> None:
+        require_no_update(instance_root)
         linked = _linked_component(character_root / CHARACTER_STATE)
         if linked is not None:
             raise CharacterError("UNSAFE_DESTINATION", f"{linked} es un enlace simbólico o una "
@@ -574,6 +590,7 @@ def _record_proposal_decision(instance_root: Path, core_root: Path, character_id
                                          "efectiva vigente")
     state_path = character.character_root / CHARACTER_STATE
     _require_unlocked(state_path, "este personaje")
+    require_no_update(instance.instance_root)
     verb = _PROPOSAL_VERB[review_status]
     receipt = confirm_human_action(
         terminal, phrase_prefix=f"{verb}-PROPUESTA {proposal_id} v{version}",
@@ -762,6 +779,7 @@ def _record_staff_response(instance_root: Path, core_root: Path, character_id: s
                                          "no se reescribe el historial")
     state_path = character.character_root / CHARACTER_STATE
     _require_unlocked(state_path, "este personaje")
+    require_no_update(instance.instance_root)
     receipt = confirm_human_action(
         terminal,
         phrase_prefix=f"REGISTRAR-RESPUESTA-STAFF {review_status.value} {DRAFT_ID} v{version}",

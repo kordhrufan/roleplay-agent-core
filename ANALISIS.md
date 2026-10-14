@@ -3011,7 +3011,7 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
      Pendiente/rechazado no será consultable, los conflictos devolverán
      `REQUIERE CONFIRMACIÓN` y cada respuesta entregará solo pasajes pertinentes con cita.
 
-   **Subincremento 5a — Ampliación del corpus de una instancia existente (detallado).**
+   **Subincremento 5a — Ampliación del corpus de una instancia existente (detallado). [x] Hecho.**
 
    **Decisión de arquitectura y límite cerrado.** Implementar un *workspace de ampliación nuevo*
    ligado por contenido a la instancia, no reabrir ni modificar el workspace que produjo el cierre
@@ -4251,7 +4251,7 @@ subincremento mínimo. No se cambia la política de instrucciones v1.
   4d1, 4d2 y 4e, ya hechas en TTY real; el recorrido completo en un foro real queda para cuando
   el usuario aporte su expediente.
 
-### Incremento 5a — ampliación aditiva del corpus (en curso)
+### Incremento 5a — ampliación aditiva del corpus
 - Rama: `feature/incremento-5a-ampliacion-corpus` (base `1265600`). Plan detallado por Codex (hilo
   `01a13973-c83b-7d32-84fc-7810d00ea690`). Motivo: primera prueba con un foro real; el material
   de raza llegó después del cierre.
@@ -4294,3 +4294,57 @@ subincremento mínimo. No se cambia la política de instrucciones v1.
   autoconsistentes pero inválidos; resuelto con rutas gestionadas bajo `dossier/`, esquema
   único y versiones de expediente sin repetir). Fase 1 aprobada; revisión archivada en
   `docs/analisis/incremento-5a1-revision.md`. Tests: 501 OK en `py -3.11` y `py -3.14`.
+- Fase 2 hecha (estado de trabajo sobre `854acaf`): `core/runtime/instance.py`
+  (`EXPANDED_INSTANCE_SCHEMA_VERSION`, carga v2 con la cadena en `LoadedInstance.corpus`,
+  `update_instance`/`InstanceUpdateResult`, `update_lock_path`, `require_no_update`; los cerrojos
+  `characters/.<id>.create.lock` se ignoran al cargar), `core/runtime/character.py` (el `guard`
+  de cada escritura y los pasos previos a cada frase comprueban el cerrojo de actualización; la
+  publicación del primer concepto toma `characters/.<id>.create.lock`), `core/runtime/cli.py`
+  (`instance update`, `instance corpus history`) y exports. Test nuevo
+  `tests/test_instance_update.py` (14). Resultado: 515 OK en `py -3.11` y `py -3.14`.
+- Decisiones de detalle (fase 2):
+  - Swap: staging hermano `.<nombre>.update-staging-<hex>` validado con la ruta lógica final
+    (carga completa, `characters/` byte a byte, estados y revisiones iguales, corpus aprobado
+    anterior conservado, snapshot nuevo) y relectura de estáticos+personajes justo antes; después
+    `instancia -> .<nombre>.update-backup-<hex>` y `staging -> instancia`. Si falla el segundo
+    rename se restaura el backup; si también falla la restauración, `IO` con ambas rutas y el
+    backup completo intacto. Tras publicar se vuelve a cargar y comparar y solo entonces se borra
+    el backup (su fallo se informa indicando que el cambio quedó aplicado).
+  - El cerrojo de actualización reutiliza `_corpus_lock` con la ruta hermana
+    `.<nombre>.instance-update.lock` (mismos mensajes y garantías de liberación). La creación del
+    primer personaje usa también `_corpus_lock`, con `guard` que comprueba ese cerrojo, y lo
+    vuelve a comprobar justo antes de publicar.
+  - La frase de actualización no deja registro persistente (el plan no fija ninguno); el no-op
+    exige TTY pero no genera reto. `previous_snapshot_sha256` es el padre del snapshot adoptado.
+  - `instance corpus history` sintetiza la entrada `LEGACY_V1` de una instancia v1 sin
+    reescribirla (vía `closed_corpus_of`).
+- Revisión de la fase 2 (mismo hilo): REV5A-03 (Alta; el plan mezclaba lecturas no ligadas y
+  permitía confirmar un snapshot y aplicar otro; resuelto con dos lecturas completas de bytes de
+  instancia y workspace alrededor de la carga, todo derivado de ellas, y una huella bajo el lock
+  que incluye lo mostrado en el prompt), REV5A-04 (Media; restos `update-staging`/`update-backup`
+  ignorados; ahora CONFLICT con rutas antes del no-op, del prompt y bajo el lock), REV5A-05 (Baja;
+  faltaba `snapshot_for_candidate`; añadido y exportado) y REV5A-06 (Baja; regresiones de v2→v2
+  con estados completos de personaje, lecturas estables, restos y fallos de escritura y de
+  verificación posterior). 5a aprobado completo; revisión archivada en
+  `docs/analisis/incremento-5a-revision.md` (la de la fase 1, también en
+  `docs/analisis/incremento-5a1-revision.md`).
+- Resultado final de los tests: 523 OK en `py -3.11` y `py -3.14`, sin omitidos (suites 5a: 49).
+  Plantillas, `tests/expected_instance_templates.py` y `reference/` sin cambios desde `1265600`;
+  `rg` del legado y de subcomandos prohibidos vacíos.
+- Validación funcional: PENDIENTE (ampliación real con el material de raza del usuario: extend,
+  candidatos, cierre e `instance update` en TTY real).
+- Métricas por agente (solo telemetría verificable; ausente = NO DISPONIBLE):
+  - Codex (`gpt-5.6-sol`, high), contadores de `~/.codex/sessions` (hilos exclusivos de 5a):
+    - Análisis `01a13973-c83b-7d32-84fc-7810d00ea690` (1 encargo): entrada 2.427.111 (caché
+      leída 2.262.656), salida 36.661 (razonamiento 23.310).
+    - Revisión `01a13991-57cf-7fb2-a9b1-26495e1e986c` (5 encargos: revisión fase 1, 2
+      verificaciones, revisión fase 2, 1 verificación): entrada 10.220.660 (caché leída
+      9.890.048), salida 53.938 (razonamiento 25.140).
+    - Escritura de caché 0; errores/cancelaciones 0; coste o cuota NO DISPONIBLE.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde «he creado un archivo .MD de hollows»
+    hasta antes del commit final; incluye la decisión del alcance; 68 respuestas de API
+    deduplicadas por id): entrada 136, salida 169.762, caché leída 45.590.323, caché escrita
+    288.100. Coste NO DISPONIBLE.
+  - Retrabajo: tres rondas de corrección (6 hallazgos, uno en dos pasos). Antes de las
+    revisiones: normalización de CRLF tras el merge, tres expectativas de test propias
+    (dos aserciones laxas y una simulación demasiado amplia) y heredocs fallidos sin efectos.

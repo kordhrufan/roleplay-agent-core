@@ -55,12 +55,14 @@ from core.runtime.assimilation import (
     snapshot_record,
 )
 from core.runtime.instance import (
+    EXPANDED_INSTANCE_SCHEMA_VERSION,
     INSTANCE_SCHEMA_VERSION,
     ApprovedCorpusEntry,
     InstanceConfig,
     InstanceCorpus,
     InstanceError,
     InstanceInitResult,
+    InstanceUpdateResult,
     LoadedInstance,
     SourceWorkspace,
     approved_corpus,
@@ -68,6 +70,10 @@ from core.runtime.instance import (
     create_instance,
     get_approved_candidate,
     load_instance,
+    require_no_update,
+    snapshot_for_candidate,
+    update_instance,
+    update_lock_path,
 )
 from core.character.models import (
     DRAFT_ID,
@@ -143,6 +149,7 @@ __all__ = [
     "DOSSIER_NAME",
     "DOSSIER_SCHEMA_VERSION",
     "DRAFT_ID",
+    "EXPANDED_INSTANCE_SCHEMA_VERSION",
     "EXPANSION_WORKSPACE_SCHEMA_VERSION",
     "INSTANCE_SCHEMA_VERSION",
     "INTEGRITY_SCHEMA_VERSION",
@@ -196,6 +203,7 @@ __all__ = [
     "InstanceCorpus",
     "InstanceError",
     "InstanceInitResult",
+    "InstanceUpdateResult",
     "LoadedCharacter",
     "LoadedDossierSection",
     "LoadedDossierSource",
@@ -261,6 +269,10 @@ __all__ = [
     "record_candidate_decision",
     "record_proposal_decision",
     "record_staff_response",
+    "require_no_update",
+    "snapshot_for_candidate",
     "snapshot_record",
     "staff_response_record",
+    "update_instance",
+    "update_lock_path",
 ]
