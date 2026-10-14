@@ -1,7 +1,7 @@
-"""Vertical slice of increments 4 and 7a: dossier → workspace → candidates → decisions and
+"""Vertical slice of increments 4, 7a and 7b: dossier → workspace → candidates → decisions and
 closure → instance → human concept → proposals → effective composition → sheet → transcribed
 staff response → topic → transcribed post → human seed → developed draft → manual publication
-confirmed afterwards.
+confirmed afterwards → instructions migrated to v2 (and an instance created with v2).
 
 Agent steps run through the CLI in a fresh process each time (a restart between phases). Human
 steps (barrier A) go through the API with a fake terminal, because a real TTY cannot be scripted;
@@ -31,6 +31,7 @@ from core.runtime.character import (
     record_proposal_decision,
     record_staff_response,
 )
+from core.runtime.instance import update_instance_instructions
 from core.runtime.narrative import (
     confirm_narrative_publication,
     import_human_seed,
@@ -334,12 +335,38 @@ class VerticalSliceTest(unittest.TestCase):
         for name, data in final.items():
             self.assertIsNone(LEGACY.search(data.decode("utf-8", "replace")), msg=name)
 
+        # 7b: the instructions move to v2; only the instruction set changes and work goes on.
+        self.assertTrue(self.migrate_instructions().updated)
+        migrated = self.state_bytes()
+        self.assertEqual({n for n in set(final) | set(migrated) if final.get(n) != migrated.get(n)},
+                         {"instancia/AGENTS.md", "instancia/CLAUDE.md",
+                          "instancia/work/instructions.json", "instancia/work/integrity.json"})
+        self.assertFalse(self.assert_repeat_changes_nothing(self.migrate_instructions).updated)
+        self.cli("instance", "status", "--instance", str(self.instance))
+        self.assertEqual(self.narrative("topic", "show")["state_revision"], 5)
+        self.assertEqual(len(self.character("draft", "list")["drafts"]), 2)
+        agents = (self.instance / "AGENTS.md").read_text(encoding="utf-8")
+        for command in ("narrative seed import", "narrative draft create",
+                        "narrative publication confirm"):
+            self.assertIn(command, agents)
+
+        # A new instance can be created with v2 instructions directly.
+        second = self.base / "instancia-v2"
+        self.assertTrue(self.cli("instance", "init", "--workspace", str(self.workspace),
+                                 "--output", str(second), "--instructions-version", "2")["created"])
+        self.cli("instance", "status", "--instance", str(second))
+        self.assertTrue((second / "work" / "instructions.json").is_file())
+
     def narrative(self, group: str, action: str, *argv: str) -> dict:
         topic = () if (group, action) == ("topic", "list") else ("--topic-id", "muelle")
         return self.cli("narrative", group, action, "--instance", str(self.instance), *topic,
                         *argv)
 
     # --- human steps --------------------------------------------------------------------------
+
+    def migrate_instructions(self):
+        return self.human(lambda: update_instance_instructions(
+            self.instance, core_root=ROOT, terminal=FakeTerminal()))
 
     def record_post(self):
         return self.human(lambda: record_external_post(

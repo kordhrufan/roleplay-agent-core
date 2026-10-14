@@ -437,5 +437,203 @@ class ApprovedCorpusTest(InstanceCase):
             ApprovedCorpusEntry(idea, rejected)
 
 
+class InstructionsV2Test(InstanceCase):
+    """7b: instructions are a version axis of their own; v1 stays the default."""
+
+    def create2(self, output=None):
+        return create_instance(self.workspace, output=output or self.output, core_root=ROOT,
+                               instructions_version=2)
+
+    def tree(self, root):
+        return {p.relative_to(root).as_posix(): p.read_bytes()
+                for p in sorted(root.rglob("*")) if p.is_file()}
+
+    def rewrite(self, changes):
+        """Apply `changes` ({path: bytes | None}) and regenerate a consistent manifest, so a
+        failure comes from the instructions checks and not from integrity.json."""
+        for relative, data in changes.items():
+            path = self.output / relative
+            if data is None:
+                path.unlink()
+            else:
+                path.write_bytes(data)
+        config = json.loads((self.output / "instance.json").read_bytes())
+        paths = ["AGENTS.md", "CLAUDE.md", "instance.json", "corpus/state.json",
+                 *(f["path"] for f in config["dossier"]["files"])]
+        if (self.output / "work" / "instructions.json").is_file():
+            paths.append("work/instructions.json")
+        covered = sorted(paths)
+        integrity = {"algorithm": "sha256", "files": [
+            {"path": path, "sha256": hashlib.sha256((self.output / path).read_bytes()).hexdigest(),
+             "size": len((self.output / path).read_bytes())} for path in covered],
+            "schema_version": config["schema_version"]}
+        (self.output / "work" / "integrity.json").write_bytes(
+            instance_module.canonical_json_bytes(integrity, pretty=True))
+
+    def assert_invalid(self, fragment=None):
+        with self.assertRaises(InstanceError) as ctx:
+            load_instance(self.output, expected_core_root=ROOT)
+        self.assertEqual(ctx.exception.code, "INVALID_STATE", ctx.exception.reason)
+        if fragment is not None:
+            self.assertIn(fragment, ctx.exception.reason)
+
+    def descriptor(self):
+        return json.loads((self.output / "work" / "instructions.json").read_bytes())
+
+    def test_default_and_explicit_v1_are_the_historical_tree(self):
+        self.create()
+        self.assertEqual(files(self.output), EXPECTED_LAYOUT)
+        default = self.tree(self.output)
+        shutil.rmtree(self.output)
+        create_instance(self.workspace, output=self.output, core_root=ROOT, instructions_version=1)
+        self.assertEqual(self.tree(self.output), default)
+        instructions = load_instance(self.output).instructions
+        self.assertEqual((instructions.version, instructions.descriptor_sha256,
+                          [f.path for f in instructions.files]),
+                         (1, None, ["AGENTS.md", "CLAUDE.md"]))
+        self.assertEqual(instructions.instructions_sha256, instance_module._sha256(
+            instance_module.canonical_json_bytes({
+                "files": [f.as_json() for f in instructions.files],
+                "format": "roleplay-agent-core-instance-instructions",
+                "instructions_version": 1}, pretty=False)))
+
+    def test_v2_layout_descriptor_manifest_and_retry(self):
+        result = self.create2()
+        self.assertTrue(result.created)
+        self.assertEqual(files(self.output), sorted([*EXPECTED_LAYOUT, "work/instructions.json"]))
+        agents = (self.output / "AGENTS.md").read_bytes()
+        claude = (self.output / "CLAUDE.md").read_bytes()
+        managed = [{"path": name, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
+                   for name, data in (("AGENTS.md", agents), ("CLAUDE.md", claude))]
+        set_sha = instance_module._sha256(instance_module.canonical_json_bytes(
+            {"files": managed, "format": "roleplay-agent-core-instance-instructions",
+             "instructions_version": 2}, pretty=False))
+        raw = (self.output / "work" / "instructions.json").read_bytes()
+        self.assertEqual(raw, instance_module.canonical_json_bytes({
+            "files": managed, "format": "roleplay-agent-core-instance-instructions",
+            "instructions_sha256": set_sha, "instructions_version": 2}, pretty=True))
+        integrity = json.loads((self.output / "work" / "integrity.json").read_bytes())
+        self.assertIn({"path": "work/instructions.json", "sha256": hashlib.sha256(raw).hexdigest(),
+                       "size": len(raw)}, integrity["files"])
+        self.assertEqual(integrity["schema_version"], 1)
+        loaded = load_instance(self.output, expected_core_root=ROOT)
+        self.assertEqual((loaded.config.schema_version, loaded.instructions.version,
+                          loaded.instructions.instructions_sha256,
+                          loaded.instructions.descriptor_sha256),
+                         (1, 2, set_sha, hashlib.sha256(raw).hexdigest()))
+        self.assertNotIn(b"Consultas disponibles", agents)
+        before = snapshot(self.output)
+        self.assertFalse(self.create2().created)
+        self.assertEqual(snapshot(self.output), before)
+        with self.assertRaises(InstanceError) as ctx:
+            self.create()  # a v1 request on a v2 folder is not a migration
+        self.assertEqual(ctx.exception.code, "CONFLICT")
+        v1 = self.root / "v1"
+        self.create(v1)
+        with self.assertRaises(InstanceError) as ctx:
+            self.create2(v1)
+        self.assertEqual(ctx.exception.code, "CONFLICT")
+        self.assertEqual(snapshot(self.output), before)
+
+    def test_version_argument(self):
+        for value in (True, 0, 3, "2", 2.0, None):
+            with self.subTest(value=value):
+                with self.assertRaises(InstanceError) as ctx:
+                    create_instance(self.workspace, output=self.output, core_root=ROOT,
+                                    instructions_version=value)
+                self.assertEqual(ctx.exception.code, "INVALID_STATE")
+        self.assertFalse(self.output.exists())
+
+    def test_descriptor_manipulations_fail_closed(self):
+        self.create2()
+        original = self.tree(self.output)
+        good = self.descriptor()
+        canonical = instance_module.canonical_json_bytes
+
+        def variant(**changes):
+            data = json.loads(json.dumps(good))
+            for key, value in changes.items():
+                if value is KeyError:
+                    del data[key]
+                else:
+                    data[key] = value
+            return canonical(data, pretty=True)
+
+        swapped = list(reversed(good["files"]))
+        resized = json.loads(json.dumps(good["files"]))
+        resized[0]["size"] += 1
+        rehashed = json.loads(json.dumps(good["files"]))
+        rehashed[1]["sha256"] = "0" * 64
+        cases = {
+            "version 1": variant(instructions_version=1),
+            "version 3": variant(instructions_version=3),
+            "version text": variant(instructions_version="2"),
+            "version bool": variant(instructions_version=True),
+            "format": variant(format="otro"),
+            "extra key": variant(extra=1),
+            "missing key": variant(instructions_sha256=KeyError),
+            "order": variant(files=swapped),
+            "size": variant(files=resized),
+            "hash": variant(files=rehashed),
+            "set hash": variant(instructions_sha256="0" * 64),
+            "not canonical": canonical(good, pretty=False),
+            "a list": canonical([good], pretty=True),
+        }
+        for name, data in cases.items():
+            with self.subTest(case=name):
+                self.rewrite({"work/instructions.json": data})
+                self.assert_invalid()
+                self.rewrite({path: original[path] for path in original
+                              if path != "work/integrity.json"})
+                self.assertEqual(self.tree(self.output), original)
+        with self.subTest(case="descriptor removed"):
+            self.rewrite({"work/instructions.json": None})
+            self.assert_invalid("instrucciones v1")
+        self.rewrite({"work/instructions.json": original["work/instructions.json"]})
+        self.assertEqual(load_instance(self.output).instructions.version, 2)
+
+    def test_mixed_sets_and_uncovered_descriptor(self):
+        self.create2()
+        original = self.tree(self.output)
+        config = load_instance(self.output).config
+        v1_agents = instance_module.render_instructions(instance_module.AGENTS_TEMPLATE, config)
+        # AGENTS v1 + CLAUDE v2 with a descriptor that describes them both exactly.
+        files = [{"path": "AGENTS.md", "sha256": hashlib.sha256(v1_agents).hexdigest(),
+                  "size": len(v1_agents)}, self.descriptor()["files"][1]]
+        set_sha = instance_module._sha256(instance_module.canonical_json_bytes(
+            {"files": files, "format": "roleplay-agent-core-instance-instructions",
+             "instructions_version": 2}, pretty=False))
+        mixed = instance_module.canonical_json_bytes(
+            {"files": files, "format": "roleplay-agent-core-instance-instructions",
+             "instructions_sha256": set_sha, "instructions_version": 2}, pretty=True)
+        self.rewrite({"AGENTS.md": v1_agents, "work/instructions.json": mixed})
+        self.assert_invalid("AGENTS.md no corresponde a su plantilla (instrucciones v2)")
+        self.rewrite({path: original[path] for path in original if path != "work/integrity.json"})
+        # Both Markdown v1 but a descriptor present: not a v1 instance either.
+        v1_claude = instance_module.render_instructions(instance_module.CLAUDE_TEMPLATE, config)
+        self.rewrite({"AGENTS.md": v1_agents, "CLAUDE.md": v1_claude})
+        self.assert_invalid()
+        self.rewrite({path: original[path] for path in original if path != "work/integrity.json"})
+        # A descriptor the manifest does not list.
+        integrity = json.loads(original["work/integrity.json"])
+        integrity["files"] = [f for f in integrity["files"]
+                              if f["path"] != "work/instructions.json"]
+        (self.output / "work" / "integrity.json").write_bytes(
+            instance_module.canonical_json_bytes(integrity, pretty=True))
+        self.assert_invalid()
+        (self.output / "work" / "integrity.json").write_bytes(original["work/integrity.json"])
+        (self.output / "work" / "otro.json").write_bytes(b"{}")
+        self.assert_invalid()
+        (self.output / "work" / "otro.json").unlink()
+        descriptor = self.output / "work" / "instructions.json"
+        descriptor.unlink()
+        descriptor.mkdir()
+        self.assert_invalid()
+        descriptor.rmdir()
+        descriptor.write_bytes(original["work/instructions.json"])
+        self.assertEqual(self.tree(self.output), original)
+        self.assertEqual(load_instance(self.output).instructions.version, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

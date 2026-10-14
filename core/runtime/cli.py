@@ -86,6 +86,7 @@ from core.runtime.instance import (
     get_approved_candidate,
     load_instance,
     update_instance,
+    update_instance_instructions,
 )
 from core.runtime.narrative import (
     confirm_narrative_publication,
@@ -236,6 +237,8 @@ def _build_parser() -> argparse.ArgumentParser:
     _workspace_argument(instance_init)
     instance_init.add_argument("--output", required=True, type=Path,
                                help="carpeta de la instancia")
+    instance_init.add_argument("--instructions-version", type=int, choices=(1, 2), default=1,
+                               help="versión de las instrucciones del agente (por defecto 1)")
     instance_init.set_defaults(handler=_instance_init, action_name="instance.init")
     instance_update = instance_actions.add_parser(
         "update", help="adopta el snapshot cerrado de un workspace de ampliación; pide teclear una "
@@ -243,6 +246,16 @@ def _build_parser() -> argparse.ArgumentParser:
     _instance_argument(instance_update)
     _workspace_argument(instance_update)
     instance_update.set_defaults(handler=_instance_update, action_name="instance.update")
+    instructions = instance_actions.add_parser("instructions",
+                                               help="instrucciones del agente en la instancia")
+    instructions_actions = instructions.add_subparsers(dest="instructions_action", required=True,
+                                                       metavar="acción")
+    instructions_update = instructions_actions.add_parser(
+        "update", help="pasa las instrucciones de la v1 a la v2; pide teclear una frase con un "
+                       "código (no autentica a la persona)")
+    _instance_argument(instructions_update)
+    instructions_update.set_defaults(handler=_instance_instructions_update,
+                                     action_name="instance.instructions.update")
     instance_status = instance_actions.add_parser("status", help="comprueba la integridad")
     _instance_argument(instance_status)
     instance_status.set_defaults(handler=_instance_status, action_name="instance.status")
@@ -869,7 +882,8 @@ def _load_instance(args: argparse.Namespace) -> LoadedInstance:
 
 
 def _instance_init(args: argparse.Namespace) -> int:
-    result = create_instance(args.workspace, output=args.output, core_root=_checkout())
+    result = create_instance(args.workspace, output=args.output, core_root=_checkout(),
+                             instructions_version=args.instructions_version)
     instance = result.instance
     forum_id = instance.config.forum_id
     root = str(instance.instance_root)
@@ -917,6 +931,24 @@ def _instance_update(args: argparse.Namespace) -> int:
     else:
         _line(f"Instancia ya actualizada: {instance.config.forum_id} | snapshot {snapshot} | "
               f"{detail}")
+    return EXIT_OK
+
+
+def _instance_instructions_update(args: argparse.Namespace) -> int:
+    if args.json:
+        raise InstanceError("INVALID_STATE", "la actualización humana de instrucciones no admite "
+                                             "--json: ejecuta el comando en tu terminal y responde "
+                                             "a la confirmación")
+    result = update_instance_instructions(args.instance, core_root=_checkout(),
+                                          terminal=_SystemTerminal())
+    forum_id = result.instance.config.forum_id
+    new = result.instructions
+    if result.updated:
+        _line(f"Instrucciones actualizadas: {forum_id} | v{result.previous.version} -> "
+              f"v{new.version} | conjunto sha256={new.instructions_sha256}.")
+    else:
+        _line(f"Instrucciones ya actualizadas: {forum_id} | v{new.version} | conjunto "
+              f"sha256={new.instructions_sha256}.")
     return EXIT_OK
 
 

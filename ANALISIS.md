@@ -3984,25 +3984,493 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
      uso de un modelo quedan fuera de esta validación del core y requieren acción/autorización
      separada.
 
-7b. [ ] **Instrucciones de instancia v2 y migración (esbozo; detallar tras aprobar 7a).** Mantener
-     byte a byte `AGENTS.template.md`, `CLAUDE.template.md`, `instance-policy.template.md` y sus
-     golden v1. Crear plantillas paralelas v2 y un descriptor íntegro
-     `work/instructions.json` con versión/hashes, ortogonal a `instance.json` v1/v2 y al formato del
-     corpus. No reutilizar `schema_version` de instancia, que hoy distingue la cadena de snapshots.
-     Nuevas instrucciones deben documentar comandos reales 4d/4e/7a, flujo semilla -> desarrollo ->
-     revisión humana -> publicación manual -> registro, citas, separación de canales, barrera A y
-     prohibición de red/publicación/MP/Discord; ante una pregunta directa sobre automatización o
-     identidad, el agente pausa y avisa a la persona antes de redactar respuesta.
+7b. [x] **Instrucciones de instancia v2 y migración (detallado).** Objetivo cerrado: generar de
+     forma explícita una instancia nueva con instrucciones v2, o migrar de v1 a v2 las instrucciones
+     de una instancia existente mediante una acción humana independiente, sin cambiar su expediente,
+     corpus, personajes ni memoria narrativa. Las instrucciones v2 enseñan al agente abierto en la
+     carpeta de la instancia a consultar 4d/4e/7a, desarrollar y registrar solo operaciones no
+     humanas, detenerse ante cada barrera humana y mantener separados el texto publicable, OOC,
+     privado y resultados pendientes. El core sigue sin abrir el foro, locators, red, MP o Discord,
+     y no publica ni redacta mediante un proveedor de modelo.
 
-     Añadir una operación humana separada `instance instructions update --instance RUTA`, no
-     sobrecargar `instance update --workspace`: ambas comparten la primitiva transaccional de
-     staging/swap/restore de 5a, pero autorizan cambios distintos. Prompt debe mostrar versión y
-     hashes viejo/nuevo; retry idéntico es no-op. Preservar byte a byte dossier, corpus,
-     `characters/` y `narrative/`. `instance update` debe preservar el descriptor e instrucciones
-     v2 si ya existen. Para no romper el golden histórico, `instance init` sin opción conserva v1;
-     se podrá añadir `--instructions-version 2` explícito y probar que el camino v1 sigue idéntico.
-     Criterio: una copia de la instancia real pasa de instrucciones v1 a v2 con barrera A, carga
-     íntegra y sabe operar 7a sin inventar comandos; rollback nunca deja políticas mezcladas.
+     **Base contrastada, alcance y archivos.** Partir de `31c6af9` sobre `620aea1`: 588 pruebas
+     pasan en Python 3.11 y 3.14. Modificar `core/runtime/{instance,cli,__init__}.py`; crear
+     `core/runtime/templates/{AGENTS.v2,CLAUDE.v2,instance-policy.v2}.template.md`; ampliar
+     `tests/expected_instance_templates.py`, `tests/test_{instance_templates,instance,
+     instance_cli,instance_update,vertical_slice}.py` y crear
+     `tests/test_instance_instruction_update.py`. Tocar `core/runtime/{character,narrative}.py`
+     solo si una prueba revela que una mutación no respeta el cerrojo común ya existente; no
+     cambiar modelos, JSON ni salidas de 4d/4e/7a.
+
+     Mantener **sin un solo byte de cambio**
+     `core/runtime/templates/{AGENTS,CLAUDE,instance-policy}.template.md`, las constantes v1
+     `EXPECTED_{POLICY,AGENTS,CLAUDE}` y el resultado completo de `instance init` sin la opción
+     nueva. No modificar `instance.template.json`, `expediente.template.md`, el formato de
+     `instance.json`, corpus, estados de personaje/tema, adaptadores, paquetes ni `reference/`.
+     Stdlib únicamente; ninguna prueba o validación de 7b usa red, navegador, Discord, foro o API
+     de modelo.
+
+     **Dos ejes de versión ortogonales.** No cambiar el significado de
+     `InstanceConfig.schema_version`: `1` continúa significando corpus cerrado legado y `2` cadena
+     aditiva de snapshots. La versión de instrucciones vive solo en su propio contrato. Deben cargar
+     las cuatro combinaciones `instancia v1/instrucciones v1`, `instancia v1/instrucciones v2`,
+     `instancia v2/instrucciones v1` e `instancia v2/instrucciones v2`; actualizar el corpus cambia
+     solo el primer eje y actualizar instrucciones solo el segundo.
+
+     Añadir en `instance.py` las constantes exactas:
+
+     ```python
+     LEGACY_INSTRUCTIONS_VERSION = 1
+     CURRENT_INSTRUCTIONS_VERSION = 2
+     INSTRUCTIONS_FORMAT = "roleplay-agent-core-instance-instructions"
+     INSTRUCTIONS_DESCRIPTOR = "work/instructions.json"
+     AGENTS_V2_TEMPLATE = _TEMPLATES / "AGENTS.v2.template.md"
+     CLAUDE_V2_TEMPLATE = _TEMPLATES / "CLAUDE.v2.template.md"
+     POLICY_V2_TEMPLATE = _TEMPLATES / "instance-policy.v2.template.md"
+     ```
+
+     Crear `InstanceInstructions(frozen=True, slots=True)` con `version: int`,
+     `files: tuple[ManagedFile, ...]`, `instructions_sha256: str` y
+     `descriptor_sha256: str | None`. `files` contiene exactamente, en orden por path,
+     `AGENTS.md` y `CLAUDE.md`; versión solo `1|2`; todos los hashes son 64 hex minúsculas. En v1
+     `descriptor_sha256 is None`; en v2 es el hash de los bytes canónicos del descriptor. Añadir
+     `instructions: InstanceInstructions` a `LoadedInstance`, construir este dataclass siempre al
+     cargar y pasar argumentos por nombre al crear el `LoadedInstance` provisional para que el
+     cambio de campo no dependa del orden posicional. Reexportar modelo, constantes y operaciones
+     públicas nuevas desde `core/runtime/__init__.py`.
+
+     **Descriptor v2 íntegro.** Una instancia v1 no tiene `work/instructions.json`. Una v2 lo tiene
+     con UTF-8 sin BOM, LF, JSON estricto y forma canónica pretty de `canonical_json_bytes`; sus
+     claves y su forma exactas son:
+
+     ```json
+     {
+       "files": [
+         {"path": "AGENTS.md", "sha256": "<sha256 de los bytes renderizados>", "size": 123},
+         {"path": "CLAUDE.md", "sha256": "<sha256 de los bytes renderizados>", "size": 123}
+       ],
+       "format": "roleplay-agent-core-instance-instructions",
+       "instructions_sha256": "<hash del conjunto>",
+       "instructions_version": 2
+     }
+     ```
+
+     Los objetos de `files` usan exactamente la forma existente de `ManagedFile`; tamaños son
+     enteros no negativos exactos y la lista está ordenada y sin duplicados. No añadir
+     `schema_version`, versión de instancia, snapshot, ruta del checkout, receipt, nonce, reloj ni
+     contenido del corpus. `instructions_sha256` es SHA-256 de los bytes JSON canónicos compactos
+     (`pretty=False`) del objeto formado por `files`, `format` e `instructions_version`, sin la
+     propia clave `instructions_sha256`. Así se puede calcular también el conjunto v1 inferido,
+     aunque v1 no tenga descriptor. `descriptor_sha256` no se guarda dentro del descriptor para no
+     crear un hash circular.
+
+     Incluir el propio `work/instructions.json` como `ManagedFile` en `work/integrity.json` v2 de
+     instrucciones. El manifiesto exterior autentica integridad local del descriptor; el
+     descriptor liga versión y documentos; y el render exacto liga los documentos a las plantillas
+     conocidas. `work/integrity.json.schema_version` sigue igual a
+     `instance.json.schema_version`: no se reutiliza para las instrucciones.
+
+     **Detección y carga cerrada.** En `_load_instance`, después de validar la raíz/configuración y
+     leer los dos Markdown, detectar la versión solo por la presencia física segura de
+     `work/instructions.json`, nunca por `instance.json.schema_version`, por contenido heurístico o
+     por el corpus:
+
+     - si el descriptor no existe, construir el modelo v1 inferido y exigir que ambos Markdown
+       coincidan byte a byte con el render de las tres plantillas v1; el `expected_cover` histórico
+       no incluye descriptor y permanece idéntico;
+     - si existe, exigir archivo regular sin link, parseo estricto/canónico, las cuatro claves
+       exactas anteriores, `format` exacto, `instructions_version == 2`, lista exacta de dos
+       `ManagedFile`, hashes/tamaños iguales a los archivos reales, hash de conjunto reproducible y
+       render byte a byte con las plantillas v2; incluir el descriptor en `expected_cover` y
+       comprobar su hash/tamaño mediante el manifiesto exterior;
+     - versión desconocida, `1` con descriptor, descriptor ausente con Markdown v2, descriptor v2
+       con uno o dos Markdown v1, archivo extra, link/junction, JSON no canónico, clave extra,
+       booleano usado como entero, orden distinto, hash/tamaño alterado o plantilla no reproducible
+       dan `INVALID_STATE`; una ruta insegura conserva la clasificación actual
+       `UNSAFE_DESTINATION` donde corresponda;
+     - una edición de un Markdown falla primero por `work/integrity.json` o por `files`; editar el
+       descriptor falla por el manifiesto o su validación; editar ambos sin regenerar el manifiesto
+       también falla. Una reescritura coordinada de todos los bytes y hashes a un conjunto v1
+       válido es indistinguible de una instancia v1 legítima: la integridad local actual no es una
+       firma ni conserva un historial autenticado. Documentar esta limitación, no introducir claves
+       o firmas en 7b.
+
+     La validación del descriptor ocurre antes de cargar personajes/temas, y la exploración estricta
+     de `work/` solo permite el descriptor cuando está listado. Cualquier fallo impide devolver una
+     instancia parcialmente cargada. `load_instance` no migra, crea, borra ni reescribe nada.
+
+     **Render y golden v2.** Conservar `render_instructions(template, config)` exactamente como API
+     v1 o añadirle únicamente un keyword opcional `policy_template=POLICY_TEMPLATE` cuyo default
+     reproduzca los mismos bytes. Añadir un helper interno por versión que seleccione la terna de
+     plantillas y devuelva los dos archivos renderizados; no decidir la política por el nombre del
+     Markdown ni mezclar una plantilla exterior v1 con una política v2. Sustituir solo
+     `$display_name`, `$forum_id`, `$common_policy`, `$core_root_ps` e `$instance_root_ps`; escapar
+     comillas simples de PowerShell con `_powershell`; rechazar cualquier placeholder restante.
+
+     Congelar las tres plantillas v2 como nuevas constantes
+     `EXPECTED_{POLICY,AGENTS,CLAUDE}_V2` en `tests/expected_instance_templates.py`. Los tests leen
+     los seis ficheros raw y comparan bytes exactos, UTF-8 sin BOM, solo LF y LF final. AGENTS v2 y
+     CLAUDE v2 tienen el mismo encabezado, marcadores comunes y cuerpo; difieren únicamente en la
+     primera explicación específica de Codex/Claude, igual que v1. El bloque entre
+     `COMMON_BEGIN`/`COMMON_END` es exactamente el contenido completo de
+     `instance-policy.v2.template.md`, incluida su LF final.
+
+     El texto exacto de `instance-policy.v2.template.md` debe expresar, en este orden y sin reglas
+     temáticas, estos invariantes (las frases entre backticks y los nombres de comandos son
+     literales y quedan fijados por el golden):
+
+     1. nunca ejecutar por la persona acciones con barrera A; enumerar
+        `assimilation candidate approve`, `assimilation candidate reject`, `assimilation close`,
+        `instance update`, `instance instructions update`, `character concept import`,
+        `character proposal approve`, `character proposal reject`, `character staff record`,
+        `narrative post record`, `narrative seed import` y
+        `narrative publication confirm`; mostrar el comando completo y esperar a que la persona lo
+        ejecute en una terminal interactiva;
+     2. permitir al agente ejecutar solo consultas y las mutaciones no humanas
+        `character proposal add`, `character draft create`, `narrative topic create` y
+        `narrative draft create`, siempre mediante el core y nunca editando JSON gestionado;
+     3. usar solo versiones vigentes `APPROVED` del snapshot cerrado, conservar candidato, versión
+        y hash en cada cita, y tratar una `UNCERTAINTY` aprobada como material que aún requiere
+        confirmación;
+     4. obtener del corpus aprobado todas las normas específicas del foro —incluida cualquier norma
+        sobre asistencia o IA y cualquier acuerdo con staff—; si no existen allí, declararlas
+        desconocidas y preguntar a la persona, sin inventar permiso ni prohibición;
+     5. separar `BORRADOR`, aprobación humana de propuesta, aprobación de staff, publicación y canon;
+        ninguna transición implica otra;
+     6. la persona aporta concepto y semillas, revisa, usa su cuenta, publica y mantiene las
+        comunicaciones humanas; el agente desarrolla propuestas/fichas/posts y registra únicamente
+        las operaciones no humanas anteriores;
+     7. no usar red, navegador, foro, MP, Discord ni otro canal externo; no publicar, enviar,
+        reaccionar ni abrir/seguir/dereferenciar locators. Un locator es solo texto de evidencia;
+     8. mantener `publishable_text` como único texto copiable al foro y no mezclar en él
+        `ooc_notes`, `private_notes` ni `pending_outcomes`; un resultado que depende de terceros
+        sigue pendiente aunque el post propio se publique;
+     9. ante una pregunta directa sobre automatización, asistencia, quién redacta/opera la cuenta o
+        identidad, pausar antes de redactar cualquier respuesta, mostrar la pregunta a la persona y
+        esperar sus instrucciones; no ocultar ni decidir por ella;
+     10. no inventar comandos, flags, hashes, estados, hechos o reglas y no modificar directamente
+         estados gestionados ni sus hashes.
+
+     **Estructura exacta de AGENTS/CLAUDE v2.** Después del encabezado específico y el bloque común,
+     ambos documentos llevan, en este orden, las secciones `## Arranque de cada conversación`,
+     `## Comandos reales del core`, `## Preparación del personaje`,
+     `## Flujo narrativo de un turno`, `## Canales que no se mezclan` y
+     `## Límites externos y preguntas sensibles`. No incluir lore, nombres de foros/personajes,
+     URLs, ejemplos legacy ni una norma local supuesta. Cada invocación se presenta dentro de un
+     único bloque PowerShell delimitado por `Push-Location '$core_root_ps'` y `Pop-Location`; cada
+     `--instance` usa `'$instance_root_ps'`. Los placeholders operativos se escriben como
+     `'ID_PERSONAJE'`, `'ID_TEMA'`, `'ID_OBJETO'`, `N`, `'HASH'` y `'RUTA_EXTERNA'`, dejando claro
+     que una entrada debe ser un archivo regular fuera del checkout y de la instancia.
+
+     `Arranque` obliga a ejecutar `instance status`, consultar `instance corpus list`, recuperar el
+     tema con `narrative topic list/show` y la composición/ficha con
+     `character effective show` y `character draft list/show`. Una conversación nueva no usa el
+     historial del chat como autoridad: reconstruye contexto desde `narrative/`; si faltan IDs o una
+     ficha vigente `ACTIVE` y `APPROVED`, se detiene y lo explica.
+
+     `Comandos reales` contiene todos y solo estos patrones de 4d/4e/7a, conservando nombres y
+     argumentos de la CLI implementada:
+
+     ```text
+     instance status --instance RUTA
+     instance corpus list --instance RUTA
+     instance corpus show --instance RUTA --candidate-id ID --version N
+     character concept import --instance RUTA --character-id ID --version N --input ARCHIVO
+     character concept list --instance RUTA --character-id ID
+     character concept show --instance RUTA --character-id ID --version N
+     character effective show --instance RUTA --character-id ID
+     character proposal add --instance RUTA --character-id ID --input ARCHIVO_JSON
+     character proposal list --instance RUTA --character-id ID
+     character proposal show --instance RUTA --character-id ID --proposal-id ID --version N
+     character proposal approve --instance RUTA --character-id ID --proposal-id ID --version N
+     character proposal reject --instance RUTA --character-id ID --proposal-id ID --version N
+     character draft create --instance RUTA --character-id ID --version N --composition-sha256 HASH --input ARCHIVO
+     character draft list --instance RUTA --character-id ID
+     character draft show --instance RUTA --character-id ID --version N
+     character staff record --instance RUTA --character-id ID --version N --status APPROVED|REJECTED --input ARCHIVO_JSON
+     narrative topic create --instance RUTA --character-id ID --topic-id ID --title TEXTO
+     narrative topic list --instance RUTA [--character-id ID]
+     narrative topic show --instance RUTA --topic-id ID
+     narrative post record --instance RUTA --topic-id ID --input ARCHIVO_JSON
+     narrative post list --instance RUTA --topic-id ID
+     narrative post show --instance RUTA --topic-id ID --post-id ID
+     narrative seed import --instance RUTA --topic-id ID --input ARCHIVO_JSON
+     narrative seed list --instance RUTA --topic-id ID
+     narrative seed show --instance RUTA --topic-id ID --seed-id ID --version N
+     narrative draft create --instance RUTA --topic-id ID --input ARCHIVO_JSON
+     narrative draft list --instance RUTA --topic-id ID
+     narrative draft show --instance RUTA --topic-id ID --draft-id ID --version N
+     narrative publication confirm --instance RUTA --topic-id ID --draft-id ID --version N --input ARCHIVO_JSON
+     ```
+
+     La barra `APPROVED|REJECTED` y los corchetes de la lista anterior son notación de contrato, no
+     texto para copiar en PowerShell: los bloques renderizados usan un valor concreto entre comillas
+     (`'APPROVED'` o `'REJECTED'`) y explican en prosa que `--character-id` es opcional en
+     `narrative topic list`.
+
+     La plantilla rotula por separado consultas, mutaciones del agente y acciones humanas. No
+     muestra `--json` para una acción humana, `--yes`, `--force`, nonce, un comando `publish`,
+     `send`, `export`, MP/Discord ni una edición directa. Si una operación no está en la lista o la
+     CLI la rechaza, el agente se detiene y comunica el error en vez de improvisar sintaxis.
+
+     `Preparación del personaje` fija 4d/4e: la persona declara el concepto; el agente consulta la
+     composición efectiva, registra propuestas completas y citadas; la persona aprueba/rechaza; el
+     agente crea la ficha contra el hash efectivo; la persona la publica/revisa fuera del core y
+     transcribe la respuesta del staff. Solo una ficha mostrada como vigente, `ACTIVE` y
+     `APPROVED` habilita `narrative draft create`; una propuesta aprobada no es aprobación de staff.
+
+     `Flujo narrativo` fija estos pasos, sin saltos:
+
+     1. consultar tema/posts exactos; para continuación, la persona copia y registra primero cada
+        post ajeno con `narrative post record`;
+     2. la persona expresa sus ideas y límites en el JSON de semilla y ejecuta
+        `narrative seed import`; el agente no fabrica esa autoría;
+     3. el agente vuelve a consultar semilla, contexto, composición, ficha y candidatos aprobados;
+        desarrolla el post completo, usa citas `candidate_id`+`version` solo cuando sean aplicables
+        y registra con `narrative draft create` los cuatro canales separados;
+     4. mostrar `narrative draft show`; presentar a la persona solo el bloque
+        `POST PARA COPIA MANUAL` como publicable y señalar por separado OOC, privado y pendientes;
+     5. esperar revisión humana. La persona puede pedir otra versión; solo ella copia/publica con su
+        cuenta. El agente no abre el locator ni comprueba el foro;
+     6. después de la publicación manual, la persona aporta `post_id`, hash del borrador, locator,
+        fecha observada y texto final exacto y ejecuta `narrative publication confirm`;
+     7. volver a consultar `narrative post/topic show`; si el texto final difiere, conservar
+        `EDITED`, no fingir `EXACT`. Registrar publicación propia no confirma resultados pendientes.
+
+     `Canales` define literalmente: `publishable_text` = único bloque publicable;
+     `ooc_notes` = coordinación fuera de personaje; `private_notes` = razonamiento privado que no
+     se muestra a terceros; `pending_outcomes` = consecuencias aún no decididas. Las semillas son
+     aportaciones humanas, los posts ajenos/publicaciones son transcripciones literales y ninguno
+     se convierte por sí solo en hecho semántico o canon. `Límites` repite la prohibición externa y
+     la pausa por automatización/identidad para que no dependa solo del bloque común.
+
+     **Creación explícita y compatibilidad v1.** Cambiar la firma pública a:
+
+     ```python
+     def create_instance(workspace_root: Path, *, output: Path, core_root: Path,
+                         instructions_version: int = 1) -> InstanceInitResult: ...
+     ```
+
+     Exigir `type(version) is int` y `1|2`. `_expected_files` recibe la versión: para v1 ejecuta la
+     ruta histórica sin descriptor y produce exactamente el mismo árbol/bytes; para v2 renderiza
+     los nuevos Markdown, crea el descriptor y lo incluye al construir integridad. La CLI añade
+     `instance init ... --instructions-version {1,2}`, default `1`. Sin opción y con `1` explícito,
+     texto, JSON, layout, hashes e idempotencia actuales no cambian. Con `2` se mantienen las mismas
+     salidas actuales de init —la opción ya declara la elección— y el resultado se comprueba por el
+     descriptor. Repetir init con la misma versión es no-op; apuntar una petición v1 a una carpeta v2
+     o viceversa es `CONFLICT`, no una migración implícita.
+
+     **Operación pública de migración.** Añadir:
+
+     ```python
+     @dataclass(frozen=True, slots=True)
+     class InstanceInstructionsUpdateResult:
+         instance: LoadedInstance
+         previous: InstanceInstructions
+         instructions: InstanceInstructions
+         updated: bool
+
+     def update_instance_instructions(instance_root: Path, *, core_root: Path,
+                                      terminal: Terminal) -> InstanceInstructionsUpdateResult: ...
+     ```
+
+     Solo admite v1→v2. Exige terminal interactiva antes de planificar, carga y lee establemente el
+     árbol completo, rechaza restos transaccionales y, si ya es v2 exacta, devuelve `updated=False`
+     sin prompt, lock, escritura ni cambio de mtime. No hay downgrade, target arbitrario, `--force`
+     ni importación de plantillas externas. Antes del prompt rechaza lock de update, creación/estado
+     de personaje o tema; después de confirmar toma el cerrojo común, relee y exige la misma huella,
+     vuelve a revisar locks/restos y solo entonces intercambia el árbol. Frase distinta, EOF o
+     Ctrl+C no escriben; no capturar `KeyboardInterrupt`.
+
+     El prompt previo a `confirm_human_action`, con LF y sin truncado, es exactamente:
+
+     ```text
+     ACTUALIZACIÓN HUMANA DE INSTRUCCIONES REQUERIDA
+     Foro: FORUM_ID
+     Instancia: INSTANCE_ROOT
+     Versión actual: 1
+     Conjunto actual SHA-256: OLD_SET_SHA256
+     AGENTS.md actual SHA-256: OLD_AGENTS_SHA256
+     CLAUDE.md actual SHA-256: OLD_CLAUDE_SHA256
+     Versión nueva: 2
+     Conjunto nuevo SHA-256: NEW_SET_SHA256
+     AGENTS.md nuevo SHA-256: NEW_AGENTS_SHA256
+     CLAUDE.md nuevo SHA-256: NEW_CLAUDE_SHA256
+     Descriptor nuevo SHA-256: NEW_DESCRIPTOR_SHA256
+     Se reemplazarán AGENTS.md y CLAUDE.md, se añadirá work/instructions.json y se regenerará work/integrity.json para cubrirlos.
+     Se conservarán byte a byte instance.json, dossier/, corpus/, characters/ y narrative/.
+     Esta acción cambia solo las instrucciones locales del agente; no cambia las normas del foro, no publica ni usa red.
+     ```
+
+     Invocar con
+     `phrase_prefix="ACTUALIZAR-INSTRUCCIONES <forum_id> v1-a-v2"`; la barrera añade exactamente
+     `Escribe exactamente: ACTUALIZAR-INSTRUCCIONES <forum_id> v1-a-v2 <NONCE>\n> `, donde nonce
+     conserva `[A-HJ-NP-Z2-9]{8}`. La confirmación autoriza solo esos bytes v2 calculados y no una
+     ampliación del corpus. No persistir frase, nonce, receipt ni identidad supuesta.
+
+     **Una primitiva transaccional, dos autorizaciones.** Extraer la mecánica de `_swap_in` a un
+     helper interno neutral que reciba raíz lógica, mapa completo esperado, huella completa previa,
+     etiqueta de staging/backup y callback de validación. El helper solo: crea staging hermano,
+     escribe/fsync cada byte, carga el staging como la ruta lógica final, ejecuta la validación
+     específica, comprueba que la raíz no cambió, renombra raíz→backup y staging→raíz, restaura ante
+     fallo, valida lo publicado y borra backup. No conoce `Terminal`, frases, workspace, versión de
+     instrucciones ni qué cambio está autorizado.
+
+     `update_instance` y `update_instance_instructions` construyen planes/dataclasses distintos,
+     prompts distintos y callbacks distintos, pero usan el mismo
+     `update_lock_path` (`.<instancia>.instance-update.lock`) y la misma primitiva. Conservar los
+     prefijos hermanos `.update-staging-<token>`/`.update-backup-<token>` y hacer que cualquiera de
+     las dos operaciones rechace restos de la otra: un backup puede ser la única copia recuperable.
+     La frase `ACTUALIZAR-INSTANCIA ...` nunca sirve para instrucciones y
+     `ACTUALIZAR-INSTRUCCIONES ...` nunca aplica corpus. Si una operación completa durante el prompt
+     de la otra, la replanificación bajo lock produce `CONFLICT`; no se reutiliza la confirmación
+     sobre un plan nuevo.
+
+     Para 5a, construir el árbol nuevo con el conjunto de instrucciones existente copiado byte a
+     byte: v1 conserva solo AGENTS/CLAUDE v1 y ausencia del descriptor; v2 conserva los dos Markdown
+     y descriptor v2. Regenerar `work/integrity.json` del nuevo snapshot incluyendo el descriptor
+     solo en v2. Ampliar `_check_preserved` para comparar modelo, hashes y bytes de instrucciones,
+     además de `characters/` y `narrative/`. El prompt y las salidas actuales de `instance update`
+     no cambian.
+
+     Para 7b, el mapa esperado parte de `_tree_bytes` y cambia únicamente `AGENTS.md`, `CLAUDE.md`,
+     `work/instructions.json` y `work/integrity.json`; el callback exige igualdad byte a byte de
+     **todas** las demás rutas, vuelve a comparar config/corpus/dossier/personajes/temas y exige
+     instrucciones v2 exactas. Staging y raíz publicada siempre contienen o bien el conjunto v1
+     completo o bien el v2 completo; nunca un AGENTS v2 con CLAUDE/política/descriptor v1. Los
+     fallos conservan los mensajes y garantías de 5a: antes del primer rename la raíz queda intacta;
+     si falla publicar se restaura; si falla también restaurar se conservan backup anterior y
+     staging nuevo con instrucciones explícitas de recuperación; si solo falla borrar el backup se
+     informa sin negar que la actualización ya ocurrió.
+
+     **CLI y salidas exactas.** Bajo `instance`, añadir grupo `instructions` y acción:
+
+     ```text
+     instance instructions update --instance RUTA
+     ```
+
+     `action_name="instance.instructions.update"`. No admite `--json`: antes de mostrar prompt
+     devuelve `INVALID_STATE`/3 con mensaje exacto `la actualización humana de instrucciones no
+     admite --json: ejecuta el comando en tu terminal y responde a la confirmación`; en JSON, el
+     objeto estándar `{"ok": false, "code": "INVALID_STATE", "message": <mensaje>}` ordenado y
+     con escapes ASCII, y en texto `Error (INVALID_STATE): <mensaje>` por stderr. No existe salida
+     JSON de éxito porque la barrera requiere TTY real.
+
+     Tras éxito, una sola línea LF:
+
+     ```text
+     Instrucciones actualizadas: FORUM_ID | v1 -> v2 | conjunto sha256=NEW_SET_SHA256.
+     ```
+
+     En retry v2, sin prompt:
+
+     ```text
+     Instrucciones ya actualizadas: FORUM_ID | v2 | conjunto sha256=CURRENT_SET_SHA256.
+     ```
+
+     Mantener byte a byte las salidas texto/JSON preexistentes de `instance init`, `status`,
+     `corpus`, `instance update`, character y narrative. Errores de la API nueva se traducen por el
+     mapa actual `INVALID_STATE=3`, `CONFLICT|UNSAFE_DESTINATION=4`, `IO=5`.
+
+     **Pruebas exhaustivas.** Cubrir al menos:
+
+     - golden raw/render v1 sin cambios y golden raw/render v2; bloque común exacto, paridad
+       AGENTS/CLAUDE, escaping PowerShell, UTF-8/LF, ausencia de placeholders, nombres temáticos,
+       URLs y comandos inexistentes; extraer los comandos de los bloques y comprobar que el parser
+       acepta cada forma con argumentos válidos o falla solo por datos/paths, no por sintaxis;
+     - init default y `--instructions-version 1` contra los bytes/layout/output actuales; init v2,
+       descriptor/manifest/hashes exactos, retry sin escritura y conflicto cruzado v1/v2; API
+       rechaza `bool`, `0`, `3` y texto;
+     - matriz de carga 2×2 entre schema de instancia e instrucciones; v1 inferida y v2 descrita
+       exponen el modelo correcto. Probar descriptor ausente/presente, versión/formato/hash/tamaño/
+       orden/claves/canonicalidad manipulados, Markdown cambiado, descriptor no cubierto, extra en
+       `work/`, link/junction y mezcla AGENTS/CLAUDE v1/v2; todo falla cerrado sin reescribir;
+     - migración v1→v2 con prompt completo byte a byte y regex del nonce. Comparar hashes antes/
+       después: solo cambian los cuatro paths autorizados; `instance.json`, todo `dossier/`,
+       `corpus/`, cada byte de `characters/` y `narrative/` permanecen idénticos y los estados
+       recargados son iguales. Incluir personaje con concepto/propuesta/ficha/respuesta de staff y
+       tema con post/semilla/borrador/publicación, no árboles vacíos;
+     - retry v2 sin prompt/lock/escritura/mtime; terminal no interactiva, frase errónea, EOF y
+       `KeyboardInterrupt`; cambio de cualquier archivo o aparición de locks/restos durante el
+       prompt; dos migraciones concurrentes; migración frente a escritura de personaje/tema y frente
+       a `instance update`; ninguna carrera pierde bytes ni acepta el plan antiguo;
+     - inyección de fallos al crear/escribir/fsync/cargar staging, raíz→backup, staging→raíz,
+       restauración, verificación publicada y limpieza. Comprobar raíz v1 o v2 completa, backup/
+       staging recuperables en el doble fallo, rechazo posterior de leftovers y ausencia de política
+       mezclada en todos los puntos;
+     - `instance update` v1→schema 2 y schema 2→2 preserva instrucciones v1 si partió de v1;
+       repetir partiendo de instrucciones v2 y comprobar bytes/descriptor/hash de conjunto
+       idénticos, incluido rollback con `characters/` y `narrative/` no vacíos;
+     - CLI: argumentos/choices, acción, salida exacta de éxito/no-op, rechazo JSON antes del prompt,
+       códigos/streams y que `init`, `status` y `update` antiguos conservan sus salidas. Recorrido
+       vertical nuevo con init v2 y otro que crea v1, migra, reinicia y ejecuta consultas 4d/4e/7a.
+
+     **Criterios de aceptación.** 7b queda completo cuando: (1) los tres templates y golden v1 no
+     cambian; (2) init sin opción sigue creando exactamente v1 e init explícito puede crear v2;
+     (3) `load_instance` acepta las cuatro combinaciones válidas, expone la versión independiente y
+     rechaza cualquier mezcla/manipulación probada; (4) una migración confirmada sustituye el
+     conjunto completo y nada más, retry es no-op y todo fallo conserva un árbol recuperable no
+     mezclado; (5) 5a preserva cualquiera de las dos versiones de instrucciones; (6) las v2 solo
+     nombran operaciones reales, reservan todas las barreras a la persona y describen el ciclo
+     semilla→desarrollo→revisión→publicación manual→registro con canales/citas correctos; (7) una
+     pregunta directa de automatización/identidad obliga a pausar; (8) normas del foro y acuerdos de
+     staff provienen solo del corpus aprobado; y (9) las suites completas pasan en 3.11 y 3.14 sin
+     red ni dependencias nuevas.
+
+     **Verificación exacta desde PowerShell.** Claude ejecuta desde el checkout, sin tocar la
+     instancia real:
+
+     ```powershell
+     git diff --check
+     py -3.11 -B -m unittest tests.test_instance_templates tests.test_instance tests.test_instance_cli tests.test_instance_update tests.test_instance_instruction_update tests.test_vertical_slice -v
+     py -3.11 -B -m unittest discover -s tests -v
+     py -3.14 -B -m unittest tests.test_instance_templates tests.test_instance tests.test_instance_cli tests.test_instance_update tests.test_instance_instruction_update tests.test_vertical_slice -v
+     py -3.14 -B -m unittest discover -s tests -v
+     git diff --exit-code 31c6af9 -- core/runtime/templates/AGENTS.template.md core/runtime/templates/CLAUDE.template.md core/runtime/templates/instance-policy.template.md
+     git diff --name-only 31c6af9 -- reference
+     rg -n "Nozomu|Naruto|Jcink|narutorol|Discord|discord\.com|https?://" core/runtime/templates/AGENTS.v2.template.md core/runtime/templates/CLAUDE.v2.template.md core/runtime/templates/instance-policy.v2.template.md
+     git status --short
+     ```
+
+     El diff de las tres plantillas v1 y el de `reference/` terminan sin salida. El `rg` puede
+     encontrar únicamente la palabra genérica `Discord` en la prohibición; no debe encontrar tema,
+     foro, URL ni integración. Revisar además el diff de `tests/expected_instance_templates.py`
+     para confirmar que las tres constantes v1 no cambiaron y solo se añadieron golden v2.
+
+     **Validación funcional manual, local y posterior.** Sobre una **copia** externa de la instancia
+     real, nunca sobre la única copia, obtener antes un inventario `ruta relativa -> SHA-256` de
+     todos los archivos. Ejecutar en TTY real:
+
+     ```powershell
+     Push-Location '<CHECKOUT_31C6AF9_MAS_7B>'
+     py -3.11 -B -m core.runtime.cli instance status --instance '<COPIA_INSTANCIA>'
+     py -3.11 -B -m core.runtime.cli instance instructions update --instance '<COPIA_INSTANCIA>'
+     py -3.11 -B -m core.runtime.cli instance status --instance '<COPIA_INSTANCIA>'
+     py -3.11 -B -m core.runtime.cli character effective show --instance '<COPIA_INSTANCIA>' --character-id '<ID_PERSONAJE>'
+     py -3.11 -B -m core.runtime.cli character draft list --instance '<COPIA_INSTANCIA>' --character-id '<ID_PERSONAJE>'
+     py -3.11 -B -m core.runtime.cli narrative topic list --instance '<COPIA_INSTANCIA>' --character-id '<ID_PERSONAJE>'
+     py -3.11 -B -m core.runtime.cli narrative topic show --instance '<COPIA_INSTANCIA>' --topic-id '<ID_TEMA>'
+     py -3.11 -B -m core.runtime.cli instance instructions update --instance '<COPIA_INSTANCIA>'
+     Pop-Location
+     ```
+
+     La persona compara visualmente versiones/hashes del prompt y teclea la frase. Después compara
+     el inventario: solo pueden diferir `AGENTS.md`, `CLAUDE.md`, `work/instructions.json` (alta) y
+     `work/integrity.json`; todos los demás hashes y el contenido lógico de personaje/tema son
+     iguales. Abrir una conversación nueva en la raíz de la copia y comprobar, sin red/modelo
+     adicional, que el agente consulta un tema existente, pide a la persona ejecutar semilla/post/
+     publicación, puede preparar y registrar un `narrative draft create`, muestra solo
+     `publishable_text` para copia, separa OOC/privado/pendientes y se detiene ante una pregunta
+     simulada sobre automatización/identidad. No publicar, abrir locators ni contactar a terceros en
+     esta validación.
+
+     **Riesgos y dudas de 7b.** No queda una decisión bloqueante para el usuario: la compatibilidad
+     exige default v1, la actualización separada fija v1→v2 y no hay razón para ofrecer downgrade.
+     El descriptor detecta corrupción y mezclas, no a un actor local capaz de reconstruir un
+     conjunto v1 entero y todos sus hashes; resolver autenticidad exigiría una raíz de confianza
+     fuera de la instancia y queda fuera de alcance. La duplicación AGENTS/CLAUDE puede divergir:
+     golden y prueba de igualdad salvo el párrafo específico la frenan. Futuras operaciones de CLI
+     requerirán instrucciones v3 y otra migración explícita; no se modifica silenciosamente v2.
 
 7c. [ ] **Memoria semántica y correcciones por anotación (esbozo; detallar después de validar
      7a/7b).** Añadir detrás de un `MemoryRepository` un log inmutable por tema basado solo en
@@ -4987,3 +5455,72 @@ subincremento mínimo. No se cambia la política de instrucciones v1.
     por id): entrada 196, salida 176.725, caché leída 34.764.606, caché escrita 362.041.
   - Coste o cuota NO DISPONIBLE. Retrabajo: una ronda de corrección (4 hallazgos) y una
     verificación.
+
+### Incremento 7b — instrucciones de instancia v2 y migración
+- Rama: `feature/incremento-7-memoria-narrativa` (sobre `31c6af9`, 7a; `main` aún no lo
+  contiene). Plan detallado por Codex (hilo `01a13ac7-aaa8-7962-830d-52cf3828af76`).
+- Implementado: plantillas `{AGENTS,CLAUDE,instance-policy}.v2.template.md`; en `instance.py`,
+  constantes, `InstanceInstructions`, `LoadedInstance.instructions`, `_instruction_files` (terna
+  de plantillas por versión, nunca mezclada), descriptor `work/instructions.json`, detección por
+  presencia del descriptor y carga cerrada, `create_instance(..., instructions_version=1)`,
+  preservación de instrucciones y descriptor en `instance update`, primitiva neutral
+  `_swap_tree` (5a la usa vía `_swap_in`) y `update_instance_instructions` con su prompt; CLI
+  `instance init --instructions-version {1,2}` e `instance instructions update`.
+- Desviaciones y concreciones:
+  - Texto de las plantillas v2 redactado por Claude según los diez invariantes y las seis
+    secciones del plan; el golden lo congela. Añade las formas JSON exactas de las entradas que
+    ya existen (propuesta, respuesta del staff, post ajeno, semilla, borrador y publicación) para
+    que el agente no invente formatos, y permite que el agente pase a JSON literalmente lo que la
+    persona dicte o pegue (semilla, post ajeno), sin añadir ideas propias: la persona sigue viendo
+    el contenido exacto y confirmando con la frase.
+  - La validación de la migración compara los campos lógicos (`_logical`: configuración, corpus,
+    personajes, temas), no `LoadedInstance` entero: el expediente cargado guarda rutas físicas,
+    distintas en el staging. Sus bytes se comparan con el árbol completo.
+  - Una ronda de ampliación preparada antes de migrar las instrucciones sigue siendo aplicable
+    (ver REV7B-01): la base acepta también el manifiesto v1 que la misma instancia tendría sin
+    migrar, reconstruido solo desde sus estáticos actuales y las plantillas v1.
+- Pruebas (antes de la revisión): 621 OK en Python 3.11 y 3.14 (588 → 621). Nuevas: `test_instance_instruction_update`
+  (15: prompt byte a byte, solo cambian los cuatro paths, retry no-op sin cerrojo, barreras,
+  cambios/migración concurrentes durante el prompt, cerrojos y restos, fallos de escritura,
+  renombrado, restauración, verificación, borrado del backup y liberación del cerrojo, CLI);
+  `test_instance_templates` +8 (golden v2, invariantes, paridad AGENTS/CLAUDE, sin tema/URLs, y
+  cada comando de las plantillas es real y lo acepta el parser); `test_instance` +5 (v1 por
+  defecto idéntico, v2 exacto, retry, conflicto cruzado, argumento, 15 manipulaciones del
+  descriptor, conjuntos mezclados y descriptor no cubierto); `test_instance_update` +4 (los dos
+  ejes con rollback y dos rondas; cada actualización frente a la otra durante su prompt);
+  `test_instance_cli` +1; recorrido vertical con migración e init v2.
+- Verificación del plan: `git diff --check` limpio; plantillas v1 sin cambios desde `31c6af9` y
+  `expected_instance_templates.py` solo con adiciones; `reference/` sin cambios; en las plantillas
+  v2 solo aparece la palabra genérica «Discord» de la prohibición.
+- Revisión de Codex (hilo `01a13ae1-164b-77f0-ac17-bcd82051a111`): CAMBIOS SOLICITADOS, tres
+  hallazgos corregidos juntos, más los huecos de pruebas señalados.
+  - REV7B-01: `_legacy_manifest_sha256` reconstruye, con instrucciones v2, el manifiesto v1 de la
+    misma instancia; `_plan_update` acepta como base el manifiesto actual o ese, y sigue exigiendo
+    igualdad de revisión, corpus, `instance.json` y snapshot. La ronda preparada en v1 se aplica
+    tras migrar, con confirmación nueva, conservando las instrucciones v2.
+  - REV7B-02: bajo el cerrojo, el árbol se compara byte a byte antes de cargarlo; una alteración que
+    rompe la carga durante el prompt es `CONFLICT` y no escribe nada.
+  - REV7B-03: `LoadedInstance.instructions` es obligatorio (sin default, validado en
+    `__post_init__`).
+  - Pruebas añadidas: ronda v1 aplicada tras migrar y base reconstruida exacta; corrupciones de un
+    estático y de un estado mutable durante el prompt; fallos de `fsync`, de carga del staging y de
+    su limpieza (con resto que bloquea el siguiente intento); `work/` como junction y descriptor
+    como enlace simbólico; claves de los ejemplos JSON de las plantillas contra los parsers; campo
+    obligatorio. Suite: 626 OK en 3.11 y 3.14.
+- Verificación de Codex en el mismo hilo: APROBADO — 7b COMPLETO; REV7B-01..03 resueltos y huecos
+  de pruebas cubiertos. Archivado en `docs/analisis/incremento-7b-revision.md`.
+- Cierre: revisión de código completada; pruebas automatizadas 626 OK en 3.11 y 3.14; validación
+  funcional pendiente (solo la persona): migración con TTY real sobre una copia de la instancia
+  real y una conversación nueva en esa copia que opere 7a sin inventar comandos.
+- Métricas (acumulados de cada hilo, sin sumar caché ni razonamiento dos veces):
+  - Codex análisis (`gpt-5.6-sol`, hilo `01a13ac7-…`, 1 turno, 0 errores): entrada 1.851.950
+    (caché 1.727.232), salida 28.624 (razonamiento 14.537), escritura de caché 0.
+  - Codex revisión + verificación (`gpt-5.6-sol`, hilo `01a13ae1-…`, 2 turnos, 0 errores):
+    entrada 5.064.811 (caché 4.912.128), salida 22.176 (razonamiento 11.385), escritura de caché 0.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde «Hacer 7b primero» hasta antes del
+    commit; 45 respuestas de API deduplicadas por id): entrada 90, salida 80.609, caché leída
+    17.641.586, caché escrita 145.258.
+  - Coste o cuota NO DISPONIBLE. Retrabajo: una ronda de corrección (3 hallazgos y huecos de
+    pruebas) y una verificación; antes de la revisión, cuatro expectativas de test propias
+    (rutas distintas al comparar v1, rutas físicas del expediente, orden de casos, `replace` con
+    `None`).

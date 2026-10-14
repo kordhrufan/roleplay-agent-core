@@ -103,6 +103,25 @@ class InitStatusTest(InstanceCliCase):
         self.assertEqual((payload["action"], payload["created"]), ("instance.init", True))
         self.assertEqual(payload["instance"], str(self.output))
 
+    def test_init_with_instructions_v2_keeps_the_outputs(self):
+        argv = ["instance", "init", "--workspace", str(self.workspace), "--output",
+                str(self.output)]
+        code, out, _ = run(*argv, "--instructions-version", "2")
+        self.assertEqual(code, 0)
+        self.assertRegex(out, r"^Instancia creada para el foro «foro-neutral» en .+ "
+                              r"\(snapshot sha256=[0-9a-f]{64}\)\.\n$")
+        self.assertTrue((self.output / "work" / "instructions.json").is_file())
+        code, out, _ = run("--json", *argv, "--instructions-version", "2")
+        self.assertEqual((code, json.loads(out)["created"]), (0, False))
+        for extra in ((), ("--instructions-version", "1")):
+            with self.subTest(extra=extra):
+                code, out, _ = run("--json", *argv, *extra)
+                self.assertEqual((code, json.loads(out)["code"]), (4, "CONFLICT"))
+        default = self.root / "por-defecto"
+        self.assertEqual(run("instance", "init", "--workspace", str(self.workspace), "--output",
+                             str(default))[0], 0)
+        self.assertFalse((default / "work" / "instructions.json").exists())
+
     def test_status_without_workspace(self):
         instance = self.created()
         shutil.rmtree(self.workspace)

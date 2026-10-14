@@ -29,6 +29,7 @@ from core.runtime.instance import (
     render_instructions,
     snapshot_for_candidate,
     update_instance,
+    update_instance_instructions,
     update_lock_path,
 )
 from core.runtime import cli
@@ -760,6 +761,112 @@ class NarrativeUpdateTest(UpdateCase):
         self.assertEqual(self.narrative(), narrative)
         self.assertTrue(self.update().updated)
         self.assertEqual(self.narrative(), narrative)
+
+
+class InstructionsAxisTest(UpdateCase):
+    """7b: the corpus update keeps whichever instructions the instance has, byte for byte."""
+
+    def instructions_bytes(self):
+        return {name: (self.instance / name).read_bytes() if (self.instance / name).exists()
+                else None for name in ("AGENTS.md", "CLAUDE.md", "work/instructions.json")}
+
+    def test_v1_instructions_survive_v1_to_v2_corpus(self):
+        before = self.instructions_bytes()
+        model = self.loaded_instance().instructions
+        self.closed_round()
+        self.assertTrue(self.update().updated)
+        after = self.loaded_instance()
+        self.assertEqual((self.instructions_bytes(), after.instructions, after.config.schema_version),
+                         (before, model, 2))
+        self.assertIsNone(before["work/instructions.json"])
+
+    def test_v2_instructions_survive_two_corpus_rounds_and_a_rollback(self):
+        self.assertTrue(update_instance_instructions(self.instance, core_root=ROOT,
+                                                     terminal=FakeTerminal()).updated)
+        before = self.instructions_bytes()
+        model = self.loaded_instance().instructions
+        characters = self.characters()
+        self.closed_round()
+        replace_calls = FailureTest.flaky_replace(self, lambda s, d: "update-staging" in s.name)
+        with mock.patch.object(instance_module.os, "replace", replace_calls):
+            with self.assertRaises(InstanceError):
+                self.update()
+        self.assertEqual((self.instructions_bytes(), self.loaded_instance().config.schema_version),
+                         (before, 1))
+        self.assertTrue(self.update().updated)
+        integrity = json.loads((self.instance / "work" / "integrity.json").read_bytes())
+        self.assertEqual(integrity["schema_version"], 2)
+        self.assertIn("work/instructions.json", [f["path"] for f in integrity["files"]])
+        third = successor_dossier(self.root, "exp3", version="2026-10-20", edit=lambda t, d: t.replace(
+            "Las del sur, del fuego.\n~~~~\n",
+            'Las del sur, del fuego.\n~~~~\n\n### Fuente\nMetadatos: id="mares" | versión="1" | '
+            'autoridad="Staff" | alcance="foro"\n~~~~ texto\nEl mar no tiene fondo.\n~~~~\n'))
+        self.workspace = self.root / "ampliacion-3"
+        value = new_candidate("mar", quote="El mar no tiene fondo.")
+        value["citations"][0]["source_id"] = "mares"
+        self.extend(dossier_dir=third)
+        self.add(value)
+        self.decide("mar")
+        self.close()
+        self.assertTrue(self.update().updated)
+        after = self.loaded_instance()
+        self.assertEqual((self.instructions_bytes(), after.instructions, self.characters()),
+                         (before, model, characters))
+        self.assertEqual(self.siblings(), [])
+        # Already v2: the instructions update stays a no-op on a schema 2 instance.
+        self.assertFalse(update_instance_instructions(self.instance, core_root=ROOT,
+                                                      terminal=FakeTerminal()).updated)
+
+    def test_each_update_conflicts_when_the_other_completes_during_its_prompt(self):
+        self.closed_round()
+        migrate = lambda: update_instance_instructions(self.instance, core_root=ROOT,  # noqa: E731
+                                                       terminal=FakeTerminal())
+        with self.assertRaises(InstanceError) as ctx:
+            self.update(FakeTerminal(on_read=migrate))
+        self.assertEqual(ctx.exception.code, "CONFLICT")
+        after = self.loaded_instance()
+        self.assertEqual((after.config.schema_version, after.instructions.version), (1, 2))
+        # REV7B-01: the round prepared on the v1 manifest still applies after the migration,
+        # with a new confirmation, and keeps the v2 instructions byte for byte.
+        migrated = self.instructions_bytes()
+        terminal = FakeTerminal()
+        self.assertTrue(self.update(terminal).updated)
+        self.assertIn("ACTUALIZAR-INSTANCIA foro-neutral r2", terminal.output)
+        after = self.loaded_instance()
+        self.assertEqual((after.config.schema_version, after.instructions.version,
+                          self.instructions_bytes()), (2, 2, migrated))
+        self.assertEqual(self.siblings(), [])
+
+    def test_a_round_prepared_on_v1_needs_the_same_static_files(self):
+        self.closed_round()
+        update_instance_instructions(self.instance, core_root=ROOT, terminal=FakeTerminal())
+        legacy = instance_module._legacy_manifest_sha256
+        with mock.patch.object(instance_module, "_legacy_manifest_sha256",
+                               lambda instance, static: ()):
+            with self.assertRaises(InstanceError) as ctx:
+                self.update()
+        self.assertIn("snapshot base", ctx.exception.reason)
+        # The rebuilt manifest is exactly the one the workspace bound.
+        loaded = self.loaded_instance()
+        files = {path: (self.instance / path).read_bytes()
+                 for path in ("instance.json", "work/integrity.json", "AGENTS.md", "CLAUDE.md",
+                              "corpus/state.json", "work/instructions.json",
+                              *(f.path for f in loaded.config.dossier_files))}
+        base = self.loaded().config.base_instance
+        self.assertEqual(legacy(loaded, files), (base.integrity_sha256,))
+        self.assertTrue(self.update().updated)
+
+    def test_the_instructions_update_conflicts_when_the_corpus_update_completes(self):
+        self.closed_round()
+        with self.assertRaises(InstanceError) as ctx:
+            update_instance_instructions(self.instance, core_root=ROOT,
+                                         terminal=FakeTerminal(on_read=lambda: self.update()))
+        self.assertEqual(ctx.exception.code, "CONFLICT")
+        after = self.loaded_instance()
+        self.assertEqual((after.config.schema_version, after.instructions.version), (2, 1))
+        self.assertTrue(update_instance_instructions(self.instance, core_root=ROOT,
+                                                     terminal=FakeTerminal()).updated)
+        self.assertEqual(self.loaded_instance().config.schema_version, 2)
 
 
 class UpdateCliTest(UpdateCase):

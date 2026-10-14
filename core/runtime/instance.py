@@ -106,6 +106,18 @@ INSTANCE_TEMPLATE = _TEMPLATES / "instance.template.json"
 POLICY_TEMPLATE = _TEMPLATES / "instance-policy.template.md"
 AGENTS_TEMPLATE = _TEMPLATES / "AGENTS.template.md"
 CLAUDE_TEMPLATE = _TEMPLATES / "CLAUDE.template.md"
+AGENTS_V2_TEMPLATE = _TEMPLATES / "AGENTS.v2.template.md"
+CLAUDE_V2_TEMPLATE = _TEMPLATES / "CLAUDE.v2.template.md"
+POLICY_V2_TEMPLATE = _TEMPLATES / "instance-policy.v2.template.md"
+LEGACY_INSTRUCTIONS_VERSION = 1
+CURRENT_INSTRUCTIONS_VERSION = 2
+INSTRUCTIONS_FORMAT = "roleplay-agent-core-instance-instructions"
+INSTRUCTIONS_DESCRIPTOR = "work/instructions.json"  # only in instructions v2 (7b)
+_INSTRUCTION_TEMPLATES = {
+    LEGACY_INSTRUCTIONS_VERSION: (AGENTS_TEMPLATE, CLAUDE_TEMPLATE, POLICY_TEMPLATE),
+    CURRENT_INSTRUCTIONS_VERSION: (AGENTS_V2_TEMPLATE, CLAUDE_V2_TEMPLATE, POLICY_V2_TEMPLATE),
+}
+_INSTRUCTIONS_KEYS = frozenset({"files", "format", "instructions_sha256", "instructions_version"})
 COMMON_BEGIN = "<!-- BEGIN ROLEPLAY-AGENT-CORE:COMMON -->\n"
 COMMON_END = "<!-- END ROLEPLAY-AGENT-CORE:COMMON -->"
 
@@ -230,6 +242,33 @@ class ApprovedCorpusEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class InstanceInstructions:
+    """The agent instructions of an instance (7b), a version axis apart from `schema_version`.
+
+    v1 has no descriptor: AGENTS.md and CLAUDE.md must be the v1 render. v2 is described by
+    `work/instructions.json`, covered by the integrity manifest. `instructions_sha256` hashes the
+    set (files, format, version), so it exists for an inferred v1 too."""
+
+    version: int
+    files: tuple[ManagedFile, ...]
+    instructions_sha256: str
+    descriptor_sha256: str | None
+
+    def __post_init__(self) -> None:
+        if type(self.version) is not int or self.version not in _INSTRUCTION_TEMPLATES:
+            _invalid(f"versión de instrucciones desconocida: {self.version!r}")
+        if (not isinstance(self.files, tuple) or not all(isinstance(f, ManagedFile)
+                                                         for f in self.files)
+                or [f.path for f in self.files] != [AGENTS_FILE, CLAUDE_FILE]):
+            _invalid("las instrucciones son exactamente AGENTS.md y CLAUDE.md")
+        _require_sha256("instructions_sha256", self.instructions_sha256)
+        if (self.descriptor_sha256 is None) != (self.version == LEGACY_INSTRUCTIONS_VERSION):
+            _invalid("solo las instrucciones v2 tienen descriptor")
+        if self.descriptor_sha256 is not None:
+            _require_sha256("descriptor_sha256", self.descriptor_sha256)
+
+
+@dataclass(frozen=True, slots=True)
 class LoadedInstance:
     """`closure` is the 4c1 closure (v1) or the current `CorpusSnapshot` (v2); `corpus` is the
     snapshot chain of a v2 instance (None for v1: read it with `closed_corpus_of`)."""
@@ -242,8 +281,21 @@ class LoadedInstance:
     decisions: tuple[AssimilationDecision, ...]
     closure: AssimilationClosure | CorpusSnapshot
     characters: tuple[LoadedCharacter, ...]
+    instructions: InstanceInstructions
     corpus: ClosedCorpus | None = None
     topics: tuple[LoadedNarrativeTopic, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.instructions, InstanceInstructions):
+            _invalid("una instancia cargada siempre tiene sus instrucciones")
+
+
+@dataclass(frozen=True, slots=True)
+class InstanceInstructionsUpdateResult:
+    instance: LoadedInstance
+    previous: InstanceInstructions
+    instructions: InstanceInstructions
+    updated: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,10 +311,16 @@ class InstanceInitResult:
     created: bool
 
 
-def create_instance(workspace_root: Path, *, output: Path, core_root: Path) -> InstanceInitResult:
-    """Materialize a closed workspace as a new instance at `output`, or return the identical one."""
+def create_instance(workspace_root: Path, *, output: Path, core_root: Path,
+                    instructions_version: int = LEGACY_INSTRUCTIONS_VERSION) -> InstanceInitResult:
+    """Materialize a closed workspace as a new instance at `output`, or return the identical one.
+
+    Without `instructions_version` the instance keeps the v1 instructions, byte for byte as
+    before 7b; v2 must be asked for explicitly. Another version in the folder is a CONFLICT."""
+    if type(instructions_version) is not int or instructions_version not in _INSTRUCTION_TEMPLATES:
+        raise InstanceError("INVALID_STATE", "la versión de instrucciones debe ser 1 o 2")
     try:
-        return _create_instance(Path(workspace_root), output, core_root)
+        return _create_instance(Path(workspace_root), output, core_root, instructions_version)
     except (WorkspaceError, PersistenceError, AssimilationError, CharacterError) as exc:
         raise InstanceError(exc.code, exc.reason) from exc
     except DossierError as exc:
@@ -332,13 +390,14 @@ def get_approved_candidate(instance: LoadedInstance, *, candidate_id: str,
 # --- Creation ---------------------------------------------------------------------------------
 
 
-def _create_instance(workspace_root: Path, output: Path, core_root: Path) -> InstanceInitResult:
+def _create_instance(workspace_root: Path, output: Path, core_root: Path,
+                     instructions_version: int) -> InstanceInitResult:
     core_root = _checkout(core_root)
     first = _read_source(workspace_root, core_root)
     target = _absolute(output)
     _check_destination(target, core_root, workspace_root)
     initial = _destination_state(target)
-    expected = _expected_files(first, target, core_root)
+    expected = _expected_files(first, target, core_root, instructions_version)
     if target.exists() and any(target.iterdir()):
         return InstanceInitResult(_existing(target, expected, core_root), False)
     return _materialize(target, expected, workspace_root, core_root, first, initial)
@@ -403,7 +462,8 @@ def _check_destination(target: Path, core_root: Path, workspace_root: Path) -> N
         _unsafe(f"{target} existe y no es una carpeta")
 
 
-def _expected_files(source: _Source, target: Path, core_root: Path) -> dict[str, bytes]:
+def _expected_files(source: _Source, target: Path, core_root: Path,
+                    instructions_version: int = LEGACY_INSTRUCTIONS_VERSION) -> dict[str, bytes]:
     instance_root = _canonical(target)
     core = _canonical(core_root)
     meta = source.loaded_dossier.dossier
@@ -427,8 +487,7 @@ def _expected_files(source: _Source, target: Path, core_root: Path) -> dict[str,
     files: dict[str, bytes] = dict(source.dossier_files)
     files[INSTANCE_CORPUS] = source.corpus
     files[INSTANCE_FILE] = canonical_json_bytes(config_data, pretty=True)
-    files[AGENTS_FILE] = render_instructions(AGENTS_TEMPLATE, config)
-    files[CLAUDE_FILE] = render_instructions(CLAUDE_TEMPLATE, config)
+    files.update(_instruction_files(instructions_version, config))
     covered = sorted((_managed(path, data) for path, data in files.items()), key=lambda f: f.path)
     integrity = {"algorithm": "sha256", "files": [f.as_json() for f in covered],
                  "schema_version": INSTANCE_SCHEMA_VERSION}
@@ -436,16 +495,73 @@ def _expected_files(source: _Source, target: Path, core_root: Path) -> dict[str,
     return files
 
 
-def render_instructions(template: Path, config: InstanceConfig) -> bytes:
+def render_instructions(template: Path, config: InstanceConfig, *,
+                        policy_template: Path = POLICY_TEMPLATE) -> bytes:
     """Render AGENTS.md or CLAUDE.md for an instance; the common block is the policy verbatim."""
     text = string.Template(template.read_text(encoding="utf-8")).substitute(
         display_name=config.display_name,
         forum_id=config.forum_id,
-        common_policy=POLICY_TEMPLATE.read_text(encoding="utf-8"),
+        common_policy=policy_template.read_text(encoding="utf-8"),
         core_root_ps=_powershell(config.core_root),
         instance_root_ps=_powershell(config.instance_root),
     )
     return text.encode("utf-8")
+
+
+def _instruction_files(version: int, config: InstanceConfig) -> dict[str, bytes]:
+    """AGENTS.md and CLAUDE.md of one version, from its own three templates (never mixed), plus
+    the descriptor in v2."""
+    agents, claude, policy = _INSTRUCTION_TEMPLATES[version]
+    files = {AGENTS_FILE: render_instructions(agents, config, policy_template=policy),
+             CLAUDE_FILE: render_instructions(claude, config, policy_template=policy)}
+    if version != LEGACY_INSTRUCTIONS_VERSION:
+        managed = (_managed(AGENTS_FILE, files[AGENTS_FILE]),
+                   _managed(CLAUDE_FILE, files[CLAUDE_FILE]))
+        files[INSTRUCTIONS_DESCRIPTOR] = canonical_json_bytes(
+            _descriptor_record(version, managed), pretty=True)
+    return files
+
+
+def _instructions_set_sha256(version: int, files: tuple[ManagedFile, ...]) -> str:
+    return _sha256(canonical_json_bytes({"files": [f.as_json() for f in files],
+                                         "format": INSTRUCTIONS_FORMAT,
+                                         "instructions_version": version}, pretty=False))
+
+
+def _descriptor_record(version: int, files: tuple[ManagedFile, ...]) -> dict[str, object]:
+    return {"files": [f.as_json() for f in files], "format": INSTRUCTIONS_FORMAT,
+            "instructions_sha256": _instructions_set_sha256(version, files),
+            "instructions_version": version}
+
+
+def _instructions_of(config: InstanceConfig, agents_raw: bytes, claude_raw: bytes,
+                     descriptor_raw: bytes | None) -> InstanceInstructions:
+    """Which instructions an instance has: decided only by the descriptor being there, then
+    every byte must be the render of that version's templates."""
+    files = (_managed(AGENTS_FILE, agents_raw), _managed(CLAUDE_FILE, claude_raw))
+    version = LEGACY_INSTRUCTIONS_VERSION
+    if descriptor_raw is not None:
+        data = parse_strict_json(descriptor_raw, INSTRUCTIONS_DESCRIPTOR)
+        if descriptor_raw != canonical_json_bytes(data, pretty=True):
+            _invalid(f"{INSTRUCTIONS_DESCRIPTOR} se modificó fuera del core (no está en forma "
+                     "canónica)")
+        if not isinstance(data, dict) or set(data) != _INSTRUCTIONS_KEYS:
+            _invalid(f"{INSTRUCTIONS_DESCRIPTOR} no tiene exactamente las claves esperadas")
+        if (data["format"] != INSTRUCTIONS_FORMAT
+                or type(data["instructions_version"]) is not int
+                or data["instructions_version"] != CURRENT_INSTRUCTIONS_VERSION):
+            _invalid(f"{INSTRUCTIONS_DESCRIPTOR}: formato o versión de instrucciones desconocidos")
+        if _parse_managed_list(data["files"]) != files:
+            _invalid(f"{INSTRUCTIONS_DESCRIPTOR} no corresponde a AGENTS.md y CLAUDE.md")
+        version = CURRENT_INSTRUCTIONS_VERSION
+        if data != _descriptor_record(version, files):
+            _invalid(f"{INSTRUCTIONS_DESCRIPTOR}: el hash del conjunto no corresponde")
+    expected = _instruction_files(version, config)
+    for name, raw in ((AGENTS_FILE, agents_raw), (CLAUDE_FILE, claude_raw)):
+        if expected[name] != raw:
+            _invalid(f"{name} no corresponde a su plantilla (instrucciones v{version})")
+    return InstanceInstructions(version, files, _instructions_set_sha256(version, files),
+                                None if descriptor_raw is None else _sha256(descriptor_raw))
 
 
 def _existing(target: Path, expected: dict[str, bytes], core_root: Path) -> LoadedInstance:
@@ -526,8 +642,8 @@ def update_instance(instance_root: Path, *, workspace_root: Path, core_root: Pat
     """Adopt the closed snapshot of an expansion workspace in the instance it was made for.
 
     Only the static files change (instance.json v2, dossier/, corpus/state.json v2 and the
-    integrity manifest); AGENTS.md, CLAUDE.md and every byte under characters/ are copied as
-    they are. The new tree is staged and validated next to the instance, then swapped in by
+    integrity manifest); AGENTS.md, CLAUDE.md, the instructions descriptor (v2) and every byte
+    under characters/ and narrative/ are copied as they are. The new tree is staged and validated next to the instance, then swapped in by
     renaming; if publishing fails the previous instance is restored or kept as a backup, never
     deleted. Barrier A blocks the automated command path but does not authenticate a person.
     """
@@ -621,7 +737,9 @@ def _plan_update(instance_root: Path, workspace_root: Path, core_root: Path) -> 
     if workspace.config.forum_id != instance.config.forum_id:
         raise InstanceError("CONFLICT", "la ampliación es de otro foro")
     static_paths = [INSTANCE_FILE, INSTANCE_INTEGRITY, AGENTS_FILE, CLAUDE_FILE, INSTANCE_CORPUS,
-                    *(f.path for f in instance.config.dossier_files)]
+                    *(f.path for f in instance.config.dossier_files),
+                    *([INSTRUCTIONS_DESCRIPTOR] if instance.instructions.descriptor_sha256
+                      else [])]
     static = {path: instance_files[path] for path in static_paths}
     characters = _mutable_files(instance_files)
     snapshot = workspace.closure
@@ -636,12 +754,13 @@ def _plan_update(instance_root: Path, workspace_root: Path, core_root: Path) -> 
     expected = None
     if not applied:
         base = workspace.config.base_instance
+        manifests = {_sha256(static[INSTANCE_INTEGRITY]), *_legacy_manifest_sha256(instance,
+                                                                                  static)}
         if (base.corpus_revision, base.corpus_sha256, base.instance_json_sha256,
-                base.integrity_sha256, base.snapshot_sha256) != (
+                base.snapshot_sha256) != (
             instance.corpus_revision, _sha256(static[INSTANCE_CORPUS]),
-            _sha256(static[INSTANCE_FILE]), _sha256(static[INSTANCE_INTEGRITY]),
-            instance.config.corpus.snapshot_sha256,
-        ):
+            _sha256(static[INSTANCE_FILE]), instance.config.corpus.snapshot_sha256,
+        ) or base.integrity_sha256 not in manifests:
             raise InstanceError("CONFLICT", "la instancia no está en el snapshot base de esta "
                                             "ampliación (otra ampliación ya se aplicó, la base "
                                             "es otra o la cadena se bifurcaría)")
@@ -653,6 +772,24 @@ def _plan_update(instance_root: Path, workspace_root: Path, core_root: Path) -> 
                        context.delta.previous_version, context.delta.version,
                        statuses.count(ReviewStatus.APPROVED),
                        statuses.count(ReviewStatus.REJECTED), applied, expected)
+
+
+def _legacy_manifest_sha256(instance: LoadedInstance, static: dict[str, bytes]) -> tuple[str, ...]:
+    """With v2 instructions, the hash of the one manifest this same instance had with v1 ones.
+
+    Migrating the instructions regenerates work/integrity.json; an expansion round prepared
+    before that binds the v1 manifest. It is rebuilt from the current static files and the v1
+    templates only, so any other change (instance.json, dossier, corpus) still breaks the base."""
+    if instance.instructions.version == LEGACY_INSTRUCTIONS_VERSION:
+        return ()
+    files = dict(static)
+    files.pop(INSTRUCTIONS_DESCRIPTOR)
+    files.pop(INSTANCE_INTEGRITY)
+    files.update(_instruction_files(LEGACY_INSTRUCTIONS_VERSION, instance.config))
+    covered = sorted((_managed(path, data) for path, data in files.items()), key=lambda f: f.path)
+    integrity = {"algorithm": "sha256", "files": [f.as_json() for f in covered],
+                 "schema_version": instance.config.schema_version}
+    return (_sha256(canonical_json_bytes(integrity, pretty=True)),)
 
 
 def _expected_update_files(instance: LoadedInstance, workspace, workspace_files: dict[str, bytes],
@@ -683,6 +820,8 @@ def _expected_update_files(instance: LoadedInstance, workspace, workspace_files:
     files[INSTANCE_FILE] = canonical_json_bytes(config_data, pretty=True)
     files[AGENTS_FILE] = static[AGENTS_FILE]
     files[CLAUDE_FILE] = static[CLAUDE_FILE]
+    if INSTRUCTIONS_DESCRIPTOR in static:
+        files[INSTRUCTIONS_DESCRIPTOR] = static[INSTRUCTIONS_DESCRIPTOR]
     covered = sorted((_managed(path, data) for path, data in files.items()), key=lambda f: f.path)
     integrity = {"algorithm": "sha256", "files": [f.as_json() for f in covered],
                  "schema_version": EXPANDED_INSTANCE_SCHEMA_VERSION}
@@ -765,13 +904,23 @@ def _is_create_lock(entry: Path) -> bool:
 
 
 def _swap_in(plan: _UpdatePlan, core_root: Path) -> None:
-    root = plan.instance.instance_root
+    _swap_tree(plan.instance.instance_root, {**plan.expected, **plan.characters},
+               plan.instance_files, core_root,
+               lambda loaded, path: _check_preserved(plan, loaded, _characters_bytes(path)))
+
+
+def _swap_tree(root: Path, files: dict[str, bytes], original: dict[str, bytes], core_root: Path,
+               check) -> None:
+    """Stage `files` as the whole new tree next to `root`, validate it as if it lived at `root`
+    (`check(loaded, path)`), make sure `root` is still `original` and swap by renaming; restore,
+    or keep a recoverable backup, on failure. It knows nothing of terminals, phrases or which
+    change was authorized: the callers decide that before calling it, under the update lock."""
     token = secrets.token_hex(8)
     staging = root.parent / f".{root.name}.update-staging-{token}"
     backup = root.parent / f".{root.name}.update-backup-{token}"
     staging.mkdir()
     try:
-        for relative, data in {**plan.expected, **plan.characters}.items():
+        for relative, data in files.items():
             if relative.endswith("/"):
                 staging.joinpath(*relative.rstrip("/").split("/")).mkdir(parents=True,
                                                                         exist_ok=True)
@@ -783,8 +932,8 @@ def _swap_in(plan: _UpdatePlan, core_root: Path) -> None:
                 stream.flush()
                 os.fsync(stream.fileno())
         staged = _load_instance(staging, root, core_root)
-        _check_preserved(plan, staged, _characters_bytes(staging))
-        if _tree_bytes(root) != plan.instance_files:
+        check(staged, staging)
+        if _tree_bytes(root) != original:
             raise InstanceError("CONFLICT", "la instancia cambió mientras se preparaba la "
                                             "actualización; no se ha tocado nada")
     except BaseException as exc:
@@ -818,7 +967,7 @@ def _swap_in(plan: _UpdatePlan, core_root: Path) -> None:
                                   f"restaurado la anterior{note}") from exc
     try:
         published = _load_instance(root, root, core_root)
-        _check_preserved(plan, published, _characters_bytes(root))
+        check(published, root)
     except (InstanceError, WorkspaceError, PersistenceError, AssimilationError, CharacterError,
             DossierError, OSError) as exc:
         raise InstanceError("IO", f"la instancia nueva se publicó pero no supera la verificación "
@@ -829,10 +978,141 @@ def _swap_in(plan: _UpdatePlan, core_root: Path) -> None:
                                   f"anterior {leftover}: bórrala a mano")
 
 
+# --- Instructions update (7b) -------------------------------------------------------------------
+
+
+def update_instance_instructions(instance_root: Path, *, core_root: Path,
+                                 terminal: Terminal) -> InstanceInstructionsUpdateResult:
+    """Replace the v1 agent instructions of an instance by v2 (barrier A).
+
+    Only AGENTS.md and CLAUDE.md change, work/instructions.json is added and the integrity
+    manifest is regenerated to cover them; every other byte (instance.json, dossier/, corpus/,
+    characters/, narrative/) is kept. It shares the staging/swap/restore primitive and the lock of
+    `instance update`, but its phrase authorizes only this change. Already v2: a no-op."""
+    try:
+        return _update_instructions(Path(instance_root), core_root, terminal)
+    except (WorkspaceError, PersistenceError, AssimilationError, CharacterError) as exc:
+        raise InstanceError(exc.code, exc.reason) from exc
+    except DossierError as exc:
+        raise InstanceError("INVALID_STATE", str(exc)) from exc
+    except OSError as exc:
+        raise InstanceError("IO", f"error de disco al actualizar las instrucciones: {exc}") from exc
+
+
+def _update_instructions(instance_root: Path, core_root: Path,
+                         terminal: Terminal) -> InstanceInstructionsUpdateResult:
+    _require_interactive(terminal)
+    core_root = _checkout(core_root)
+    instance, files = _stable_instance(instance_root, core_root)
+    root = instance.instance_root
+    _reject_update_leftovers(root)
+    previous = instance.instructions
+    if previous.version == CURRENT_INSTRUCTIONS_VERSION:
+        return InstanceInstructionsUpdateResult(instance, previous, previous, False)
+    lock = update_lock_path(root)
+    if os.path.lexists(lock):
+        require_no_update(root)
+    _reject_character_locks(root)
+    expected, instructions = _instructions_tree(instance, files)
+    confirm_human_action(
+        terminal, phrase_prefix=f"ACTUALIZAR-INSTRUCCIONES {instance.config.forum_id} v1-a-v2",
+        prompt=_instructions_prompt(instance, instructions))
+    with _corpus_lock(lock.with_name(lock.name[:-len(".lock")]), "la instancia"):
+        if _tree_bytes(root) != files:  # before loading: a change that breaks it is a conflict too
+            raise InstanceError("CONFLICT", "la instancia, sus personajes o sus temas cambiaron "
+                                            "mientras se confirmaba; no se ha tocado nada")
+        again, again_files = _stable_instance(instance_root, core_root)
+        if again_files != files or again != instance:
+            raise InstanceError("CONFLICT", "la instancia, sus personajes o sus temas cambiaron "
+                                            "mientras se confirmaba; no se ha tocado nada")
+        _reject_character_locks(root)
+        _reject_update_leftovers(root)
+
+        def check(loaded: LoadedInstance, path: Path) -> None:
+            if _tree_bytes(path) != expected:
+                _invalid("la instancia preparada no contiene exactamente lo confirmado")
+            if loaded.instructions != instructions:
+                _invalid("las instrucciones preparadas no son las v2 confirmadas")
+            # dossier/ holds physical paths; its bytes are already compared through the tree.
+            if _logical(loaded) != _logical(again):
+                _invalid("la configuración, el corpus, los personajes o los temas no se "
+                         "conservan exactamente")
+
+        _swap_tree(root, expected, files, core_root, check)
+    loaded = load_instance(root, expected_core_root=core_root)
+    return InstanceInstructionsUpdateResult(loaded, previous, loaded.instructions, True)
+
+
+def _logical(instance: LoadedInstance) -> tuple:
+    """What an instance means, wherever it is read from (staging or its own root)."""
+    return (instance.config, instance.instance_root, instance.corpus_revision,
+            instance.candidates, instance.decisions, instance.closure, instance.corpus,
+            instance.characters, instance.topics)
+
+
+def _stable_instance(instance_root: Path, core_root: Path) -> tuple[LoadedInstance, dict]:
+    """The loaded instance between two complete byte reads that must agree."""
+    root = _absolute(instance_root)
+    before = _tree_bytes(root)
+    instance = load_instance(root, expected_core_root=core_root)
+    files = _tree_bytes(root)
+    if files != before:
+        raise InstanceError("CONFLICT", "la instancia cambió mientras se leía; repite")
+    return instance, files
+
+
+def _instructions_tree(instance: LoadedInstance, files: dict[str, bytes]
+                       ) -> tuple[dict[str, bytes], InstanceInstructions]:
+    """The whole tree after the change: the v2 set, its descriptor and a manifest covering them;
+    every other path keeps its bytes."""
+    config = instance.config
+    expected = dict(files)
+    expected.update(_instruction_files(CURRENT_INSTRUCTIONS_VERSION, config))
+    paths = [INSTANCE_FILE, AGENTS_FILE, CLAUDE_FILE, INSTANCE_CORPUS, INSTRUCTIONS_DESCRIPTOR,
+             *(f.path for f in config.dossier_files)]
+    covered = sorted((_managed(path, expected[path]) for path in paths), key=lambda f: f.path)
+    integrity = {"algorithm": "sha256", "files": [f.as_json() for f in covered],
+                 "schema_version": config.schema_version}
+    expected[INSTANCE_INTEGRITY] = canonical_json_bytes(integrity, pretty=True)
+    managed = (_managed(AGENTS_FILE, expected[AGENTS_FILE]),
+               _managed(CLAUDE_FILE, expected[CLAUDE_FILE]))
+    instructions = InstanceInstructions(
+        CURRENT_INSTRUCTIONS_VERSION, managed,
+        _instructions_set_sha256(CURRENT_INSTRUCTIONS_VERSION, managed),
+        _sha256(expected[INSTRUCTIONS_DESCRIPTOR]))
+    return expected, instructions
+
+
+def _instructions_prompt(instance: LoadedInstance, new: InstanceInstructions) -> str:
+    old = instance.instructions
+    lines = [
+        "ACTUALIZACIÓN HUMANA DE INSTRUCCIONES REQUERIDA",
+        f"Foro: {instance.config.forum_id}",
+        f"Instancia: {instance.instance_root}",
+        f"Versión actual: {old.version}",
+        f"Conjunto actual SHA-256: {old.instructions_sha256}",
+        f"AGENTS.md actual SHA-256: {old.files[0].sha256}",
+        f"CLAUDE.md actual SHA-256: {old.files[1].sha256}",
+        f"Versión nueva: {new.version}",
+        f"Conjunto nuevo SHA-256: {new.instructions_sha256}",
+        f"AGENTS.md nuevo SHA-256: {new.files[0].sha256}",
+        f"CLAUDE.md nuevo SHA-256: {new.files[1].sha256}",
+        f"Descriptor nuevo SHA-256: {new.descriptor_sha256}",
+        "Se reemplazarán AGENTS.md y CLAUDE.md, se añadirá work/instructions.json y se regenerará "
+        "work/integrity.json para cubrirlos.",
+        "Se conservarán byte a byte instance.json, dossier/, corpus/, characters/ y narrative/.",
+        "Esta acción cambia solo las instrucciones locales del agente; no cambia las normas del "
+        "foro, no publica ni usa red.",
+    ]
+    return "".join(f"{line}\n" for line in lines)
+
+
 def _check_preserved(plan: _UpdatePlan, loaded: LoadedInstance,
                      characters: dict[str, bytes]) -> None:
     if characters != plan.characters:
         _invalid("characters/ o narrative/ no se copiaron byte a byte")
+    if loaded.instructions != plan.instance.instructions:
+        _invalid("las instrucciones de la instancia no se conservan exactamente")
     before = [(c.character_root, c.state_revision, c.state) for c in plan.instance.characters]
     after = [(c.character_root, c.state_revision, c.state) for c in loaded.characters]
     if before != after:
@@ -891,10 +1171,15 @@ def _load_instance(physical: Path, logical_root: Path,
     covered = _parse_managed_list(integrity_data["files"])
     agents_raw = _read_regular(physical, AGENTS_FILE)
     claude_raw = _read_regular(physical, CLAUDE_FILE)
+    # The instructions version is decided only by the descriptor being there (7b).
+    descriptor_raw = None
+    if os.path.lexists(physical.joinpath(*INSTRUCTIONS_DESCRIPTOR.split("/"))):
+        descriptor_raw = _read_regular(physical, INSTRUCTIONS_DESCRIPTOR)
     expected_cover = tuple(sorted(
         [_managed(AGENTS_FILE, agents_raw), _managed(CLAUDE_FILE, claude_raw),
          _managed(INSTANCE_FILE, config_raw), *config.dossier_files,
-         ManagedFile(INSTANCE_CORPUS, config.corpus.sha256, config.corpus.size)],
+         ManagedFile(INSTANCE_CORPUS, config.corpus.sha256, config.corpus.size),
+         *([] if descriptor_raw is None else [_managed(INSTRUCTIONS_DESCRIPTOR, descriptor_raw)])],
         key=lambda f: f.path))
     if covered != expected_cover:
         _invalid(f"{INSTANCE_INTEGRITY} no corresponde a los archivos de la instancia")
@@ -936,13 +1221,12 @@ def _load_instance(physical: Path, logical_root: Path,
         if chain.current.snapshot_sha256 != config.corpus.snapshot_sha256:
             _invalid("el corpus de la instancia no es el snapshot cerrado declarado")
         records = (chain.candidates, chain.decisions, chain.current, chain)
-    for name, template, raw in ((AGENTS_FILE, AGENTS_TEMPLATE, agents_raw),
-                                (CLAUDE_FILE, CLAUDE_TEMPLATE, claude_raw)):
-        if render_instructions(template, config) != raw:
-            _invalid(f"{name} no corresponde a su plantilla")
+    instructions = _instructions_of(config, agents_raw, claude_raw, descriptor_raw)
     candidates, decisions, closure, chain = records
-    provisional = LoadedInstance(config, logical_root, dossier, revision, candidates, decisions,
-                                 closure, (), chain)
+    provisional = LoadedInstance(
+        config=config, instance_root=logical_root, dossier=dossier, corpus_revision=revision,
+        candidates=candidates, decisions=decisions, closure=closure, characters=(),
+        corpus=chain, instructions=instructions)
 
     def resolve(candidate_id: str, version: int) -> AssimilationCandidate:
         return get_approved_candidate(provisional, candidate_id=candidate_id,
