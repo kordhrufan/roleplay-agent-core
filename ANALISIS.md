@@ -2997,10 +2997,495 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
     cambian historial, solo concepto declarado + corpus/propuestas aprobados forman las referencias
     de la ficha, la respuesta no altera composición ni publicación, instrucciones v1 no divergen y
     ninguna ruta invoca modelo, red, publicación o contenido temático.
-5. [ ] **Asimilación completa y recuperación dirigida.** Añadir versiones/supersesión, vigencia,
-   índice determinista y contratos `core/rules`/`core/world`, incluido `ABSENT`. Criterio:
-   pendiente/rechazado no es consultable, conflictos devuelven `REQUIERE CONFIRMACIÓN` y la consulta
-   entrega solo pasajes pertinentes con cita.
+5. [ ] **Asimilación completa y recuperación dirigida (dividida).** No abordar a la vez la
+   ampliación operativa, la sustitución semántica y la consulta. Ejecutar en este orden:
+
+   - **5a — ampliación aditiva de un corpus existente:** un expediente sucesor solo añade fuentes,
+     una ronda decide solo candidatos nuevos y una instancia existente adopta el nuevo snapshot sin
+     cambiar `characters/` ni dejar de resolver ninguna cita previa. Se detalla a continuación.
+   - **5b — supersesión y vigencia:** permitir nuevas versiones de candidatos ya cerrados, declarar
+     qué sustituye a qué y aplicar fechas/ámbitos sin borrar versiones históricas. Este paso deberá
+     cambiar el concepto actual de «vigente», pero no el formato ni la cadena aditiva de 5a.
+   - **5c — recuperación dirigida:** construir el índice determinista y los contratos
+     `core/rules`/`core/world`, incluido `ABSENT`, sobre un snapshot cerrado elegido explícitamente.
+     Pendiente/rechazado no será consultable, los conflictos devolverán
+     `REQUIERE CONFIRMACIÓN` y cada respuesta entregará solo pasajes pertinentes con cita.
+
+   **Subincremento 5a — Ampliación del corpus de una instancia existente (detallado).**
+
+   **Decisión de arquitectura y límite cerrado.** Implementar un *workspace de ampliación nuevo*
+   ligado por contenido a la instancia, no reabrir ni modificar el workspace que produjo el cierre
+   anterior. Un cierre ya registrado sigue siendo terminal. El flujo es:
+
+   ```text
+   instancia en snapshot S(n)
+           + expediente sucesor estrictamente aditivo
+           -> workspace de ampliación W(n+1), con el corpus base copiado byte a byte
+           -> candidatos/decisiones solo de la ronda n+1
+           -> cierre humano S(n+1), cuyo padre es S(n)
+           -> actualización humana y transaccional de la misma instancia
+   ```
+
+   Esta separación conserva el workspace anterior como evidencia, permite ampliar una instancia v1
+   aunque aquel workspace ya no exista y evita convertir `close_assimilation` en una operación
+   reversible. 5a **no** implementa supersesión: ningún `candidate_id` presente en un snapshot
+   anterior admite una versión nueva. Tampoco interpreta fechas de vigencia, crea índices,
+   modifica `core/rules`, `core/world` o `core/character`, ni cambia automáticamente la composición,
+   ficha o revisión de un personaje. Un candidato nuevo aprobado queda disponible para propuestas
+   futuras; no se aplica retroactivamente.
+
+   Archivos de producción en alcance: `core/runtime/assimilation.py`, `workspace.py`, `instance.py`,
+   `character.py`, `cli.py` y `core/runtime/__init__.py`. No crear otro módulo ni tocar adapters,
+   `core/character/models.py`, paquetes o `reference/`; reutilizar los helpers actuales. En pruebas,
+   añadir las tres suites indicadas abajo y modificar solo suites/helpers de 4 afectados por la
+   compatibilidad. Ninguna plantilla entra en el diff.
+
+   **Compatibilidad y formatos.** Mantener los decoders y encoders v1 y añadir formatos v2 por
+   despacho explícito, nunca mediante claves opcionales ambiguas:
+
+   - un workspace/instancia v1 existente carga y responde exactamente como en 4f; no se migra al
+     consultar ni al ejecutar operaciones de personaje;
+   - `assimilation init` y `instance init` sobre un workspace v1 siguen produciendo exactamente los
+     mismos bytes que en `1265600`;
+   - no modificar `workspace.template.json`, `instance.template.json`,
+     `AGENTS.template.md`, `CLAUDE.template.md`, `instance-policy.template.md` ni
+     `tests/expected_instance_templates.py`. Para `instance.json` v2, reutilizar el objeto ya
+     renderizado con la plantilla v1 y cambiar solo `schema_version` en memoria antes de la
+     codificación canónica; no duplicar la plantilla;
+   - la primera ampliación de una instancia v1 crea un workspace v2 y, solo al actualizar, convierte
+     el corpus estático de la instancia a v2. Los `characters/*/state.json` continúan siendo sobres
+     v1 y quedan byte a byte iguales;
+   - las ampliaciones posteriores parten de la instancia v2 actual y añaden un eslabón, sin saltar
+     snapshots ni reescribir los anteriores.
+
+   El sobre común de `persistence.py` continúa en `schema_version: 1`: el formato se distingue por
+   las claves exactas de `content`. El corpus cerrado v1 conserva exactamente
+   `candidates`/`closure`/`decisions`. El corpus cerrado v2 tiene exactamente:
+
+   ```json
+   {
+     "candidates": ["todos los registros, en orden de alta"],
+     "decisions": ["todas las decisiones, en orden de alta"],
+     "snapshots": ["CorpusSnapshot, en orden y sin huecos"]
+   }
+   ```
+
+   Cada `CorpusSnapshot` tiene exactamente estas claves:
+
+   ```json
+   {
+     "base_revision": 17,
+     "candidate_count": 9,
+     "closure_id": "assimilation-closure:r2",
+     "corpus_revision": 18,
+     "decision_count": 9,
+     "dossier": {
+       "dossier_version": "2",
+       "files": [{"path": "dossier/expediente.md", "sha256": "...", "size": 1}],
+       "forum_id": "foro-neutral",
+       "schema_version": 1,
+       "snapshot_sha256": "..."
+     },
+     "evidence": {"locator": "...", "section_or_passage": "...", "sha256": "...", "source_id": "..."},
+     "format": "ADDITIVE_V2",
+     "ordinal": 2,
+     "parent_snapshot_sha256": "...",
+     "receipt": {"confirmation_sha256": "...", "method": "TTY_NONCE_V1"},
+     "snapshot_sha256": "..."
+   }
+   ```
+
+   `dossier.snapshot_sha256` es SHA-256 del JSON compacto canónico de las otras cuatro claves del
+   registro `dossier`. Para `ADDITIVE_V2`, `snapshot_sha256` es SHA-256 del JSON compacto canónico
+   con `format`, `ordinal`, `parent_snapshot_sha256`, el registro `dossier` completo y los prefijos
+   exactos `candidates[:candidate_count]` y `decisions[:decision_count]`. Así el hash liga corpus,
+   expediente y padre, no solo el estado final. La evidencia humana se calcula sobre todas las
+   claves escalares del snapshot, `dossier`, `receipt` y `snapshot_sha256`, excluyendo solo
+   `evidence`.
+
+   Al importar el primer corpus v1, representarlo como el primer `CorpusSnapshot` con
+   `format="LEGACY_V1"`, `ordinal=1`, `parent_snapshot_sha256=null`, el cierre/recibo/evidencia y
+   `snapshot_sha256` originales sin alterarlos, los contadores derivados de sus dos arrays y el
+   descriptor del expediente derivado de la instancia íntegra. Su hash se sigue comprobando con el
+   algoritmo v1. `closure_id` permanece `assimilation-closure`: no falsificar una evidencia vieja
+   renombrándola. Un historial que ya sea v2 se copia exactamente.
+
+   El decoder común valida claves y tipos exactos, orden `ordinal=1..N`, padre igual al hash
+   anterior, hashes de expediente/snapshot/evidencia, prefijos y contadores, y estas ecuaciones:
+   `corpus_revision == base_revision + 1`; para cada ronda posterior,
+   `base_revision == previous.corpus_revision + delta_candidates + delta_decisions`. Los conteos
+   crecen, los registros anteriores son prefijos inmutables y todo candidato del sufijo usa un ID
+   ausente de los prefijos. El último elemento es el snapshot actual. Ofrecer
+   `snapshot_for_candidate(candidate_id, version)` para obtener el primer snapshot cuyo prefijo lo
+   contiene; esto hace auditable el origen de cada `CorpusCandidateRef` existente sin cambiar su
+   forma `(candidate_id, version, candidate_sha256)`.
+
+   **Expediente sucesor y delta permitido.** Las versiones continúan siendo textos opacos porque el
+   contrato vigente admite tanto `1` como fechas `AAAA-MM-DD`; 5a no inventa una comparación
+   lexicográfica o semver incompatible. «Superior» significa *sucesor registrado en la cadena*: la
+   nueva `versión_expediente` debe ser distinta de la actual y no aparecer en ningún snapshot
+   anterior. Validar además:
+
+   - mismo `schema_version`, `forum_id` y `display_name`;
+   - toda ocurrencia de fuente anterior conserva sección (o material suelto), clave
+     `(source_id, version)`, autoridad, alcance, fechas, pasaje, origen, sugerencias, texto literal y
+     SHA-256. Dentro de cada sección, las ocurrencias antiguas son una subsecuencia en el mismo
+     orden; no se eliminan, duplican, reordenan ni mueven;
+   - una fuente añadida usa una clave que no existía. Puede estrenar `source_id` o reutilizar uno
+     con otro texto opaco de `version`, pero ambas versiones quedan declaradas y la antigua no se
+     sustituye. Todas las apariciones de una clave nueva pertenecen a la ronda nueva;
+   - una sección `PROVIDED` permanece `PROVIDED`; una `MISSING` puede pasar a `PROVIDED` solo si
+     recibe al menos una fuente nueva. `NOT_APPLICABLE`, las notas y una sección sin fuentes nuevas
+     quedan idénticas. El material suelto solo admite anexos, con las entradas antiguas intactas;
+   - debe existir al menos una clave de fuente nueva. Cambiar solo cabecera, notas, estado, metadatos
+     o bytes de una fuente es `CONFLICT`, no una ampliación.
+
+   No marcar una versión nueva de fuente como sustituta ni decidir cuál está vigente; eso queda en
+   5b. El descriptor de cada snapshot conserva la lista de hashes del expediente que lo sustentó.
+   El expediente actual, al ser superconjunto estricto, conserva también los bytes de todas las
+   fuentes citadas anteriormente; el loader vuelve a resolver cada cita vieja contra ellos.
+
+   **Workspace de ampliación.** Conservar `WORKSPACE_SCHEMA_VERSION = 1` y añadir
+   `EXPANSION_WORKSPACE_SCHEMA_VERSION = 2` solo para el nuevo
+   `kind="forum-assimilation-expansion-workspace"`; el kind y parser v1 no cambian. Del mismo modo,
+   conservar `INSTANCE_SCHEMA_VERSION = 1` y añadir `EXPANDED_INSTANCE_SCHEMA_VERSION = 2`; el
+   parser/validador de instancia despacha por esa versión y exige la misma versión en
+   `work/integrity.json`. Su `workspace.json` tiene las claves v1 más `base_instance`, exactamente:
+
+   ```json
+   "base_instance": {
+     "corpus_revision": 16,
+     "corpus_sha256": "...",
+     "instance_json_sha256": "...",
+     "integrity_sha256": "...",
+     "snapshot_sha256": "..."
+   }
+   ```
+
+   No guardar ruta de la instancia: el vínculo es por contenido y la instancia puede moverse. El
+   layout añade `corpus/base.json`, copia byte a byte del `corpus/state.json` de la instancia base,
+   y usa `corpus/state.json` para **solo el delta de la ronda**. El delta mantiene las claves v1
+   `candidates`/`closure`/`decisions`, empieza vacío con la misma revisión global del corpus base y
+   usa `closure=null` hasta cerrar. `work/integrity.json` v2 cubre `workspace.json`, todo el nuevo
+   expediente y `corpus/base.json`; no cubre el delta autohasheado. El cargador comprueba ambas
+   huellas, decodifica el corpus base v1/v2 contra el expediente sucesor, calcula el delta de
+   fuentes y nunca necesita volver a abrir la instancia original.
+
+   Añadir en `core/runtime/workspace.py` y exportar por `core/runtime/__init__.py`:
+
+   ```python
+   def create_expansion_workspace(
+       instance_root: Path, *, dossier: LoadedForumDossier, dossier_dir: Path,
+       workspace: Path, core_root: Path,
+   ) -> WorkspaceInitResult: ...
+
+   def compare_additive_dossier(
+       base: LoadedForumDossier, successor: LoadedForumDossier,
+       *, previous_versions: tuple[str, ...],
+   ) -> DossierDelta: ...
+   ```
+
+   Reutilizar `_check_destination`, publicación por staging, manifiestos, lectura regular y
+   comprobaciones de junction/symlink. La instancia, el expediente y el workspace no pueden
+   coincidir, contenerse ni solaparse. Leer la instancia y sus archivos estáticos antes y después
+   de preparar el staging; cualquier cambio da `CONFLICT`. Un destino idéntico devuelve
+   `created=False` sin escritura ni cambio de mtime; otro contenido, restos o una base distinta dan
+   `CONFLICT`.
+
+   **Operaciones de la ronda.** En `core/runtime/assimilation.py`, mantener sin cambio las firmas y
+   semántica v1 y añadir modelos `DossierSnapshot`, `CorpusSnapshot`, `ClosedCorpus` y
+   `ExpansionContext`, más:
+
+   ```python
+   def decode_closed_corpus(content: object, *, dossier: LoadedForumDossier,
+                            revision: int, descriptor: DossierSnapshot) -> ClosedCorpus: ...
+   def close_expansion(state_path: Path, *, dossier: LoadedForumDossier,
+                       context: ExpansionContext, expected_revision: int,
+                       terminal: Terminal) -> ExpansionClosureResult: ...
+   def merge_closed_expansion(base: ClosedCorpus, delta: AssimilationState,
+                              snapshot: CorpusSnapshot) -> tuple[int, dict]: ...
+   ```
+
+   `decode_closed_corpus` despacha por las tres claves v1 o las tres claves v2, sin aceptar mezclas.
+   Las operaciones existentes de alta y decisión reciben internamente el `ExpansionContext` que
+   aporta `load_workspace`, sin duplicar parsers, hashes, cerrojos ni barrera A. En una ampliación:
+
+   - `candidate add` solo admite IDs ausentes de **todos** los snapshots base; su primera versión es
+     1 y puede tener versiones sucesivas dentro de la misma ronda con las reglas actuales;
+   - cada candidato del delta debe tener al menos una cita cuya `(source_id, source_version)` sea
+     nueva en `DossierDelta`; puede combinarla con fuentes anteriores. No se admite usar la ronda
+     solo para reclasificar material viejo;
+   - approve/reject solo encuentra candidatos del delta. Decisiones y prompts conservan exactamente
+     el contrato de 4c1;
+   - cerrar exige al menos un candidato nuevo, decisión sobre la versión vigente de cada ID nuevo y
+     la cobertura de sección calculada sobre la unión base+delta. Permite que todos los nuevos sean
+     `REJECTED`: el hecho auditable es que se revisaron;
+   - el cierre calcula sobre base+delta el snapshot `ADDITIVE_V2`, lo guarda como `closure` del
+     delta e incrementa una sola revisión. Repetir el cierre idéntico devuelve `created=False`; no
+     se puede añadir ni decidir después.
+
+   El prompt de cierre de ampliación es exactamente, con LF y `> ` final sin LF:
+
+   ```text
+   CIERRE HUMANO DE AMPLIACIÓN REQUERIDO
+   Foro: FORUM_ID
+   Ronda: N
+   Expediente: BASE_VERSION -> NEW_VERSION
+   Expediente SHA-256: DOSSIER_HASH
+   Snapshot padre SHA-256: PARENT_HASH
+   Revisión del corpus: REVISION
+   Snapshot nuevo SHA-256: SNAPSHOT_HASH
+   Nuevos vigentes: K; aprobados: A; rechazados: R
+   Rechazados: LISTA|ninguno
+   Incertidumbres: LISTA|ninguna
+   Escribe exactamente: CERRAR-AMPLIACION FORUM_ID rN cREVISION NONCE
+   >␠
+   ```
+
+   En el bloque, `␠` representa un único espacio ASCII; los bytes finales son `> ` sin LF.
+   `phrase_prefix` es `CERRAR-AMPLIACION <forum_id> r<N> c<revision>`. La lista usa el orden de alta
+   y `id vN`, como 4c1. Exigir TTY antes de cargar/mutar, comprobar ausencia de lock antes del prompt
+   y, bajo el mismo cerrojo de corpus, releer base, delta y expediente; un cambio durante la
+   confirmación da `CONFLICT`. EOF, frase distinta y Ctrl+C no escriben; no capturar
+   `KeyboardInterrupt`.
+
+   **Actualización de la instancia.** Añadir en `core/runtime/instance.py`:
+
+   ```python
+   @dataclass(frozen=True, slots=True)
+   class InstanceUpdateResult:
+       instance: LoadedInstance
+       previous_snapshot_sha256: str
+       updated: bool
+
+   def update_instance(instance_root: Path, *, workspace_root: Path,
+                       core_root: Path, terminal: Terminal) -> InstanceUpdateResult: ...
+
+   def snapshot_for_candidate(instance: LoadedInstance, *, candidate_id: str,
+                              version: int) -> CorpusSnapshot: ...
+   ```
+
+   Solo acepta un workspace de ampliación cerrado cuyo `base_instance` coincida con el estado
+   estático actual de la instancia. Antes de mutar, fusiona base+delta, vuelve a decodificar el
+   corpus v2, comprueba que el snapshot padre es el actual, que todos los registros base son prefijo
+   exacto y que cada personaje carga con su `candidate_id`+`version`+`candidate_sha256`. La
+   detección de «ya está aplicado» se hace antes de la de base obsoleta: si snapshot, corpus y huella
+   del workspace destino ya coinciden, devuelve `updated=False` sin prompt, escritura ni cambio de
+   mtime. Otro snapshot actual o una base que solo coincide parcialmente es `CONFLICT`; no saltar ni
+   bifurcar la cadena.
+
+   Regenerar únicamente los estáticos `instance.json` v2, `dossier/**` actual,
+   `corpus/state.json` v2 y `work/integrity.json` v2. Copiar `AGENTS.md` y `CLAUDE.md` byte a byte de
+   la instancia validada: sus plantillas v1 y su render no cambian. Copiar también todo
+   `characters/` byte a byte, incluidos todos los estados, sin añadir metadatos de snapshot ni
+   consumir revisión. Antes de publicar el staging, cargarlo usando la ruta lógica final, comparar
+   el árbol de `characters/` por rutas+bytes y comprobar que conceptos, propuestas, decisiones,
+   fichas, respuestas, composición efectiva y revisiones son iguales. La lista del corpus aprobado
+   después de la fusión es el superconjunto anterior más los nuevos aprobados; rechazados y
+   pendientes nunca se vuelven utilizables.
+
+   **Concurrencia y fallo parcial.** Usar un cerrojo exclusivo hermano de la instancia,
+   `.<nombre>.instance-update.lock`, para que no quede dentro del manifiesto estático. Todas las
+   mutaciones de `core/runtime/character.py` deben comprobar ese cerrojo antes de preguntar,
+   después de adquirir el lock del personaje y justo antes del replace. La creación del primer
+   personaje, que aún no tiene `state.json.lock`, usa durante staging/publicación el cerrojo
+   exclusivo `characters/.<character_id>.create.lock` y vuelve a comprobar el lock de update tras
+   adquirirlo y antes de publicar. El actualizador, tras adquirir su lock, relee instancia y
+   workspace y rechaza tanto `characters/*/state.json.lock` como `characters/.*.create.lock`;
+   los loaders tratan estos últimos como restos transitorios, nunca como estado. Calcular antes del
+   prompt una huella ordenada de rutas+bytes de `characters/` y exigir la misma bajo lock después de
+   la respuesta. Así una operación iniciada antes, durante o después de la confirmación da
+   `CONFLICT` o queda incluida íntegramente; no se pierde ni se cuela a medias en la copia. Las
+   lecturas pueden fallar transitoriamente con `CONFLICT`, nunca observarse como válidas contra un
+   manifiesto mezclado.
+
+   Preparar una carpeta hermana `.<nombre>.update-staging-NONCE`, con `fsync` de archivos, y validar
+   todo antes del commit. Publicar en Windows renombrando la instancia íntegra a
+   `.<nombre>.update-backup-NONCE` y el staging a la ruta final. Si falla el segundo rename,
+   restaurar inmediatamente el backup; si también falla, devolver `IO` con ambas rutas y conservar
+   la única copia recuperable, nunca borrarla. Tras publicar, volver a cargar y comparar; solo
+   entonces borrar el backup validado. Un fallo de limpieza o liberación de lock se informa como en
+   4a/4d, indicando si el cambio quedó aplicado. Rechazar restos hermanos inesperados; los tests de
+   fallo inyectado deben demostrar que queda o bien la instancia anterior válida o bien la nueva
+   válida, y que ningún estado de personaje desaparece. No usar reemplazos archivo a archivo.
+
+   El prompt de actualización es exactamente:
+
+   ```text
+   ACTUALIZACIÓN HUMANA DE INSTANCIA REQUERIDA
+   Foro: FORUM_ID
+   Instancia: INSTANCE_ROOT
+   Expediente: BASE_VERSION -> NEW_VERSION
+   Snapshot actual SHA-256: PARENT_HASH
+   Snapshot nuevo SHA-256: SNAPSHOT_HASH
+   Nuevos aprobados: A; nuevos rechazados: R
+   Personajes preservados: K
+   Esta acción reemplaza solo los archivos estáticos; no cambia revisiones ni contenido de characters/.
+   Escribe exactamente: ACTUALIZAR-INSTANCIA FORUM_ID rN NONCE
+   >␠
+   ```
+
+   En el bloque, `␠` representa un único espacio ASCII; los bytes finales son `> ` sin LF.
+   `phrase_prefix` es `ACTUALIZAR-INSTANCIA <forum_id> r<N>`. La operación exige TTY y rechaza el
+   flag global `--json` con `INVALID_STATE`:
+   `la actualización de una instancia no admite --json: ejecuta el comando en tu terminal y responde a la confirmación`.
+   El no-op idéntico conserva la convención de acciones humanas: exige TTY y rechaza `--json`, pero
+   no genera nonce ni prompt.
+
+   **CLI exacta.** Añadir, sin comando `reopen`:
+
+   ```text
+   assimilation extend --instance RUTA --dossier RUTA --workspace RUTA
+   instance update --instance RUTA --workspace RUTA
+   instance corpus history --instance RUTA
+   ```
+
+   `assimilation extend` carga el expediente con el adaptador manual y crea el workspace; las
+   operaciones `assimilation status/source/candidate/decision/close` existentes despachan por kind.
+   En el workspace de ampliación, candidate/decision list/show muestran solo el delta; source list
+   y su JSON añaden `new_in_expansion` y el texto añade ` | NUEVA` solo a fuentes nuevas. No cambiar
+   ninguna salida v1.
+
+   Salidas de éxito de `assimilation extend`:
+
+   ```text
+   Workspace de ampliación creado para «FORUM_ID» en ROOT (snapshot base=PARENT_HASH; expediente BASE_VERSION -> NEW_VERSION).
+   El workspace de ampliación de «FORUM_ID» ya existía con el mismo contenido: ROOT (snapshot base=PARENT_HASH; expediente BASE_VERSION -> NEW_VERSION).
+   ```
+
+   JSON tiene exactamente `ok`, `action="assimilation.extend"`, `base_snapshot_sha256`, `created`,
+   `dossier_version`, `forum_id`, `previous_dossier_version`, `workspace`. `assimilation status` v2
+   emite exactamente:
+
+   ```text
+   Workspace de ampliación íntegro del foro «FORUM_ID» en ROOT (ronda N; snapshot base=PARENT_HASH; revisión del corpus REVISION; expediente BASE_VERSION -> NEW_VERSION; estado ABIERTO|CERRADO).
+   ```
+
+   Su JSON tiene exactamente `ok`, `action="assimilation.status"`, `base_snapshot_sha256`,
+   `corpus_revision`, `dossier_version`, `forum_id`, `integrity="OK"`,
+   `previous_dossier_version`, `round`, `round_state="OPEN"|"CLOSED"`, `workspace`. No alterar la
+   salida v1. Tras la barrera, `assimilation close` v2 emite:
+
+   ```text
+   Ampliación cerrada: FORUM_ID | ronda N | snapshot padre PARENT_HASH | snapshot sha256=SNAPSHOT_HASH
+   Revisión del corpus: REVISION.
+   Ampliación ya cerrada: FORUM_ID | ronda N | snapshot padre PARENT_HASH | snapshot sha256=SNAPSHOT_HASH
+   Revisión del corpus: REVISION.
+   ```
+
+   Las dos primeras líneas son el caso creado y las dos últimas el retry; `--json` sigue rechazado.
+
+   `instance update` emite, tras la confirmación o en retry idéntico:
+
+   ```text
+   Instancia actualizada: FORUM_ID | snapshot PARENT_HASH -> SNAPSHOT_HASH | expediente NEW_VERSION | personajes K.
+   Instancia ya actualizada: FORUM_ID | snapshot SNAPSHOT_HASH | expediente NEW_VERSION | personajes K.
+   ```
+
+   `instance corpus history` acepta `--json`. Texto, una línea por snapshot:
+
+   ```text
+   ronda N | FORMAT | expediente=JSON_STRING | dossier_sha256=HASH | snapshot=HASH | padre=HASH|null | candidatos=TOTAL (+DELTA) | decisiones=TOTAL (+DELTA)
+   ```
+
+   JSON tiene `ok`, `action="instance.corpus.history"`, `current_snapshot_sha256`, `instance` y
+   `snapshots`; cada elemento contiene exactamente `candidate_count`, `candidate_delta`,
+   `corpus_revision`, `decision_count`, `decision_delta`, `dossier_snapshot_sha256`,
+   `dossier_version`, `format`, `ordinal`, `parent_snapshot_sha256`, `snapshot_sha256`. Para una
+   instancia v1 sintetiza una sola entrada `LEGACY_V1` sin reescribirla. Mantener errores JSON
+   `{"ok":false,"code","message"}`, `_write_exact` y códigos 0/2/3/4/5: parser -> 2;
+   input/formato/estado interno/TTY/no cerrado -> 3; expediente no aditivo, base obsoleta,
+   bifurcación, ID antiguo, lock/carrera/ruta insegura -> 4; E/S -> 5.
+
+   **Barrera A.** Son humanas las decisiones approve/reject ya existentes, el cierre de la nueva
+   ronda y la actualización de la instancia. Crear el workspace, añadir candidatos y consultar no
+   lo son porque no adoptan nada. No existe «reabrir»: el cierre previo permanece inmutable. La
+   actualización necesita barrera propia aunque la ronda ya esté cerrada porque el usuario puede
+   cerrar para auditar y decidir más tarde qué instancia adopta el snapshot. Como siempre, la TTY y
+   el nonce frenan el camino automatizado, pero no autentican a la persona.
+
+   **Tests.** Añadir `tests/test_corpus_expansion.py`,
+   `tests/test_corpus_expansion_cli.py` y `tests/test_instance_update.py`, usando solo materiales
+   neutros generados en temporales. Cubrir al menos:
+
+   - comparación de expediente: fuente nueva en cada sección/material suelto; ID nuevo y versión
+     nueva de ID existente; vieja como subsecuencia; `MISSING -> PROVIDED`; rechazo de misma
+     versión de expediente, versión ya usada, cero fuentes, borrado, edición de bytes/metadatos/
+     nota/estado, movimiento, reordenación, duplicación y `NOT_APPLICABLE -> PROVIDED`;
+   - creación v1 intacta y expansión desde instancia v1 sin el workspace original; layout, bytes de
+     `base.json`, manifiestos, hashes, rutas solapadas, symlink/junction, carrera de fuente/destino,
+     fallo de publicación/limpieza, idempotencia y mtime;
+   - delta: solo IDs nuevos, v1..vN internos, al menos una cita nueva, citas mixtas, decisión solo
+     del delta, todos aprobados/todos rechazados, cobertura por la unión, cero candidatos, pendiente,
+     add/decide tras cierre, revisión global y retry sin escritura;
+   - prompts completos de cierre/actualización con Unicode, listas vacías/no vacías, nonce de un
+     intento, TTY, stdin/stdout redirigidos, `--json`, EOF, case, espacios, Ctrl+C y cambio de cada
+     input durante la confirmación;
+   - decoder v2: claves extra/faltantes, orden, prefijos, conteos, revisiones, padre, formato,
+     descriptor/hash de expediente, snapshot, recibo/evidencia y candidate/decision alterados;
+     importación `LEGACY_V1` exacta y cadena de dos ampliaciones;
+   - actualización: instancia v1 -> v2 y v2 -> v2; estáticos esperados; `AGENTS.md`/`CLAUDE.md` y
+     las cinco plantillas v1 byte a byte; árbol completo `characters/` antes/después byte a byte;
+     misma revisión, conceptos, propuesta pendiente/rechazada/aprobada, composición, ficha y
+     respuesta; cada cita antigua sigue resolviendo y cada candidato indica su snapshot de alta;
+   - no-op sin prompt ni mtime, workspace abierto, base equivocada/obsoleta, salto/bifurcación,
+     instancia, workspace o huella de personajes cambiados durante prompt, lock de update, lock de
+     personaje, lock de creación y las ventanas de carrera entre los tres protocolos;
+   - fallos inyectados al copiar, escribir, validar, primer/segundo rename, restaurar, borrar backup
+     y liberar lock. Verificar ausencia de pérdida, mensaje de recuperación y que nunca queda una
+     instancia aceptada con archivos estáticos de dos snapshots;
+   - CLI: parser, ayuda, texto y JSON exactos de `extend`, status/source deltas e history, códigos,
+     y ausencia de `reopen`, supersede, retire, effective-source o publicación.
+
+   Ampliar las suites 4b–4f para demostrar que una instancia/workspace v1 se reencoda y se comporta
+   byte a byte como antes, que `create_instance` v1 no acepta un workspace de ampliación en lugar de
+   `instance update`, y que todas las operaciones de personaje respetan el nuevo lock sin cambiar
+   sus prompts/salidas cuando no existe. Conservar las fixtures v1 y sus golden; no regenerarlas con
+   el encoder v2.
+
+   **Criterios de aceptación.** Desde una instancia íntegra de 4 se crea una ampliación con un
+   expediente sucesor, se revisan únicamente candidatos ligados al material nuevo, se cierra un
+   snapshot hijo y se actualiza la instancia. El historial prueba la cadena y el expediente de cada
+   cierre. Todos los bytes y revisiones bajo `characters/` son idénticos, sus citas exactas siguen
+   resolviendo y el corpus aprobado anterior es un prefijo/superconjunto semántico inmutable. Las
+   nuevas entradas rechazadas no son consultables; las aprobadas no alteran por sí solas ningún
+   personaje. Retry es no-op, una carrera no pierde eventos y un fallo deja una copia completa
+   recuperable. Los artefactos v1 no tocados y las plantillas permanecen byte a byte.
+
+   Verificación exacta desde PowerShell:
+
+   ```powershell
+   py -3.11 -B -m unittest tests.test_corpus_expansion tests.test_corpus_expansion_cli tests.test_instance_update -v
+   py -3.11 -B -m unittest tests.test_assimilation_candidates tests.test_assimilation_decisions tests.test_assimilation_workspace_cli tests.test_instance tests.test_instance_cli tests.test_instance_templates -v
+   py -3.11 -B -m unittest tests.test_character_state tests.test_character_proposals tests.test_character_draft tests.test_staff_review_cli tests.test_vertical_slice -v
+   py -3.11 -B -m unittest discover -s tests -v
+   git diff --check
+   git diff --exit-code 1265600 -- core/runtime/templates/workspace.template.json core/runtime/templates/instance.template.json core/runtime/templates/AGENTS.template.md core/runtime/templates/CLAUDE.template.md core/runtime/templates/instance-policy.template.md tests/expected_instance_templates.py
+   git diff --name-only 1265600 -- reference
+   rg -n "Nozomu|Naruto|Jcink|narutorol|account 59|275" core tests/test_corpus_expansion.py tests/test_corpus_expansion_cli.py tests/test_instance_update.py
+   rg -n 'add_parser\("(reopen|supersede|retire|publish|confirm-publication|effective-source)"' core/runtime/cli.py
+   git status --short
+   ```
+
+   **Validación funcional manual.** Con copias temporales y rutas externas: conservar una instancia
+   v1 que tenga personaje, concepto, propuesta pendiente y ficha; preparar un expediente de versión
+   distinta que mantenga todo y añada dos fuentes neutras, una con ID nuevo y otra como versión
+   nueva de un ID existente; ejecutar `assimilation extend`, comprobar marcadores `NUEVA`, añadir y
+   decidir candidatos, cerrar y reiniciar el proceso. Antes de actualizar, confirmar que la
+   instancia sigue en el padre. Ejecutar `instance update` en TTY, reiniciar, listar history/corpus y
+   todas las vistas del personaje, comparar hashes de `characters/` y repetir update para probar
+   no-op. Crear después una segunda ampliación para verificar la cadena. La prueba con la instancia
+   real queda fuera de la suite: hacer primero una copia recuperable, no leer secretos y no usar red
+   ni modelos.
+
+   **Riesgos y dudas abiertas de 5a.** No queda una decisión funcional bloqueante. Se recomienda y
+   se fija que las versiones de expediente/fuente sean opacas y que la cadena declare la sucesión:
+   imponer semver o fecha rompería valores v1 válidos y no aportaría seguridad. También se fija la
+   barrera A separada para `instance update`; cerrar una ronda no autoriza implícitamente a sustituir
+   los estáticos de cualquier instancia. El principal riesgo de implementación es el swap de
+   directorio en Windows; por eso el criterio no es «no existe instante sin nombre final», sino
+   «nunca se pierde la copia anterior y nunca carga como válida una mezcla», con restore y rutas de
+   recuperación probados.
 6. [ ] **Creación de personajes completa.** Implementar `core/character`, varias fichas por
    instancia, propuestas versionadas y ejes separados de staff/aprendizaje/utilizabilidad.
    Criterio: el agente nunca origina el concepto ni incorpora una propuesta sin aceptación, y una
@@ -3765,3 +4250,47 @@ subincremento mínimo. No se cambia la política de instrucciones v1.
 - Incremento 4 completo (4a–4f). Validación funcional de 4f: no aplica más allá de las de 4c1,
   4d1, 4d2 y 4e, ya hechas en TTY real; el recorrido completo en un foro real queda para cuando
   el usuario aporte su expediente.
+
+### Incremento 5a — ampliación aditiva del corpus (en curso)
+- Rama: `feature/incremento-5a-ampliacion-corpus` (base `1265600`). Plan detallado por Codex (hilo
+  `01a13973-c83b-7d32-84fc-7810d00ea690`). Motivo: primera prueba con un foro real; el material
+  de raza llegó después del cierre.
+- Implementación en dos fases, cada una con revisión: **fase 1** (expediente sucesor, workspace
+  de ampliación, ronda y cierre) y **fase 2** (`instance update`, instancia v2, historial,
+  cerrojos con los personajes y `tests/test_instance_update.py`).
+- Fase 1 hecha: `core/runtime/assimilation.py` (`DossierFileRef`, `DossierSnapshot`,
+  `CorpusSnapshot`, `ClosedCorpus`, `DossierDelta`, `ExpansionContext`,
+  `ExpansionClosureResult`, `decode_closed_corpus`, `merge_closed_expansion`, `snapshot_record`,
+  `close_expansion`; reglas del delta en alta, decisión, decodificación y cierre),
+  `core/runtime/workspace.py` (`BaseInstance`, config v2, `compare_additive_dossier`,
+  `create_expansion_workspace`, `dossier_descriptor`, carga v2), `core/runtime/instance.py`
+  (`closed_corpus_of`; `instance init` rechaza un workspace de ampliación), `core/runtime/cli.py`
+  (`assimilation extend`; `status`, `source list` y `close` despachan por tipo) y exports. Tests
+  nuevos `tests/test_corpus_expansion{,_cli}.py` (24).
+- Resultado de los tests (fase 1): 498 OK en `py -3.11` y `py -3.14`, sin omitidos; plantillas,
+  `tests/expected_instance_templates.py` y `reference/` sin cambios desde `1265600`.
+- Desviaciones y decisiones de detalle (fase 1):
+  - El workspace de ampliación guarda también una copia byte a byte del expediente de la
+    instancia en `base/dossier/**` (cubierta por la integridad v2) y `workspace.json` añade la
+    clave `base_dossier` (`files`, `path`). Sin ella no se puede calcular al cargar qué fuentes son
+    nuevas sin abrir la instancia, como exige el plan.
+  - `decode_candidate_state`, `add_candidate` y `record_candidate_decision` reciben el keyword
+    opcional `context` (por defecto `None`, comportamiento v1 idéntico). `_closure_blockers`
+    admite `check_coverage` y `covered_before`: al reverificar un cierre v1 contra un expediente
+    sucesor no se exige la cobertura de secciones que antes faltaban; la cobertura de la ronda se
+    calcula sobre la unión base+delta.
+  - Al leer un corpus v1 como `LEGACY_V1` se exige además `base_revision == altas + decisiones`.
+    El descriptor de expediente del snapshot `LEGACY_V1` se deriva de los archivos del expediente
+    de la instancia (rutas `dossier/...`).
+  - `instance.closed_corpus_of(instance)` lee el corpus de una instancia como cadena (en la fase
+    2 la instancia v2 lo cargará directamente).
+  - Higiene: el avance de `main` reescribió en CRLF la copia de trabajo (`core.autocrlf=true`);
+    se volvió a LF fuera de `reference/` y `.gitattributes` fija `*.py text eol=lf`. Se quitó un
+    import duplicado de `ReviewStatus` en `cli.py` (resto de 4d2).
+- Revisión de la fase 1 (hilo `01a13991-57cf-7fb2-a9b1-26495e1e986c`): REV5A-01 (Media; el
+  cierre no releía base, expedientes ni configuración tras la frase; resuelto en dos pasos con
+  una huella de bytes de todas las entradas estáticas, tomada antes del prompt y comparada bajo
+  el cerrojo junto a una recarga completa) y REV5A-02 (Media; descriptores históricos
+  autoconsistentes pero inválidos; resuelto con rutas gestionadas bajo `dossier/`, esquema
+  único y versiones de expediente sin repetir). Fase 1 aprobada; revisión archivada en
+  `docs/analisis/incremento-5a1-revision.md`. Tests: 501 OK en `py -3.11` y `py -3.14`.

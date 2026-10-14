@@ -3,6 +3,10 @@
 The workspace is where candidates will be prepared and decided (4b-4c) before any forum
 instance or agent instructions exist. Managed files are covered by an integrity manifest; the
 corpus state is a self-hashed envelope. Hashes detect edits; they do not authenticate actors.
+
+An expansion workspace (5a) is a separate kind: it binds by content to an existing instance,
+holds a copy of that instance's dossier and closed corpus, a strictly additive successor dossier
+and the delta of one round. Earlier closures are never reopened.
 """
 
 from __future__ import annotations
@@ -24,9 +28,17 @@ from core.runtime.assimilation import (
     AssimilationClosure,
     AssimilationDecision,
     AssimilationError,
+    ClosedCorpus,
+    CorpusSnapshot,
+    DossierDelta,
     DossierError,
+    DossierFileRef,
+    DossierSectionStatus,
+    DossierSnapshot,
+    ExpansionContext,
     LoadedForumDossier,
     decode_candidate_state,
+    decode_closed_corpus,
     load_dossier,
 )
 from core.runtime.persistence import (
@@ -47,6 +59,12 @@ CORPUS_STATE = "corpus/state.json"
 INTEGRITY_FILE = "work/integrity.json"
 WORKSPACE_KIND = "forum-assimilation-workspace"
 INITIAL_CORPUS = {"candidates": [], "closure": None, "decisions": []}
+EXPANSION_WORKSPACE_SCHEMA_VERSION = 2
+EXPANSION_WORKSPACE_KIND = "forum-assimilation-expansion-workspace"
+BASE_CORPUS = "corpus/base.json"
+BASE_PREFIX = "base"
+BASE_DOSSIER_DIR = f"{BASE_PREFIX}/{DOSSIER_DIR}"
+BASE_DOSSIER_PATH = f"{BASE_DOSSIER_DIR}/{DOSSIER_NAME}"
 
 _TEMPLATE = Path(__file__).resolve().parent / "templates" / "workspace.template.json"
 _CHECKOUT_MARKER = ("core", "runtime", "cli.py")
@@ -55,6 +73,9 @@ _WORKSPACE_KEYS = frozenset(
     {"core_root", "display_name", "dossier", "dossier_version", "forum_id", "kind",
      "schema_version"}
 )
+_EXPANSION_KEYS = _WORKSPACE_KEYS | {"base_dossier", "base_instance"}
+_BASE_INSTANCE_KEYS = frozenset({"corpus_revision", "corpus_sha256", "instance_json_sha256",
+                                 "integrity_sha256", "snapshot_sha256"})
 _INTEGRITY_KEYS = frozenset({"algorithm", "files", "schema_version"})
 _MANAGED_KEYS = frozenset({"path", "sha256", "size"})
 _NAME_SURROGATE = 0x20000000  # reparse tags that redirect to another path (junction, symlink)
@@ -92,6 +113,32 @@ class ManagedFile:
 
 
 @dataclass(frozen=True, slots=True)
+class BaseInstance:
+    """What an expansion workspace binds to: the instance's static state, by content."""
+
+    corpus_revision: int
+    corpus_sha256: str
+    instance_json_sha256: str
+    integrity_sha256: str
+    snapshot_sha256: str
+
+    def __post_init__(self) -> None:
+        if type(self.corpus_revision) is not int or self.corpus_revision < 1:
+            _invalid("base_instance.corpus_revision debe ser un entero positivo")
+        for name in ("corpus_sha256", "instance_json_sha256", "integrity_sha256",
+                     "snapshot_sha256"):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not _SHA256.fullmatch(value):
+                _invalid(f"base_instance.{name} debe ser un SHA-256 en minúsculas")
+
+    def as_json(self) -> dict[str, object]:
+        return {"corpus_revision": self.corpus_revision, "corpus_sha256": self.corpus_sha256,
+                "instance_json_sha256": self.instance_json_sha256,
+                "integrity_sha256": self.integrity_sha256,
+                "snapshot_sha256": self.snapshot_sha256}
+
+
+@dataclass(frozen=True, slots=True)
 class WorkspaceConfig:
     schema_version: int
     forum_id: str
@@ -100,10 +147,32 @@ class WorkspaceConfig:
     core_root: Path
     dossier_path: str
     dossier_files: tuple[ManagedFile, ...]
+    base_instance: BaseInstance | None = None  # only expansion workspaces (schema 2)
+    base_dossier_files: tuple[ManagedFile, ...] = ()
+
+    @property
+    def is_expansion(self) -> bool:
+        return self.base_instance is not None
 
     def __post_init__(self) -> None:
-        if type(self.schema_version) is not int or self.schema_version != WORKSPACE_SCHEMA_VERSION:
-            _invalid(f"schema_version debe ser {WORKSPACE_SCHEMA_VERSION}")
+        if self.base_instance is None:
+            if type(self.schema_version) is not int or self.schema_version != WORKSPACE_SCHEMA_VERSION:
+                _invalid(f"schema_version debe ser {WORKSPACE_SCHEMA_VERSION}")
+            if self.base_dossier_files != ():
+                _invalid("solo un workspace de ampliación copia el expediente base")
+        else:
+            if (type(self.schema_version) is not int
+                    or self.schema_version != EXPANSION_WORKSPACE_SCHEMA_VERSION):
+                _invalid(f"schema_version debe ser {EXPANSION_WORKSPACE_SCHEMA_VERSION}")
+            if not isinstance(self.base_instance, BaseInstance):
+                _invalid("base_instance inválido")
+            _check_managed_list(self.base_dossier_files)
+            base_paths = [f.path for f in self.base_dossier_files]
+            if BASE_DOSSIER_PATH not in base_paths or not all(
+                path.startswith(f"{BASE_DOSSIER_DIR}/") for path in base_paths
+            ):
+                _invalid(f"base_dossier.files debe incluir {BASE_DOSSIER_PATH} y solo rutas bajo "
+                         f"{BASE_DOSSIER_DIR}/")
         if not isinstance(self.forum_id, str) or not _FORUM_ID.fullmatch(self.forum_id):
             _invalid("forum_id inválido")
         for name in ("display_name", "dossier_version"):
@@ -124,13 +193,16 @@ class WorkspaceConfig:
 
 @dataclass(frozen=True, slots=True)
 class LoadedWorkspace:
+    """In an expansion workspace, candidates/decisions/closure are the round's delta only."""
+
     config: WorkspaceConfig
     workspace_root: Path
     dossier: LoadedForumDossier
     corpus_revision: int
     candidates: tuple[AssimilationCandidate, ...]
     decisions: tuple[AssimilationDecision, ...]
-    closure: AssimilationClosure | None
+    closure: AssimilationClosure | CorpusSnapshot | None
+    expansion: ExpansionContext | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,7 +267,8 @@ def _absolute(path: Path) -> Path:
         raise WorkspaceError("INVALID_STATE", "la ruta del workspace no es válida") from exc
 
 
-def _check_destination(target: Path, core_root: Path, dossier_dir: Path) -> None:
+def _check_destination(target: Path, core_root: Path, dossier_dir: Path,
+                       *others: tuple[str, Path]) -> None:
     _require_publish_support()
     if _CONTROL.search(str(target)):
         _unsafe("la ruta del workspace contiene caracteres de control")
@@ -206,7 +279,8 @@ def _check_destination(target: Path, core_root: Path, dossier_dir: Path) -> None
     if not parent.is_dir():
         _unsafe(f"la carpeta padre {parent} no existe; créala antes")
     real = _identity(target)
-    for name, other in (("el checkout del core", core_root), ("el expediente", dossier_dir)):
+    for name, other in (("el checkout del core", core_root), ("el expediente", dossier_dir),
+                        *others):
         other_real = _identity(other)
         if _contains(other_real, real) or _contains(real, other_real):
             _unsafe(f"el workspace no puede coincidir ni solaparse con {name}")
@@ -331,16 +405,17 @@ def _existing(target: Path, expected: dict[str, bytes], core_root: Path) -> Load
     return load_workspace(target, expected_core_root=core_root)
 
 
-def _expected_files(
-    dossier: LoadedForumDossier, dossier_dir: Path, core_root: Path
-) -> dict[str, bytes]:
+def _dossier_copy(dossier: LoadedForumDossier, dossier_dir: Path) -> dict[str, bytes]:
     files: dict[str, bytes] = {DOSSIER_PATH: _read_regular(dossier_dir / DOSSIER_NAME)}
     for loaded in _loaded_sources(dossier):
         if loaded.spec.path is not None:
             files.setdefault(f"{DOSSIER_DIR}/{loaded.spec.path}",
                              loaded.literal_text.encode("utf-8"))
-    dossier_files = sorted((_managed(path, data) for path, data in files.items()),
-                           key=lambda f: f.path)
+    return files
+
+
+def _render_config(dossier: LoadedForumDossier, core_root: Path,
+                   dossier_files: list[ManagedFile]) -> dict:
     meta = dossier.dossier
     rendered = string.Template(_TEMPLATE.read_text(encoding="utf-8")).substitute(
         core_root_json=json.dumps(str(core_root), ensure_ascii=False),
@@ -349,7 +424,16 @@ def _expected_files(
         dossier_version_json=json.dumps(meta.dossier_version, ensure_ascii=False),
         forum_id_json=json.dumps(meta.forum_id, ensure_ascii=False),
     )
-    config_data = parse_strict_json(rendered.encode("utf-8"), _TEMPLATE.as_posix())
+    return parse_strict_json(rendered.encode("utf-8"), _TEMPLATE.as_posix())
+
+
+def _expected_files(
+    dossier: LoadedForumDossier, dossier_dir: Path, core_root: Path
+) -> dict[str, bytes]:
+    files = _dossier_copy(dossier, dossier_dir)
+    dossier_files = sorted((_managed(path, data) for path, data in files.items()),
+                           key=lambda f: f.path)
+    config_data = _render_config(dossier, core_root, dossier_files)
     _parse_config(config_data)
     files[WORKSPACE_FILE] = canonical_json_bytes(config_data, pretty=True)
     files[CORPUS_STATE] = encode_state(INITIAL_CORPUS, revision=0)
@@ -367,7 +451,7 @@ def _expected_files(
 
 def _materialize(
     target: Path, expected: dict[str, bytes], dossier: LoadedForumDossier, core_root: Path,
-    initial: tuple[int, int, int] | None,
+    initial: tuple[int, int, int] | None, recheck=None,
 ) -> WorkspaceInitResult:
     staging = target.parent / f".{target.name}.staging-{secrets.token_hex(8)}"
     staging.mkdir()
@@ -383,6 +467,8 @@ def _materialize(
         staged = load_workspace(staging, expected_core_root=core_root)
         if _source_fingerprint(staged.dossier) != _source_fingerprint(dossier):
             raise WorkspaceError("CONFLICT", "el expediente cambió mientras se copiaba; repite")
+        if recheck is not None:
+            recheck()
         try:
             _publish(staging, target, initial)
         except _ConcurrentDestination as race:
@@ -455,6 +541,189 @@ def _managed(path: str, data: bytes) -> ManagedFile:
     return ManagedFile(path, hashlib.sha256(data).hexdigest(), len(data))
 
 
+# --- Expansion (5a) ---------------------------------------------------------------------------
+
+
+def create_expansion_workspace(
+    instance_root: Path, *, dossier: LoadedForumDossier, dossier_dir: Path, workspace: Path,
+    core_root: Path,
+) -> WorkspaceInitResult:
+    """Create the expansion workspace of one round over an instance, or return the identical one.
+
+    The successor dossier must be strictly additive. The instance is read, never written; the
+    workspace keeps byte copies of its dossier and closed corpus and binds to it by content.
+    """
+    if not isinstance(dossier, LoadedForumDossier):
+        _invalid("se necesita un expediente cargado")
+    dossier_dir = Path(dossier_dir)
+    core_root = _checkout(core_root)
+    target = _absolute(workspace)
+    instance_root = _absolute(instance_root)
+    try:
+        if _identity(dossier.dossier_path) != _identity(dossier_dir / DOSSIER_NAME):
+            _invalid("el expediente cargado no corresponde a la carpeta indicada")
+        real_instance, real_dossier = _identity(instance_root), _identity(dossier_dir)
+        if _contains(real_instance, real_dossier) or _contains(real_dossier, real_instance):
+            _unsafe("el expediente no puede coincidir ni solaparse con la instancia")
+        _check_destination(target, core_root, dossier_dir, ("la instancia", instance_root))
+        base = _read_instance_base(instance_root, core_root)
+        compare_additive_dossier(
+            base.dossier, dossier,
+            previous_versions=tuple(s.dossier.dossier_version for s in base.closed.snapshots))
+        initial = _destination_state(target)
+        expected = _expected_expansion_files(dossier, dossier_dir, core_root, base)
+        if target.exists() and any(target.iterdir()):
+            return WorkspaceInitResult(_existing(target, expected, core_root), False)
+
+        def recheck() -> None:
+            if _read_instance_base(instance_root, core_root).fingerprint != base.fingerprint:
+                raise WorkspaceError("CONFLICT", "la instancia cambió mientras se preparaba la "
+                                                 "ampliación; repite")
+
+        return _materialize(target, expected, dossier, core_root, initial, recheck)
+    except PersistenceError as exc:
+        raise WorkspaceError(exc.code, exc.reason) from exc
+    except AssimilationError as exc:
+        raise WorkspaceError(exc.code, exc.reason) from exc
+    except OSError as exc:
+        raise WorkspaceError("IO", f"error de disco al crear la ampliación: {exc}") from exc
+
+
+@dataclass(frozen=True, slots=True)
+class _InstanceBase:
+    instance_json: bytes
+    integrity: bytes
+    corpus: bytes
+    dossier_files: dict[str, bytes]
+    dossier: LoadedForumDossier
+    closed: ClosedCorpus
+
+    @property
+    def fingerprint(self) -> tuple:
+        return (self.instance_json, self.integrity, self.corpus, self.dossier_files)
+
+
+def _read_instance_base(instance_root: Path, core_root: Path) -> _InstanceBase:
+    from core.runtime.instance import (
+        INSTANCE_CORPUS,
+        INSTANCE_FILE,
+        INSTANCE_INTEGRITY,
+        InstanceError,
+        load_instance,
+        closed_corpus_of,
+    )
+
+    try:
+        instance = load_instance(instance_root, expected_core_root=core_root)
+        closed = closed_corpus_of(instance)
+    except InstanceError as exc:
+        raise WorkspaceError(exc.code, exc.reason) from exc
+    root = instance.instance_root
+    files = {f.path: _read_managed(root, f.path) for f in instance.config.dossier_files}
+    for managed in instance.config.dossier_files:
+        if _managed(managed.path, files[managed.path]) != managed:
+            raise WorkspaceError("CONFLICT", f"{managed.path} de la instancia cambió mientras se "
+                                             "leía")
+    return _InstanceBase(_read_managed(root, INSTANCE_FILE), _read_managed(root, INSTANCE_INTEGRITY),
+                         _read_managed(root, INSTANCE_CORPUS), files, instance.dossier, closed)
+
+
+def _expected_expansion_files(dossier: LoadedForumDossier, dossier_dir: Path, core_root: Path,
+                              base: _InstanceBase) -> dict[str, bytes]:
+    files = _dossier_copy(dossier, dossier_dir)
+    dossier_files = sorted((_managed(path, data) for path, data in files.items()),
+                           key=lambda f: f.path)
+    base_copy = {f"{BASE_PREFIX}/{path}": data for path, data in base.dossier_files.items()}
+    base_files = sorted((_managed(path, data) for path, data in base_copy.items()),
+                        key=lambda f: f.path)
+    config_data = _render_config(dossier, core_root, dossier_files)
+    config_data["kind"] = EXPANSION_WORKSPACE_KIND
+    config_data["schema_version"] = EXPANSION_WORKSPACE_SCHEMA_VERSION
+    config_data["base_instance"] = BaseInstance(
+        corpus_revision=base.closed.revision,
+        corpus_sha256=hashlib.sha256(base.corpus).hexdigest(),
+        instance_json_sha256=hashlib.sha256(base.instance_json).hexdigest(),
+        integrity_sha256=hashlib.sha256(base.integrity).hexdigest(),
+        snapshot_sha256=base.closed.current.snapshot_sha256,
+    ).as_json()
+    config_data["base_dossier"] = {"files": [f.as_json() for f in base_files],
+                                   "path": BASE_DOSSIER_PATH}
+    _parse_config(config_data)
+    files.update(base_copy)
+    files[WORKSPACE_FILE] = canonical_json_bytes(config_data, pretty=True)
+    files[BASE_CORPUS] = base.corpus
+    files[CORPUS_STATE] = encode_state(INITIAL_CORPUS, revision=base.closed.revision)
+    covered = sorted([_managed(WORKSPACE_FILE, files[WORKSPACE_FILE]), *dossier_files,
+                      *base_files, _managed(BASE_CORPUS, base.corpus)], key=lambda f: f.path)
+    integrity = {"algorithm": "sha256", "files": [f.as_json() for f in covered],
+                 "schema_version": EXPANSION_WORKSPACE_SCHEMA_VERSION}
+    files[INTEGRITY_FILE] = canonical_json_bytes(integrity, pretty=True)
+    return files
+
+
+def compare_additive_dossier(base: LoadedForumDossier, successor: LoadedForumDossier, *,
+                             previous_versions: tuple[str, ...]) -> DossierDelta:
+    """The new source keys of `successor`, which must keep every earlier occurrence intact.
+
+    Versions are opaque: "successor" means a version never used in the chain, not a larger one.
+    Earlier occurrences stay, in order, with the same metadata, origin and bytes; new ones use
+    keys `(source_id, version)` that did not exist. A MISSING section may become PROVIDED with
+    new sources; everything else (status, notes, NOT_APPLICABLE) stays identical.
+    """
+    old, new = base.dossier, successor.dossier
+    if (old.schema_version, old.forum_id, old.display_name) != (
+        new.schema_version, new.forum_id, new.display_name
+    ):
+        _conflict("el expediente sucesor debe conservar schema, forum_id y nombre")
+    if new.dossier_version == old.dossier_version or new.dossier_version in previous_versions:
+        _conflict(f"la versión de expediente «{new.dossier_version}» ya se usó en este corpus; "
+                  "usa una versión nueva")
+    old_keys = {(s.spec.source_id, s.spec.version) for s in _loaded_sources(base)}
+    added: list[tuple[str, str]] = []
+
+    def occurrence(loaded) -> tuple:
+        return (loaded.spec, loaded.literal_text, loaded.source_ref.sha256)
+
+    def take_new(loaded, where: str) -> None:
+        key = (loaded.spec.source_id, loaded.spec.version)
+        if key in old_keys:
+            _conflict(f"{where}: la fuente {loaded.spec.source_id} v{loaded.spec.version} ya "
+                      "existía y no puede añadirse, moverse ni cambiarse; usa otra versión")
+        if key not in added:
+            added.append(key)
+
+    for before, after in zip(base.sections, successor.sections):
+        where = f"«{before.spec.section.value}»"
+        expected = [occurrence(s) for s in before.sources]
+        position, fresh = 0, 0
+        for loaded in after.sources:
+            if position < len(expected) and occurrence(loaded) == expected[position]:
+                position += 1
+            else:
+                take_new(loaded, where)
+                fresh += 1
+        if position != len(expected):
+            _conflict(f"{where}: falta, cambió o se reordenó una fuente existente")
+        if before.spec.notes != after.spec.notes:
+            _conflict(f"{where}: la nota de la sección no puede cambiar en una ampliación")
+        if before.spec.status != after.spec.status and not (
+            before.spec.status is DossierSectionStatus.MISSING
+            and after.spec.status is DossierSectionStatus.PROVIDED and fresh
+        ):
+            _conflict(f"{where}: el estado de la sección no puede cambiar así en una ampliación")
+    old_loose = [(m.spec, m.source.literal_text, m.source.source_ref.sha256)
+                 for m in base.loose_material]
+    new_loose = [(m.spec, m.source.literal_text, m.source.source_ref.sha256)
+                 for m in successor.loose_material]
+    if new_loose[:len(old_loose)] != old_loose:
+        _conflict("el material suelto solo admite anexos al final, con lo anterior intacto")
+    for material in successor.loose_material[len(old_loose):]:
+        take_new(material.source, "material suelto")
+    if not added:
+        _conflict("el expediente sucesor no añade ninguna fuente nueva")
+    return DossierDelta(old.dossier_version, new.dossier_version, tuple(added))
+
+
 # --- Loading ----------------------------------------------------------------------------------
 
 
@@ -472,24 +741,31 @@ def _load_workspace(root: Path, expected_core_root: Path | None) -> LoadedWorksp
     integrity_raw = _read_managed(root, INTEGRITY_FILE)
     integrity_data = parse_strict_json(integrity_raw, INTEGRITY_FILE)
     _require_canonical(integrity_raw, integrity_data, INTEGRITY_FILE)
-    covered = _parse_integrity(integrity_data)
-    expected_cover = tuple(sorted([_managed(WORKSPACE_FILE, config_raw), *config.dossier_files],
-                                  key=lambda f: f.path))
+    covered = _parse_integrity(integrity_data, config.schema_version)
+    extra_cover = [*config.base_dossier_files]
+    if config.is_expansion:
+        extra_cover.append(_managed(BASE_CORPUS, _read_managed(root, BASE_CORPUS)))
+    expected_cover = tuple(sorted([_managed(WORKSPACE_FILE, config_raw), *config.dossier_files,
+                                   *extra_cover], key=lambda f: f.path))
     if covered != expected_cover:
         _invalid(f"{INTEGRITY_FILE} no corresponde a {WORKSPACE_FILE} y al expediente copiado")
     for managed in covered:
         data = _read_managed(root, managed.path)
         if len(data) != managed.size or hashlib.sha256(data).hexdigest() != managed.sha256:
             _invalid(f"{managed.path} se modificó fuera del core")
-    listed = {f.path for f in config.dossier_files}
-    for current, directories, files in os.walk(root / DOSSIER_DIR, followlinks=False):
-        here = Path(current)
-        for name in directories + files:
-            path = here / name
-            if _is_link(path):
-                _invalid(f"{path.relative_to(root).as_posix()} es un enlace simbólico")
-            if name in files and path.relative_to(root).as_posix() not in listed:
-                _invalid(f"{path.relative_to(root).as_posix()} no forma parte del expediente copiado")
+    trees = [(DOSSIER_DIR, {f.path for f in config.dossier_files})]
+    if config.is_expansion:
+        trees.append((BASE_PREFIX, {f.path for f in config.base_dossier_files}))
+    for folder, listed in trees:
+        for current, directories, files in os.walk(root / folder, followlinks=False):
+            here = Path(current)
+            for name in directories + files:
+                path = here / name
+                if _is_link(path):
+                    _invalid(f"{path.relative_to(root).as_posix()} es un enlace simbólico")
+                if name in files and path.relative_to(root).as_posix() not in listed:
+                    _invalid(f"{path.relative_to(root).as_posix()} no forma parte del "
+                             "expediente copiado")
 
     if expected_core_root is not None and _identity(config.core_root) != _identity(expected_core_root):
         raise WorkspaceError("CONFLICT", f"el workspace pertenece al checkout {config.core_root}")
@@ -500,27 +776,90 @@ def _load_workspace(root: Path, expected_core_root: Path | None) -> LoadedWorksp
     ):
         _invalid("el expediente copiado no coincide con workspace.json")
 
+    context = _expansion_context(root, config, dossier) if config.is_expansion else None
     if not _reject_symlinks(root, CORPUS_STATE).is_file():
         _invalid(f"falta {CORPUS_STATE} o no es un archivo")
     revision, content = load_state(root / CORPUS_STATE)
     try:
-        state = decode_candidate_state(content, dossier=dossier, revision=revision)
+        state = decode_candidate_state(content, dossier=dossier, revision=revision,
+                                       context=context)
     except AssimilationError as exc:
         raise WorkspaceError(exc.code, f"{CORPUS_STATE}: {exc.reason}") from exc
     return LoadedWorkspace(config, root, dossier, revision, state.candidates, state.decisions,
-                           state.closure)
+                           state.closure, context)
+
+
+def _expansion_context(root: Path, config: WorkspaceConfig,
+                       dossier: LoadedForumDossier) -> ExpansionContext:
+    """Rebuild the round from the copies held by the workspace; the instance is not opened."""
+    base_dossier = load_dossier(root / BASE_PREFIX / DOSSIER_DIR)
+    base_meta = base_dossier.dossier
+    if (base_meta.forum_id, base_meta.display_name) != (config.forum_id, config.display_name):
+        _invalid("el expediente base copiado no corresponde a workspace.json")
+    base_raw = _read_managed(root, BASE_CORPUS)
+    base = config.base_instance
+    if hashlib.sha256(base_raw).hexdigest() != base.corpus_sha256:
+        _invalid(f"{BASE_CORPUS} no corresponde a base_instance")
+    base_revision, base_content = load_state(root / BASE_CORPUS)
+    if base_revision != base.corpus_revision:
+        _invalid(f"{BASE_CORPUS} no está en la revisión de base_instance")
+    base_files = tuple(ManagedFile(f.path[len(BASE_PREFIX) + 1:], f.sha256, f.size)
+                       for f in config.base_dossier_files)
+    try:
+        closed = decode_closed_corpus(base_content, dossier=dossier, revision=base_revision,
+                                      descriptor=dossier_descriptor(base_dossier, base_files))
+    except AssimilationError as exc:
+        raise WorkspaceError(exc.code, f"{BASE_CORPUS}: {exc.reason}") from exc
+    if closed.current.snapshot_sha256 != base.snapshot_sha256:
+        _invalid(f"{BASE_CORPUS} no está en el snapshot de base_instance")
+    delta = compare_additive_dossier(
+        base_dossier, dossier,
+        previous_versions=tuple(s.dossier.dossier_version for s in closed.snapshots))
+    return ExpansionContext(closed, delta, dossier_descriptor(dossier, config.dossier_files))
+
+
+def expansion_input_bytes(root: Path) -> dict[str, bytes]:
+    """Every static file of an expansion workspace by relative path (no delta, no lock)."""
+    files = {name: _read_managed(root, name) for name in (WORKSPACE_FILE, INTEGRITY_FILE,
+                                                          BASE_CORPUS)}
+    for folder in (DOSSIER_DIR, BASE_PREFIX):
+        for relative, data in _tree_bytes(root / folder).items():
+            files[f"{folder}/{relative}"] = data
+    return files
+
+
+def dossier_descriptor(dossier: LoadedForumDossier,
+                       files: tuple[ManagedFile, ...]) -> DossierSnapshot:
+    """The snapshot descriptor of a dossier from its managed files (paths under dossier/)."""
+    meta = dossier.dossier
+    return DossierSnapshot(meta.schema_version, meta.forum_id, meta.dossier_version,
+                           tuple(DossierFileRef(f.path, f.sha256, f.size) for f in files))
 
 
 def _parse_config(data: object) -> WorkspaceConfig:
-    if not isinstance(data, dict) or set(data) != _WORKSPACE_KEYS:
+    if not isinstance(data, dict):
         _invalid(f"{WORKSPACE_FILE} no tiene exactamente las claves esperadas")
-    if data["kind"] != WORKSPACE_KIND:
+    expansion = data.get("kind") == EXPANSION_WORKSPACE_KIND
+    if set(data) != (_EXPANSION_KEYS if expansion else _WORKSPACE_KEYS):
+        _invalid(f"{WORKSPACE_FILE} no tiene exactamente las claves esperadas")
+    if not expansion and data["kind"] != WORKSPACE_KIND:
         _invalid(f"{WORKSPACE_FILE} no es un workspace de asimilación")
     dossier = data["dossier"]
     if not isinstance(dossier, dict) or set(dossier) != {"files", "path"}:
         _invalid(f"{WORKSPACE_FILE}: «dossier» debe tener exactamente files y path")
     if not isinstance(data["core_root"], str):
         _invalid(f"{WORKSPACE_FILE}: core_root debe ser texto")
+    base_instance, base_files = None, ()
+    if expansion:
+        instance, base = data["base_instance"], data["base_dossier"]
+        if not isinstance(instance, dict) or set(instance) != _BASE_INSTANCE_KEYS:
+            _invalid(f"{WORKSPACE_FILE}: «base_instance» con claves inesperadas")
+        if not isinstance(base, dict) or set(base) != {"files", "path"}:
+            _invalid(f"{WORKSPACE_FILE}: «base_dossier» debe tener exactamente files y path")
+        if base["path"] != BASE_DOSSIER_PATH:
+            _invalid(f"{WORKSPACE_FILE}: base_dossier.path debe ser {BASE_DOSSIER_PATH}")
+        base_instance = BaseInstance(**{key: instance[key] for key in _BASE_INSTANCE_KEYS})
+        base_files = _parse_managed_list(base["files"])
     return WorkspaceConfig(
         schema_version=data["schema_version"],
         forum_id=data["forum_id"],
@@ -529,13 +868,16 @@ def _parse_config(data: object) -> WorkspaceConfig:
         core_root=Path(data["core_root"]),
         dossier_path=dossier["path"],
         dossier_files=_parse_managed_list(dossier["files"]),
+        base_instance=base_instance,
+        base_dossier_files=base_files,
     )
 
 
-def _parse_integrity(data: object) -> tuple[ManagedFile, ...]:
+def _parse_integrity(data: object, schema_version: int = INTEGRITY_SCHEMA_VERSION
+                     ) -> tuple[ManagedFile, ...]:
     if not isinstance(data, dict) or set(data) != _INTEGRITY_KEYS:
         _invalid(f"{INTEGRITY_FILE} no tiene exactamente las claves esperadas")
-    if type(data["schema_version"]) is not int or data["schema_version"] != INTEGRITY_SCHEMA_VERSION:
+    if type(data["schema_version"]) is not int or data["schema_version"] != schema_version:
         _invalid(f"{INTEGRITY_FILE}: schema_version desconocido")
     if data["algorithm"] != "sha256":
         _invalid(f"{INTEGRITY_FILE}: algoritmo desconocido")
@@ -597,6 +939,10 @@ def _check_relative(path: object) -> None:
 
 def _invalid(reason: str) -> None:
     raise WorkspaceError("INVALID_STATE", reason)
+
+
+def _conflict(reason: str) -> None:
+    raise WorkspaceError("CONFLICT", reason)
 
 
 def _unsafe(reason: str) -> None:

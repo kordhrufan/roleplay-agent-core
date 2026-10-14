@@ -31,7 +31,6 @@ from core.character.models import (
     staff_response_record,
 )
 from core.review.models import ReviewStatus
-from core.review.models import ReviewStatus
 from core.runtime.assimilation import (
     AssimilationCandidate,
     AssimilationDecision,
@@ -42,6 +41,7 @@ from core.runtime.assimilation import (
     _SourceDeclaration,
     add_candidate,
     close_assimilation,
+    close_expansion,
     record_candidate_decision,
 )
 from core.runtime.character import (
@@ -77,6 +77,7 @@ from core.runtime.workspace import (
     CORPUS_STATE,
     LoadedWorkspace,
     WorkspaceError,
+    create_expansion_workspace,
     create_workspace,
     load_workspace,
 )
@@ -128,6 +129,15 @@ def _build_parser() -> argparse.ArgumentParser:
     init.add_argument("--dossier", required=True, type=Path, help="carpeta del expediente")
     _workspace_argument(init)
     init.set_defaults(handler=_assimilation_init, action_name="assimilation.init")
+
+    extend = groups.add_parser(
+        "extend", help="crea un workspace de ampliación de una instancia con un expediente "
+                       "sucesor que solo añade fuentes")
+    _instance_argument(extend)
+    extend.add_argument("--dossier", required=True, type=Path,
+                        help="carpeta del expediente sucesor")
+    _workspace_argument(extend)
+    extend.set_defaults(handler=_assimilation_extend, action_name="assimilation.extend")
 
     status = groups.add_parser("status", help="comprueba la integridad del workspace")
     _workspace_argument(status)
@@ -360,10 +370,53 @@ def _assimilation_init(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _assimilation_extend(args: argparse.Namespace) -> int:
+    dossier = load_manual_dossier(args.dossier)
+    result = create_expansion_workspace(args.instance, dossier=dossier, dossier_dir=args.dossier,
+                                        workspace=args.workspace, core_root=_checkout())
+    workspace = result.workspace
+    context = workspace.expansion
+    forum_id = workspace.config.forum_id
+    root = str(workspace.workspace_root)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name,
+               "base_snapshot_sha256": context.base.current.snapshot_sha256,
+               "created": result.created, "dossier_version": context.delta.version,
+               "forum_id": forum_id, "previous_dossier_version": context.delta.previous_version,
+               "workspace": root})
+        return EXIT_OK
+    detail = (f"(snapshot base={context.base.current.snapshot_sha256}; expediente "
+              f"{context.delta.previous_version} -> {context.delta.version})")
+    if result.created:
+        _line(f"Workspace de ampliación creado para «{forum_id}» en {root} {detail}.")
+    else:
+        _line(f"El workspace de ampliación de «{forum_id}» ya existía con el mismo contenido: "
+              f"{root} {detail}.")
+    return EXIT_OK
+
+
 def _assimilation_status(args: argparse.Namespace) -> int:
     workspace = _load(args)
     forum_id = workspace.config.forum_id
     root = str(workspace.workspace_root)
+    context = workspace.expansion
+    if context is not None:
+        closed = workspace.closure is not None
+        if args.json:
+            _emit({"ok": True, "action": args.action_name,
+                   "base_snapshot_sha256": context.base.current.snapshot_sha256,
+                   "corpus_revision": workspace.corpus_revision,
+                   "dossier_version": context.delta.version, "forum_id": forum_id,
+                   "integrity": "OK", "previous_dossier_version": context.delta.previous_version,
+                   "round": context.round, "round_state": "CLOSED" if closed else "OPEN",
+                   "workspace": root})
+        else:
+            _line(f"Workspace de ampliación íntegro del foro «{forum_id}» en {root} (ronda "
+                  f"{context.round}; snapshot base={context.base.current.snapshot_sha256}; "
+                  f"revisión del corpus {workspace.corpus_revision}; expediente "
+                  f"{context.delta.previous_version} -> {context.delta.version}; estado "
+                  f"{'CERRADO' if closed else 'ABIERTO'}).")
+        return EXIT_OK
     if args.json:
         _emit({"ok": True, "action": args.action_name, "forum_id": forum_id,
                "integrity": "OK", "workspace": root})
@@ -379,15 +432,24 @@ def _assimilation_status(args: argparse.Namespace) -> int:
 def _source_list(args: argparse.Namespace) -> int:
     workspace = _load(args)
     declarations = _source_declarations(workspace.dossier)
+    context = workspace.expansion
+
+    def is_new(declaration: _SourceDeclaration) -> bool:
+        return context.delta.is_new(declaration.source_id, declaration.source_version)
+
     if args.json:
-        _emit({"ok": True, "action": args.action_name,
-               "sources": [_source_json(d) for d in declarations],
+        sources = [_source_json(d) for d in declarations]
+        if context is not None:
+            sources = [{**s, "new_in_expansion": is_new(d)}
+                       for s, d in zip(sources, declarations)]
+        _emit({"ok": True, "action": args.action_name, "sources": sources,
                "workspace": str(workspace.workspace_root)})
     elif not declarations:
         _line("No hay fuentes.")
     else:
         for declaration in declarations:
-            _line(_source_line(declaration))
+            suffix = " | NUEVA" if context is not None and is_new(declaration) else ""
+            _line(_source_line(declaration) + suffix)
     return EXIT_OK
 
 
@@ -459,7 +521,8 @@ def _candidate_add(args: argparse.Namespace) -> int:
     workspace = _load(args)
     value = load_strict_json(args.input)
     result = add_candidate(workspace.workspace_root / CORPUS_STATE, dossier=workspace.dossier,
-                           expected_revision=workspace.corpus_revision, value=value)
+                           expected_revision=workspace.corpus_revision, value=value,
+                           context=workspace.expansion)
     candidate = result.candidate
     if args.json:
         _emit({"ok": True, "action": args.action_name, "candidate_id": candidate.candidate_id,
@@ -589,7 +652,8 @@ def _candidate_decide(args: argparse.Namespace) -> int:
     result = record_candidate_decision(
         workspace.workspace_root / CORPUS_STATE, dossier=workspace.dossier,
         expected_revision=workspace.corpus_revision, candidate_id=args.candidate_id,
-        version=args.version, review_status=args.review_status, terminal=_SystemTerminal())
+        version=args.version, review_status=args.review_status, terminal=_SystemTerminal(),
+        context=workspace.expansion)
     decision = result.decision
     prefix = "Decisión registrada" if result.created else "Decisión ya existente"
     _line(f"{prefix}: {decision.candidate_id} v{decision.candidate_version} | "
@@ -601,6 +665,18 @@ def _candidate_decide(args: argparse.Namespace) -> int:
 def _assimilation_close(args: argparse.Namespace) -> int:
     _reject_json(args)
     workspace = _load(args)
+    context = workspace.expansion
+    if context is not None:
+        expansion = close_expansion(
+            workspace.workspace_root / CORPUS_STATE, dossier=workspace.dossier, context=context,
+            expected_revision=workspace.corpus_revision, terminal=_SystemTerminal())
+        snapshot = expansion.snapshot
+        prefix = "Ampliación cerrada" if expansion.created else "Ampliación ya cerrada"
+        _line(f"{prefix}: {workspace.config.forum_id} | ronda {snapshot.ordinal} | snapshot "
+              f"padre {snapshot.parent_snapshot_sha256} | snapshot "
+              f"sha256={snapshot.snapshot_sha256}")
+        _line(f"Revisión del corpus: {expansion.corpus_revision}.")
+        return EXIT_OK
     result = close_assimilation(
         workspace.workspace_root / CORPUS_STATE, dossier=workspace.dossier,
         expected_revision=workspace.corpus_revision, terminal=_SystemTerminal())

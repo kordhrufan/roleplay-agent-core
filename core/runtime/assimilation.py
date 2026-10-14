@@ -1028,12 +1028,42 @@ def parse_candidate_input(value: object, *, dossier: LoadedForumDossier) -> Assi
 
 
 def decode_candidate_state(
-    content: object, *, dossier: LoadedForumDossier, revision: int
+    content: object, *, dossier: LoadedForumDossier, revision: int,
+    context: ExpansionContext | None = None,
 ) -> AssimilationState:
-    """Rebuild and re-verify candidates, decisions and closure against the copied dossier."""
+    """Rebuild and re-verify candidates, decisions and closure against the copied dossier.
+
+    With `context` (an expansion workspace, 5a), the content is the delta of one round: only new
+    candidate ids that cite at least one new source, and a closure that is a `CorpusSnapshot`.
+    """
+    if context is not None:
+        return _decode_expansion_state(content, dossier, revision, context)
+    return _decode_state(content, dossier, revision, check_coverage=True)
+
+
+def _decode_state(content: object, dossier: LoadedForumDossier, revision: int, *,
+                  check_coverage: bool) -> AssimilationState:
     if not isinstance(content, dict) or set(content) != _CORPUS_KEYS:
         _invalid_candidate("el corpus debe tener exactamente candidates, closure y decisions")
-    records = content["candidates"]
+    candidates = _decode_candidates(content["candidates"], dossier)
+    forum_id = dossier.dossier.forum_id
+    decisions = _decode_decisions(content["decisions"], forum_id, candidates)
+    state = AssimilationState(candidates, decisions, None)
+    if content["closure"] is None:
+        return state
+    closure = _decode_closure(content["closure"], forum_id)
+    if type(revision) is not int or closure.base_revision + 1 != revision:
+        _invalid_candidate("el cierre no corresponde a la revisión del corpus")
+    if closure.snapshot_sha256 != _snapshot_sha256(state):
+        _invalid_candidate("el cierre no corresponde al contenido actual del corpus")
+    blockers = _closure_blockers(state, dossier, check_coverage=check_coverage)
+    if blockers:
+        _invalid_candidate(f"el cierre no cumple sus condiciones: {'; '.join(blockers)}")
+    return AssimilationState(state.candidates, state.decisions, closure)
+
+
+def _decode_candidates(records: object,
+                       dossier: LoadedForumDossier) -> tuple[AssimilationCandidate, ...]:
     if not isinstance(records, list):
         _invalid_candidate("candidates debe ser una lista")
     declarations = _source_declarations(dossier)
@@ -1047,14 +1077,17 @@ def decode_candidate_state(
                                f"{expected - 1} a la {candidate.version}")
         latest[candidate.candidate_id] = candidate.version
         candidates.append(candidate)
+    return tuple(candidates)
 
-    forum_id = dossier.dossier.forum_id
+
+def _decode_decisions(records: object, forum_id: str,
+                      candidates: tuple[AssimilationCandidate, ...]
+                      ) -> tuple[AssimilationDecision, ...]:
     by_key = {c.key: c for c in candidates}
-    decision_records = content["decisions"]
-    if not isinstance(decision_records, list):
+    if not isinstance(records, list):
         _invalid_candidate("decisions debe ser una lista")
     decisions: list[AssimilationDecision] = []
-    for position, record in enumerate(decision_records, start=1):
+    for position, record in enumerate(records, start=1):
         decision = _decode_decision(position, record, forum_id)
         candidate = by_key.get((decision.candidate_id, decision.candidate_version))
         if candidate is None or candidate.candidate_sha256 != decision.candidate_sha256:
@@ -1063,34 +1096,30 @@ def decode_candidate_state(
         if any(d.decision_id == decision.decision_id for d in decisions):
             _invalid_candidate(f"la decisión {decision.decision_id} está repetida")
         decisions.append(decision)
-
-    state = AssimilationState(tuple(candidates), tuple(decisions), None)
-    if content["closure"] is None:
-        return state
-    closure = _decode_closure(content["closure"], forum_id)
-    if type(revision) is not int or closure.base_revision + 1 != revision:
-        _invalid_candidate("el cierre no corresponde a la revisión del corpus")
-    if closure.snapshot_sha256 != _snapshot_sha256(state):
-        _invalid_candidate("el cierre no corresponde al contenido actual del corpus")
-    blockers = _closure_blockers(state, dossier)
-    if blockers:
-        _invalid_candidate(f"el cierre no cumple sus condiciones: {'; '.join(blockers)}")
-    return AssimilationState(state.candidates, state.decisions, closure)
+    return tuple(decisions)
 
 
 def add_candidate(
-    state_path: Path, *, dossier: LoadedForumDossier, expected_revision: int, value: object
+    state_path: Path, *, dossier: LoadedForumDossier, expected_revision: int, value: object,
+    context: ExpansionContext | None = None,
 ) -> CandidateAddResult:
-    """Append a new pending candidate version, or return the identical existing one."""
+    """Append a new pending candidate version, or return the identical existing one.
+
+    In an expansion round (`context`), only ids absent from every closed snapshot are accepted,
+    and each candidate must cite at least one source that is new in the successor dossier.
+    """
     with _corpus_lock(state_path):
-        return _add_candidate_locked(state_path, dossier, expected_revision, value)
+        return _add_candidate_locked(state_path, dossier, expected_revision, value, context)
 
 
 def _add_candidate_locked(
-    state_path: Path, dossier: LoadedForumDossier, expected_revision: int, value: object
+    state_path: Path, dossier: LoadedForumDossier, expected_revision: int, value: object,
+    context: ExpansionContext | None = None,
 ) -> CandidateAddResult:
-    revision, content, state = _load_corpus(state_path, dossier, expected_revision)
+    revision, content, state = _load_corpus(state_path, dossier, expected_revision, context)
     candidate = parse_candidate_input(value, dossier=dossier)
+    if context is not None:
+        _check_expansion_candidate(candidate, context, conflict=True)
     by_key = {c.key: c for c in state.candidates}
     if candidate.key in by_key:
         if by_key[candidate.key].candidate_sha256 == candidate.candidate_sha256:
@@ -1217,7 +1246,7 @@ class AssimilationClosure:
 class AssimilationState:
     candidates: tuple[AssimilationCandidate, ...]
     decisions: tuple[AssimilationDecision, ...]
-    closure: AssimilationClosure | None
+    closure: AssimilationClosure | CorpusSnapshot | None  # a CorpusSnapshot closes a round
 
     def current_versions(self) -> tuple[AssimilationCandidate, ...]:
         """The highest version of each candidate id, in first-appearance order."""
@@ -1250,6 +1279,7 @@ class ClosureResult:
 def record_candidate_decision(
     state_path: Path, *, dossier: LoadedForumDossier, expected_revision: int, candidate_id: str,
     version: int, review_status: ReviewStatus, terminal: Terminal,
+    context: ExpansionContext | None = None,
 ) -> DecisionResult:
     """Record APPROVED/REJECTED for exactly one current candidate version.
 
@@ -1259,7 +1289,7 @@ def record_candidate_decision(
     _require_interactive(terminal)
     if review_status not in _DECISION_STATUSES:
         _invalid_candidate("la decisión debe ser APPROVED o REJECTED")
-    revision, content, state = _load_corpus(state_path, dossier, expected_revision)
+    revision, content, state = _load_corpus(state_path, dossier, expected_revision, context)
     candidate = _decidable_candidate(state, candidate_id, version)
     existing = state.decision_for(candidate)
     if existing is not None:
@@ -1298,7 +1328,7 @@ def record_candidate_decision(
                                     candidate.candidate_sha256, review_status, receipt,
                                     _evidence(dossier.dossier.forum_id, decision_id, payload))
     with _corpus_lock(state_path):
-        revision_again, content, state = _load_corpus(state_path, dossier, None)
+        revision_again, content, state = _load_corpus(state_path, dossier, None, context)
         if (revision_again != revision or state.closure is not None
                 or _decidable_candidate(state, candidate_id, version) != candidate
                 or state.decision_for(candidate) is not None):
@@ -1364,7 +1394,8 @@ def close_assimilation(
 
 
 def _load_corpus(
-    state_path: Path, dossier: LoadedForumDossier, expected_revision: int | None
+    state_path: Path, dossier: LoadedForumDossier, expected_revision: int | None,
+    context: ExpansionContext | None = None,
 ) -> tuple[int, dict, AssimilationState]:
     try:
         revision, content = load_state(state_path)
@@ -1373,7 +1404,7 @@ def _load_corpus(
     if expected_revision is not None and revision != expected_revision:
         raise AssimilationError("CONFLICT", f"el corpus cambió (revisión {revision}, se esperaba "
                                             f"{expected_revision}); vuelve a intentarlo")
-    state = decode_candidate_state(content, dossier=dossier, revision=revision)
+    state = decode_candidate_state(content, dossier=dossier, revision=revision, context=context)
     return revision, content, state
 
 
@@ -1515,20 +1546,35 @@ def _read_confirmation(terminal: Terminal, prompt: str, phrase: str) -> None:
                            "obtener un código nuevo")
 
 
-def _closure_blockers(state: AssimilationState, dossier: LoadedForumDossier) -> list[str]:
+def _closure_blockers(state: AssimilationState, dossier: LoadedForumDossier, *,
+                     check_coverage: bool = True,
+                     covered_before: frozenset = frozenset()) -> list[str]:
+    """Pending decisions and PROVIDED sections without an approved LITERAL.
+
+    `covered_before` adds the sections already covered by earlier snapshots (expansion rounds).
+    `check_coverage=False` re-verifies an old closure against a successor dossier, whose newly
+    provided sections that closure could not cover.
+    """
     blockers = []
     current = state.current_versions()
     pending = [c for c in current if state.decision_for(c) is None]
     if pending:
         blockers.append(f"faltan decisiones sobre {_candidate_names(pending)}")
-    approved_literals = [c for c in current if c.candidate_class is CandidateClass.LITERAL
-                         and (d := state.decision_for(c)) is not None
-                         and d.review_status is ReviewStatus.APPROVED]
-    covered = {citation.dossier_section for c in approved_literals for citation in c.citations}
+    if not check_coverage:
+        return blockers
+    covered = set(covered_before) | _covered_sections(state)
     for section in dossier.dossier.sections:
         if section.status is DossierSectionStatus.PROVIDED and section.section not in covered:
             blockers.append(f"«{_HEADINGS[section.section]}» no tiene ningún LITERAL aprobado")
     return blockers
+
+
+def _covered_sections(state: AssimilationState) -> set:
+    approved_literals = [c for c in state.current_versions()
+                         if c.candidate_class is CandidateClass.LITERAL
+                         and (d := state.decision_for(c)) is not None
+                         and d.review_status is ReviewStatus.APPROVED]
+    return {citation.dossier_section for c in approved_literals for citation in c.citations}
 
 
 def _snapshot_sha256(state: AssimilationState) -> str:
@@ -1856,3 +1902,572 @@ def _require_content(name: str, value: object) -> None:
 
 def _invalid_candidate(reason: str) -> None:
     raise AssimilationError("INVALID_STATE", reason)
+
+
+# --- Additive expansion of a closed corpus (5a) -----------------------------------------------
+# A closed corpus becomes a chain of snapshots. The first one is the original 4c1 closure
+# (LEGACY_V1, kept exactly as it was recorded); each expansion round appends candidates and
+# decisions for new ids only and closes an ADDITIVE_V2 snapshot whose parent is the previous one.
+# Nothing closed is ever rewritten: earlier records are immutable prefixes. Supersession (new
+# versions of closed candidates), validity dates and retrieval belong to 5b/5c.
+
+LEGACY_FORMAT = "LEGACY_V1"
+ADDITIVE_FORMAT = "ADDITIVE_V2"
+_SNAPSHOT_FORMATS = (LEGACY_FORMAT, ADDITIVE_FORMAT)
+_CLOSED_V2_KEYS = frozenset({"candidates", "decisions", "snapshots"})
+_SNAPSHOT_KEYS = frozenset({"base_revision", "candidate_count", "closure_id", "corpus_revision",
+                            "decision_count", "dossier", "evidence", "format", "ordinal",
+                            "parent_snapshot_sha256", "receipt", "snapshot_sha256"})
+_DOSSIER_SNAPSHOT_KEYS = frozenset({"dossier_version", "files", "forum_id", "schema_version",
+                                    "snapshot_sha256"})
+_DOSSIER_FILE_KEYS = frozenset({"path", "sha256", "size"})
+
+
+@dataclass(frozen=True, slots=True)
+class DossierFileRef:
+    path: str
+    sha256: str
+    size: int
+
+    def __post_init__(self) -> None:
+        if not _is_managed_dossier_path(self.path):
+            _invalid_candidate(f"ruta de expediente inválida en un snapshot: {self.path!r}")
+        _require_sha256("sha256 de un archivo del expediente", self.sha256)
+        if type(self.size) is not int or self.size < 0:
+            _invalid_candidate("tamaño de un archivo del expediente inválido")
+
+    def as_json(self) -> dict[str, object]:
+        return {"path": self.path, "sha256": self.sha256, "size": self.size}
+
+
+@dataclass(frozen=True, slots=True)
+class DossierSnapshot:
+    """The dossier that supported a closed snapshot: its files by path, hash and size."""
+
+    schema_version: int
+    forum_id: str
+    dossier_version: str
+    files: tuple[DossierFileRef, ...]
+    snapshot_sha256: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        if type(self.schema_version) is not int or self.schema_version < 1:
+            _invalid_candidate("schema_version del expediente inválido en un snapshot")
+        if not isinstance(self.forum_id, str) or not _CANDIDATE_ID.fullmatch(self.forum_id):
+            _invalid_candidate("forum_id inválido en un snapshot")
+        if not isinstance(self.dossier_version, str) or not self.dossier_version.strip():
+            _invalid_candidate("dossier_version inválida en un snapshot")
+        if not isinstance(self.files, tuple) or not self.files or not all(
+            isinstance(f, DossierFileRef) for f in self.files
+        ):
+            _invalid_candidate("un snapshot necesita los archivos de su expediente")
+        paths = [f.path for f in self.files]
+        if paths != sorted(paths) or len(set(paths)) != len(paths):
+            _invalid_candidate("los archivos del expediente deben estar ordenados y sin repetir")
+        if f"dossier/{DOSSIER_NAME}" not in paths:
+            _invalid_candidate(f"un snapshot necesita dossier/{DOSSIER_NAME}")
+        object.__setattr__(self, "snapshot_sha256", _compact_sha256(self.core_record()))
+
+    def core_record(self) -> dict[str, object]:
+        return {"dossier_version": self.dossier_version,
+                "files": [f.as_json() for f in self.files], "forum_id": self.forum_id,
+                "schema_version": self.schema_version}
+
+    def record(self) -> dict[str, object]:
+        return {**self.core_record(), "snapshot_sha256": self.snapshot_sha256}
+
+
+@dataclass(frozen=True, slots=True)
+class CorpusSnapshot:
+    """One closed link of the chain: how many records it covers and what supported it."""
+
+    format: str
+    ordinal: int
+    parent_snapshot_sha256: str | None
+    closure_id: str
+    base_revision: int
+    corpus_revision: int
+    candidate_count: int
+    decision_count: int
+    dossier: DossierSnapshot
+    snapshot_sha256: str
+    receipt: HumanConfirmationReceipt
+    evidence: SourceRef
+
+    def __post_init__(self) -> None:
+        if self.format not in _SNAPSHOT_FORMATS:
+            _invalid_candidate("formato de snapshot desconocido")
+        for name in ("ordinal", "base_revision", "corpus_revision", "candidate_count",
+                     "decision_count"):
+            value = getattr(self, name)
+            if type(value) is not int or value < 0:
+                _invalid_candidate(f"{name} del snapshot debe ser un entero no negativo")
+        if self.format == LEGACY_FORMAT:
+            if (self.ordinal, self.parent_snapshot_sha256, self.closure_id) != (1, None,
+                                                                                CLOSURE_ID):
+                _invalid_candidate("un snapshot LEGACY_V1 solo puede ser el primero de la cadena")
+        else:
+            if self.ordinal < 2:
+                _invalid_candidate("un snapshot ADDITIVE_V2 siempre tiene un padre")
+            _require_sha256("parent_snapshot_sha256", self.parent_snapshot_sha256)
+            if self.closure_id != expansion_closure_id(self.ordinal):
+                _invalid_candidate("closure_id no corresponde a la ronda del snapshot")
+        if self.corpus_revision != self.base_revision + 1:
+            _invalid_candidate("corpus_revision debe ser base_revision + 1")
+        if not isinstance(self.dossier, DossierSnapshot):
+            _invalid_candidate("el snapshot necesita su descriptor de expediente")
+        _require_sha256("snapshot_sha256", self.snapshot_sha256)
+        if not isinstance(self.receipt, HumanConfirmationReceipt):
+            _invalid_candidate("el snapshot necesita un recibo de confirmación humana")
+        if not isinstance(self.evidence, SourceRef):
+            _invalid_candidate("el snapshot necesita evidencia SourceRef")
+
+
+@dataclass(frozen=True, slots=True)
+class ClosedCorpus:
+    """Every closed record, in order, and the snapshot chain that closed them."""
+
+    candidates: tuple[AssimilationCandidate, ...]
+    decisions: tuple[AssimilationDecision, ...]
+    snapshots: tuple[CorpusSnapshot, ...]
+    revision: int
+
+    @property
+    def current(self) -> CorpusSnapshot:
+        return self.snapshots[-1]
+
+    def state(self) -> AssimilationState:
+        """The closed records as one state (no supersession in 5a: ids never repeat across rounds)."""
+        return AssimilationState(self.candidates, self.decisions, None)
+
+    @property
+    def candidate_ids(self) -> frozenset[str]:
+        return frozenset(c.candidate_id for c in self.candidates)
+
+    def snapshot_for(self, candidate_id: str, version: int) -> CorpusSnapshot | None:
+        """The first snapshot whose records contain that exact candidate version."""
+        for snapshot in self.snapshots:
+            if any(c.key == (candidate_id, version)
+                   for c in self.candidates[:snapshot.candidate_count]):
+                return snapshot
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class DossierDelta:
+    """What a successor dossier adds: new source keys `(source_id, version)`, in order."""
+
+    previous_version: str
+    version: str
+    new_sources: tuple[tuple[str, str], ...]
+
+    def is_new(self, source_id: str, source_version: str) -> bool:
+        return (source_id, source_version) in self.new_sources
+
+
+@dataclass(frozen=True, slots=True)
+class ExpansionContext:
+    """An open or closed expansion round over `base`, with its successor dossier."""
+
+    base: ClosedCorpus
+    delta: DossierDelta
+    dossier: DossierSnapshot  # the successor dossier of this round
+
+    @property
+    def round(self) -> int:
+        return len(self.base.snapshots) + 1
+
+
+@dataclass(frozen=True, slots=True)
+class ExpansionClosureResult:
+    snapshot: CorpusSnapshot
+    created: bool
+    corpus_revision: int
+
+
+def expansion_closure_id(ordinal: int) -> str:
+    return f"{CLOSURE_ID}:r{ordinal}"
+
+
+def decode_closed_corpus(content: object, *, dossier: LoadedForumDossier, revision: int,
+                         descriptor: DossierSnapshot) -> ClosedCorpus:
+    """A closed corpus, v1 (one 4c1 closure, read as LEGACY_V1) or v2 (a snapshot chain).
+
+    `descriptor` is the dossier that supports the current snapshot: it is attached to a v1
+    closure and must equal the last snapshot of a v2 chain. Citations are re-resolved against
+    `dossier`, which may be a strictly additive successor of the one they were made with.
+    """
+    if not isinstance(descriptor, DossierSnapshot):
+        _invalid_candidate("se necesita el descriptor del expediente")
+    if type(revision) is not int:
+        _invalid_candidate("la revisión del corpus debe ser un entero")
+    if isinstance(content, dict) and set(content) == _CORPUS_KEYS:
+        state = _decode_state(content, dossier, revision, check_coverage=False)
+        closure = state.closure
+        if closure is None:
+            _invalid_candidate("el corpus no está cerrado")
+        if closure.base_revision != len(state.candidates) + len(state.decisions):
+            _invalid_candidate("el cierre no corresponde al número de altas y decisiones")
+        snapshot = CorpusSnapshot(LEGACY_FORMAT, 1, None, closure.closure_id,
+                                  closure.base_revision, revision, len(state.candidates),
+                                  len(state.decisions), descriptor, closure.snapshot_sha256,
+                                  closure.receipt, closure.evidence)
+        return ClosedCorpus(state.candidates, state.decisions, (snapshot,), revision)
+    if not isinstance(content, dict) or set(content) != _CLOSED_V2_KEYS:
+        _invalid_candidate("el corpus cerrado debe tener exactamente candidates, closure y "
+                           "decisions (v1) o candidates, decisions y snapshots (v2)")
+    forum_id = dossier.dossier.forum_id
+    candidates = _decode_candidates(content["candidates"], dossier)
+    decisions = _decode_decisions(content["decisions"], forum_id, candidates)
+    records = content["snapshots"]
+    if not isinstance(records, list) or not records:
+        _invalid_candidate("snapshots debe ser una lista no vacía")
+    snapshots = tuple(_decode_snapshot(position, record, forum_id)
+                      for position, record in enumerate(records, start=1))
+    _check_chain(candidates, decisions, snapshots, revision, forum_id)
+    if snapshots[-1].dossier != descriptor:
+        _invalid_candidate("el último snapshot no corresponde al expediente actual")
+    return ClosedCorpus(candidates, decisions, snapshots, revision)
+
+
+def merge_closed_expansion(base: ClosedCorpus, delta: AssimilationState,
+                           snapshot: CorpusSnapshot) -> tuple[int, dict]:
+    """The v2 closed corpus after a round: base records, then the round, then its snapshot."""
+    if not isinstance(snapshot, CorpusSnapshot) or snapshot.format != ADDITIVE_FORMAT:
+        _invalid_candidate("solo se fusiona una ronda cerrada con un snapshot ADDITIVE_V2")
+    candidates = (*base.candidates, *delta.candidates)
+    decisions = (*base.decisions, *delta.decisions)
+    if (snapshot.candidate_count, snapshot.decision_count) != (len(candidates), len(decisions)):
+        _invalid_candidate("el snapshot no cubre exactamente la base y la ronda")
+    content = {
+        "candidates": [_candidate_record(c, include_hash=True) for c in candidates],
+        "decisions": [_decision_record(d) for d in decisions],
+        "snapshots": [snapshot_record(s) for s in (*base.snapshots, snapshot)],
+    }
+    return snapshot.corpus_revision, content
+
+
+def snapshot_record(snapshot: CorpusSnapshot) -> dict[str, object]:
+    return {
+        "base_revision": snapshot.base_revision,
+        "candidate_count": snapshot.candidate_count,
+        "closure_id": snapshot.closure_id,
+        "corpus_revision": snapshot.corpus_revision,
+        "decision_count": snapshot.decision_count,
+        "dossier": snapshot.dossier.record(),
+        "evidence": _evidence_record(snapshot.evidence),
+        "format": snapshot.format,
+        "ordinal": snapshot.ordinal,
+        "parent_snapshot_sha256": snapshot.parent_snapshot_sha256,
+        "receipt": _receipt_record(snapshot.receipt),
+        "snapshot_sha256": snapshot.snapshot_sha256,
+    }
+
+
+def close_expansion(state_path: Path, *, dossier: LoadedForumDossier,
+                    context: ExpansionContext, expected_revision: int,
+                    terminal: Terminal) -> ExpansionClosureResult:
+    """Close an expansion round after the exact phrase is typed. Closing is terminal.
+
+    `state_path` is the workspace's `corpus/state.json`. Under the corpus lock the whole
+    workspace (base corpus, both dossiers, configuration and integrity) is loaded again and must
+    be exactly what the prompt showed. Barrier A blocks the automated command path but does not
+    authenticate a person: a fake terminal or pseudo terminal bypasses it.
+    """
+    _require_interactive(terminal)
+    if not isinstance(context, ExpansionContext):
+        _invalid_candidate("cerrar una ampliación necesita su contexto")
+    revision, content, state = _load_corpus(state_path, dossier, expected_revision, context)
+    if state.closure is not None:
+        return ExpansionClosureResult(state.closure, False, revision)
+    inputs = _expansion_inputs(state_path, dossier, context)
+    blockers = _expansion_blockers(state, dossier, context)
+    if blockers:
+        _invalid_candidate(f"todavía no se puede cerrar la ampliación: {'; '.join(blockers)}")
+    forum_id = dossier.dossier.forum_id
+    parent = context.base.current
+    candidates = (*context.base.candidates, *state.candidates)
+    decisions = (*context.base.decisions, *state.decisions)
+    snapshot_sha256 = _additive_snapshot_sha256(context.round, parent.snapshot_sha256,
+                                                context.dossier, candidates, decisions)
+    current = state.current_versions()
+    statuses = [state.decision_for(c).review_status for c in current]
+    rejected = [c for c, s in zip(current, statuses) if s is ReviewStatus.REJECTED]
+    uncertain = [c for c in current if c.requires_confirmation]
+    _require_unlocked(state_path)
+    phrase = f"CERRAR-AMPLIACION {forum_id} r{context.round} c{revision} {_nonce()}"
+    _confirm(terminal, phrase, [
+        "CIERRE HUMANO DE AMPLIACIÓN REQUERIDO",
+        f"Foro: {forum_id}",
+        f"Ronda: {context.round}",
+        f"Expediente: {context.delta.previous_version} -> {context.delta.version}",
+        f"Expediente SHA-256: {context.dossier.snapshot_sha256}",
+        f"Snapshot padre SHA-256: {parent.snapshot_sha256}",
+        f"Revisión del corpus: {revision}",
+        f"Snapshot nuevo SHA-256: {snapshot_sha256}",
+        f"Nuevos vigentes: {len(current)}; aprobados: "
+        f"{statuses.count(ReviewStatus.APPROVED)}; rechazados: {len(rejected)}",
+        f"Rechazados: {_candidate_names(rejected) or 'ninguno'}",
+        f"Incertidumbres: {_candidate_names(uncertain) or 'ninguna'}",
+    ])
+    receipt = HumanConfirmationReceipt(HUMAN_CONFIRMATION_METHOD, _sha256_text(phrase))
+    snapshot = _additive_snapshot(forum_id, context, revision, len(candidates), len(decisions),
+                                  snapshot_sha256, receipt)
+    with _corpus_lock(state_path):
+        if _expansion_inputs(state_path, dossier, context) != inputs:
+            raise AssimilationError("CONFLICT", "el workspace de ampliación cambió mientras se "
+                                                "confirmaba; no se ha guardado nada")
+        revision_again, content, state_again = _load_corpus(state_path, dossier, None, context)
+        if (revision_again != revision or state_again.closure is not None
+                or (state_again.candidates, state_again.decisions)
+                != (state.candidates, state.decisions)):
+            raise AssimilationError("CONFLICT", "el corpus cambió mientras se confirmaba; repite")
+        new_content = dict(content)
+        new_content["closure"] = snapshot_record(snapshot)
+        _write_corpus(state_path, new_content, revision + 1)
+    return ExpansionClosureResult(snapshot, True, revision + 1)
+
+
+def _expansion_inputs(state_path: Path, dossier: LoadedForumDossier,
+                      context: ExpansionContext) -> dict[str, bytes]:
+    """The bytes of every static input of the round, read around a full reload that must agree.
+
+    Covers workspace.json, the integrity manifest, the base corpus and both dossier trees (not
+    the delta, re-read separately). Bytes are read before and after loading the workspace again,
+    so the loaded dossier and context are exactly what those bytes say.
+    """
+    from core.runtime.workspace import WorkspaceError, expansion_input_bytes, load_workspace
+
+    root = Path(state_path).parent.parent
+    try:
+        before = expansion_input_bytes(root)
+        again = load_workspace(root)
+        after = expansion_input_bytes(root)
+    except (WorkspaceError, AssimilationError, PersistenceError, DossierError, OSError) as exc:
+        raise AssimilationError("CONFLICT", "el workspace de ampliación cambió mientras se "
+                                            f"confirmaba ({exc}); no se ha guardado nada"
+                                ) from exc
+    if before != after or again.expansion != context or again.dossier != dossier:
+        raise AssimilationError("CONFLICT", "el workspace de ampliación cambió mientras se "
+                                            "confirmaba; no se ha guardado nada")
+    return before
+
+
+def _additive_snapshot(forum_id: str, context: ExpansionContext, revision: int,
+                       candidate_count: int, decision_count: int, snapshot_sha256: str,
+                       receipt: HumanConfirmationReceipt) -> CorpusSnapshot:
+    closure_id = expansion_closure_id(context.round)
+    record = {
+        "base_revision": revision,
+        "candidate_count": candidate_count,
+        "closure_id": closure_id,
+        "corpus_revision": revision + 1,
+        "decision_count": decision_count,
+        "dossier": context.dossier.record(),
+        "format": ADDITIVE_FORMAT,
+        "ordinal": context.round,
+        "parent_snapshot_sha256": context.base.current.snapshot_sha256,
+        "receipt": _receipt_record(receipt),
+        "snapshot_sha256": snapshot_sha256,
+    }
+    return CorpusSnapshot(ADDITIVE_FORMAT, context.round, context.base.current.snapshot_sha256,
+                          closure_id, revision, revision + 1, candidate_count, decision_count,
+                          context.dossier, snapshot_sha256, receipt,
+                          _evidence(forum_id, closure_id, record))
+
+
+def _additive_snapshot_sha256(ordinal: int, parent: str, dossier: DossierSnapshot,
+                              candidates, decisions) -> str:
+    return _compact_sha256({
+        "candidates": [_candidate_record(c, include_hash=True) for c in candidates],
+        "decisions": [_decision_record(d) for d in decisions],
+        "dossier": dossier.record(),
+        "format": ADDITIVE_FORMAT,
+        "ordinal": ordinal,
+        "parent_snapshot_sha256": parent,
+    })
+
+
+def _expansion_blockers(state: AssimilationState, dossier: LoadedForumDossier,
+                        context: ExpansionContext) -> list[str]:
+    blockers = []
+    if not state.candidates:
+        blockers.append("la ronda no tiene ningún candidato nuevo")
+    blockers += _closure_blockers(state, dossier,
+                                  covered_before=frozenset(_covered_sections(context.base.state())))
+    return blockers
+
+
+def _check_expansion_candidate(candidate: AssimilationCandidate, context: ExpansionContext, *,
+                               conflict: bool) -> None:
+    if candidate.candidate_id in context.base.candidate_ids:
+        reason = (f"{candidate.candidate_id} ya existe en un snapshot cerrado; una ampliación "
+                  "solo admite candidatos nuevos (las versiones de candidatos cerrados llegan "
+                  "con la supersesión)")
+        if conflict:
+            raise AssimilationError("CONFLICT", reason)
+        _invalid_candidate(reason)
+    if not any(context.delta.is_new(c.source_id, c.source_version) for c in candidate.citations):
+        _invalid_candidate(f"{candidate.candidate_id} debe citar al menos una fuente nueva de "
+                           "esta ampliación (consulta «assimilation source list»: | NUEVA)")
+
+
+def _decode_expansion_state(content: object, dossier: LoadedForumDossier, revision: int,
+                            context: ExpansionContext) -> AssimilationState:
+    if not isinstance(context, ExpansionContext):
+        _invalid_candidate("contexto de ampliación inválido")
+    if not isinstance(content, dict) or set(content) != _CORPUS_KEYS:
+        _invalid_candidate("la ronda debe tener exactamente candidates, closure y decisions")
+    forum_id = dossier.dossier.forum_id
+    candidates = _decode_candidates(content["candidates"], dossier)
+    for candidate in candidates:
+        _check_expansion_candidate(candidate, context, conflict=False)
+    decisions = _decode_decisions(content["decisions"], forum_id, candidates)
+    state = AssimilationState(candidates, decisions, None)
+    closed = content["closure"] is not None
+    expected = context.base.revision + len(candidates) + len(decisions) + (1 if closed else 0)
+    if type(revision) is not int or revision != expected:
+        _invalid_candidate("la revisión de la ronda no corresponde a sus altas y decisiones")
+    if not closed:
+        return state
+    snapshot = _decode_snapshot(1, content["closure"], forum_id)
+    all_candidates = (*context.base.candidates, *candidates)
+    all_decisions = (*context.base.decisions, *decisions)
+    expected_sha = _additive_snapshot_sha256(context.round, context.base.current.snapshot_sha256,
+                                             context.dossier, all_candidates, all_decisions)
+    wanted = _additive_snapshot(forum_id, context, revision - 1, len(all_candidates),
+                                len(all_decisions), expected_sha, snapshot.receipt)
+    if snapshot != wanted:
+        _invalid_candidate("el cierre de la ronda no corresponde a su contenido (modificado "
+                           "fuera del core)")
+    blockers = _expansion_blockers(state, dossier, context)
+    if blockers:
+        _invalid_candidate(f"el cierre de la ronda no cumple sus condiciones: "
+                           f"{'; '.join(blockers)}")
+    return AssimilationState(candidates, decisions, snapshot)
+
+
+def _decode_snapshot(position: int, record: object, forum_id: str) -> CorpusSnapshot:
+    where = f"snapshot {position}"
+    if not isinstance(record, dict) or set(record) != _SNAPSHOT_KEYS:
+        _invalid_candidate(f"{where}: claves inesperadas")
+    dossier = record["dossier"]
+    if not isinstance(dossier, dict) or set(dossier) != _DOSSIER_SNAPSHOT_KEYS:
+        _invalid_candidate(f"{where}: expediente con claves inesperadas")
+    files = dossier["files"]
+    if not isinstance(files, list) or not all(
+        isinstance(f, dict) and set(f) == _DOSSIER_FILE_KEYS for f in files
+    ):
+        _invalid_candidate(f"{where}: archivos del expediente con claves inesperadas")
+    descriptor = DossierSnapshot(dossier["schema_version"], dossier["forum_id"],
+                                 dossier["dossier_version"],
+                                 tuple(DossierFileRef(f["path"], f["sha256"], f["size"])
+                                       for f in files))
+    if descriptor.record() != dossier:
+        _invalid_candidate(f"{where}: el hash del expediente no corresponde a sus archivos")
+    if descriptor.forum_id != forum_id:
+        _invalid_candidate(f"{where}: pertenece a otro foro")
+    evidence = record["evidence"]
+    if not isinstance(evidence, dict) or set(evidence) != _EVIDENCE_KEYS:
+        _invalid_candidate(f"{where}: evidencia con claves inesperadas")
+    try:
+        evidence_ref = SourceRef(source_id=evidence["source_id"], locator=evidence["locator"],
+                                 sha256=evidence["sha256"],
+                                 section_or_passage=evidence["section_or_passage"])
+    except (ValueError, TypeError) as exc:
+        _invalid_candidate(f"{where}: evidencia inválida ({exc})")
+    snapshot = CorpusSnapshot(record["format"], record["ordinal"],
+                              record["parent_snapshot_sha256"], record["closure_id"],
+                              record["base_revision"], record["corpus_revision"],
+                              record["candidate_count"], record["decision_count"], descriptor,
+                              record["snapshot_sha256"],
+                              _decode_receipt(record["receipt"], where), evidence_ref)
+    if snapshot_record(snapshot) != record:
+        _invalid_candidate(f"{where}: registro no canónico")
+    return snapshot
+
+
+def _check_chain(candidates: tuple[AssimilationCandidate, ...],
+                 decisions: tuple[AssimilationDecision, ...],
+                 snapshots: tuple[CorpusSnapshot, ...], revision: int, forum_id: str) -> None:
+    """Every link is re-verified. LIMIT: SHA-256 detects inconsistencies; it does not
+    authenticate whoever could rewrite and rehash every layer, records included."""
+    if len({s.dossier.schema_version for s in snapshots}) != 1:
+        _invalid_candidate("todos los snapshots deben usar el mismo esquema de expediente")
+    versions = [s.dossier.dossier_version for s in snapshots]
+    if len(set(versions)) != len(versions):
+        _invalid_candidate("una versión de expediente se repite en la cadena de snapshots")
+    previous: CorpusSnapshot | None = None
+    for position, snapshot in enumerate(snapshots, start=1):
+        where = f"snapshot {position}"
+        if snapshot.ordinal != position:
+            _invalid_candidate(f"{where}: ordinal fuera de orden")
+        start_c = 0 if previous is None else previous.candidate_count
+        start_d = 0 if previous is None else previous.decision_count
+        end_c, end_d = snapshot.candidate_count, snapshot.decision_count
+        if not (start_c < end_c <= len(candidates) and start_d <= end_d <= len(decisions)):
+            _invalid_candidate(f"{where}: contadores fuera de rango")
+        round_candidates = candidates[start_c:end_c]
+        round_decisions = decisions[start_d:end_d]
+        keys = {c.key for c in round_candidates}
+        if any(d.candidate_key not in keys for d in round_decisions):
+            _invalid_candidate(f"{where}: decide un candidato de otra ronda")
+        round_state = AssimilationState(round_candidates, round_decisions, None)
+        if any(round_state.decision_for(c) is None for c in round_state.current_versions()):
+            _invalid_candidate(f"{where}: quedan candidatos sin decidir")
+        if previous is None:
+            if snapshot.format != LEGACY_FORMAT:
+                _invalid_candidate(f"{where}: la cadena debe empezar por el cierre original")
+            if snapshot.base_revision != end_c + end_d:
+                _invalid_candidate(f"{where}: base_revision no corresponde a las altas y "
+                                   "decisiones")
+            if snapshot.snapshot_sha256 != _snapshot_sha256(round_state):
+                _invalid_candidate(f"{where}: el hash no corresponde a su contenido")
+            payload = {"base_revision": snapshot.base_revision,
+                       "closure_id": snapshot.closure_id,
+                       "receipt": _receipt_record(snapshot.receipt),
+                       "snapshot_sha256": snapshot.snapshot_sha256}
+            expected_evidence = _evidence(forum_id, CLOSURE_ID, payload)
+        else:
+            if snapshot.format != ADDITIVE_FORMAT:
+                _invalid_candidate(f"{where}: solo el primer snapshot puede ser LEGACY_V1")
+            if snapshot.parent_snapshot_sha256 != previous.snapshot_sha256:
+                _invalid_candidate(f"{where}: su padre no es el snapshot anterior")
+            if snapshot.base_revision != (previous.corpus_revision + (end_c - start_c)
+                                          + (end_d - start_d)):
+                _invalid_candidate(f"{where}: base_revision no corresponde a la ronda")
+            closed_ids = {c.candidate_id for c in candidates[:start_c]}
+            if any(c.candidate_id in closed_ids for c in round_candidates):
+                _invalid_candidate(f"{where}: reutiliza un candidato de un snapshot anterior")
+            expected_sha = _additive_snapshot_sha256(snapshot.ordinal,
+                                                     snapshot.parent_snapshot_sha256,
+                                                     snapshot.dossier, candidates[:end_c],
+                                                     decisions[:end_d])
+            if snapshot.snapshot_sha256 != expected_sha:
+                _invalid_candidate(f"{where}: el hash no corresponde a su contenido")
+            payload = {k: v for k, v in snapshot_record(snapshot).items() if k != "evidence"}
+            expected_evidence = _evidence(forum_id, snapshot.closure_id, payload)
+        if snapshot.evidence != expected_evidence:
+            _invalid_candidate(f"{where}: la evidencia no corresponde al registro")
+        previous = snapshot
+    if (previous.candidate_count, previous.decision_count) != (len(candidates), len(decisions)):
+        _invalid_candidate("hay registros fuera de cualquier snapshot")
+    if previous.corpus_revision != revision:
+        _invalid_candidate("la revisión del corpus no corresponde al último snapshot")
+
+
+def _compact_sha256(value: object) -> str:
+    return hashlib.sha256(canonical_json_bytes(value, pretty=False)).hexdigest()
+
+
+def _has_control(text: str) -> bool:
+    return any(ord(ch) < 32 for ch in text)
+
+
+def _is_managed_dossier_path(path: object) -> bool:
+    """A relative POSIX path under dossier/ with no empty, dot or trailing-space segment."""
+    if (not isinstance(path, str) or not path.startswith("dossier/") or "\\" in path
+            or ":" in path or _has_control(path)):
+        return False
+    return all(segment not in ("", ".", "..") and segment == segment.rstrip(". ")
+               for segment in path.split("/"))

@@ -31,9 +31,11 @@ from core.runtime.assimilation import (
     AssimilationDecision,
     AssimilationError,
     AssimilationState,
+    ClosedCorpus,
     DossierError,
     LoadedForumDossier,
     decode_candidate_state,
+    decode_closed_corpus,
     load_dossier,
 )
 from core.runtime.persistence import (
@@ -64,6 +66,7 @@ from core.runtime.workspace import (
     _require_publish_support,
     _strip_device_prefix,
     _tree_bytes,
+    dossier_descriptor,
     load_workspace,
 )
 
@@ -257,6 +260,19 @@ def approved_corpus(instance: LoadedInstance) -> tuple[ApprovedCorpusEntry, ...]
     return tuple(entries)
 
 
+def closed_corpus_of(instance: LoadedInstance) -> ClosedCorpus:
+    """The instance's closed corpus as a snapshot chain (a v1 instance has one LEGACY_V1 link)."""
+    try:
+        revision, content = load_state(instance.instance_root.joinpath(*INSTANCE_CORPUS.split("/")))
+        if revision != instance.corpus_revision:
+            raise InstanceError("CONFLICT", "el corpus de la instancia cambió mientras se leía")
+        return decode_closed_corpus(
+            content, dossier=instance.dossier, revision=revision,
+            descriptor=dossier_descriptor(instance.dossier, instance.config.dossier_files))
+    except (AssimilationError, PersistenceError) as exc:
+        raise InstanceError(exc.code, exc.reason) from exc
+
+
 def get_approved_candidate(instance: LoadedInstance, *, candidate_id: str,
                            version: int) -> ApprovedCorpusEntry:
     """The exact current approved version; never falls back to another version."""
@@ -295,6 +311,9 @@ class _Source:
 def _read_source(workspace_root: Path, core_root: Path) -> _Source:
     workspace = load_workspace(workspace_root, expected_core_root=core_root)
     root = workspace.workspace_root
+    if workspace.expansion is not None:
+        _invalid("ese es un workspace de ampliación: aplícalo a su instancia con «instance "
+                 "update», no crea una instancia nueva")
     if workspace.closure is None:
         _invalid("la asimilación del workspace no está cerrada; ciérrala antes de crear la "
                  "instancia (`assimilation close`)")
