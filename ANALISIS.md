@@ -3490,9 +3490,555 @@ El estado solo incluye `ANALISIS.md` y los archivos enumerados para 4a.
    instancia, propuestas versionadas y ejes separados de staff/aprendizaje/utilizabilidad.
    Criterio: el agente nunca origina el concepto ni incorpora una propuesta sin aceptación, y una
    aprobación no implica aprendizaje, uso, publicación o canon.
-7. [ ] **Memoria y narrativa.** Añadir puertos/repositorio en memoria, eventos con procedencia,
-   correcciones por anotación y `core/runtime/narrative.py` con `PublicationPort` solo como contrato.
-   Criterio: OOC/pensamiento/resultado pendiente no sale como hecho; ningún adaptador publica.
+7. [ ] **Memoria y narrativa, reorientada por el uso real.** Base exacta de este análisis:
+   `620aea1` (`main = origin/main`), rama `feature/incremento-7-memoria-narrativa`, 14-10-2026.
+   El incremento 4 completo y 5a están integrados. La validación funcional aportada por el usuario
+   demuestra una instancia v2 real con tres snapshots y 122 entradas aprobadas, un personaje de
+   concepto humano, propuesta aprobada, ficha v2 aceptada y respuesta de staff registrada mediante
+   barrera A. También demuestra que el caso prioritario ya no es generar una ficha, sino desarrollar
+   semillas humanas en posts completos, tanto para abrir un tema como para responder a texto que la
+   persona copia del foro, y conservar continuidad después de que ella revise, publique a mano y
+   registre el resultado final.
+
+   El acuerdo aplicable está en el corpus aprobado con autoridad declarada por la persona usuaria;
+   no se codifica como excepción temática. El core no interpreta ni autentica ese acuerdo: el agente
+   consulta y cita el corpus. La persona sigue siendo responsable de la cuenta, de publicar y de las
+   comunicaciones fuera de la partida. Ninguna operación de 7 envía contenido, abre locators, usa
+   red/modelo ni responde a terceros.
+
+   **División y orden recomendado.** Implementar tres subincrementos, en este orden:
+
+   - **7a — flujo narrativo mínimo y memoria literal de temas (detallado abajo):** temas, posts
+     ajenos transcritos, semillas humanas, borradores del agente y publicación manual confirmada.
+     Es la rebanada que permite rolear antes: el historial literal ya da continuidad sin fingir que
+     el core sabe extraer hechos.
+   - **7b — instrucciones de instancia v2 y actualización de instancias (esbozo):** enseñar el
+     flujo 4d/4e/7a y sustituir de forma explícita las instrucciones obsoletas de una instancia. Va
+     antes de la memoria semántica porque, sin ella, el agente abierto dentro de la instancia sigue
+     leyendo que esas operaciones futuras no existen.
+   - **7c — memoria semántica con procedencia y correcciones (esbozo):** eventos IC, contexto OOC,
+     pensamiento privado y resultados pendientes como canales separados; consolidación explícita
+     y correcciones por anotación. Se apoya en los posts exactos de 7a en vez de inventar primero un
+     extractor o una ontología.
+
+7a. [x] **Flujo narrativo mínimo y memoria literal de temas (detallado).** Objetivo cerrado: desde
+     una instancia existente, registrar un tema vacío o en curso; transcribir respuestas ajenas;
+     declarar una semilla humana; registrar el post completo desarrollado fuera del core por el
+     agente sobre la composición y ficha aprobada exactas; mostrar solo el texto publicable para
+     copia; y, después de la publicación manual, registrar texto final, locator y fecha. El core
+     conserva y valida contenido aportado, hashes, enlaces y estados; no redacta, resume, extrae
+     hechos ni evalúa estilo, reglas o fidelidad semántica.
+
+     **Alcance cerrado y archivos.** Crear `core/memory/narrative.py` para modelos/codec inmutables,
+     `core/runtime/narrative.py` para puertos/operaciones y `core/runtime/events.py` como helper
+     interno común de append atómico. Modificar
+     `core/memory/__init__.py`, `core/runtime/{__init__,instance,cli}.py` y solo lo imprescindible de
+     `core/runtime/character.py` para reutilizar resoluciones, sin duplicarlas. Añadir
+     `tests/test_narrative_{models,state,workflow,cli}.py` y ampliar
+     `tests/test_{instance,instance_update,vertical_slice}.py`; ajustar las aserciones antiguas de
+     ausencia de publicación para que sigan prohibiendo `publish|send|export` y cualquier comando
+     bajo `character`, no el nuevo registro manual bajo `narrative publication confirm`.
+
+     No modificar `core/review/models.py`, `core/runtime/persistence.py`, adaptadores, paquetes,
+     las cinco plantillas v1, `tests/expected_instance_templates.py` ni `reference/`. Reutilizar
+     literalmente `SourceRef`, `DraftVersion`, `DraftLifecycle`, `PublicationStatus`,
+     `confirm_publication`, `HumanConfirmationReceipt`, `Terminal`, `confirm_human_action`,
+     `_corpus_lock(..., guard=...)`, `_require_unlocked`, `require_no_update`, el guard anti-link,
+     `load_strict_json`, `canonical_json_bytes`, `encode_state`, `load_state`,
+     `atomic_write_bytes`, `get_approved_candidate`, `get_effective_composition` y `get_draft`.
+     Extraer a `events.py` solo la mecánica hoy probada por `character._write_event`: guard antes y
+     dentro del lock, recarga exacta, comparación del estado/revisión esperados, build de revisión
+     `+1`, encode y replace atómico. El `_write_event` de personaje permanece como wrapper con la
+     misma firma/errores y todas sus llamadas/salidas intactas; narrativa añade su wrapper tipado.
+     Lectura externa, resolución y creación por staging también se comparten mediante helpers con
+     sus pruebas, sin copiar una segunda implementación ni ensanchar sus rutas permitidas.
+
+     **Layout y autoridad persistente.** Añadir, perezosamente, un segundo árbol mutable hermano de
+     `characters/`:
+
+     ```text
+     narrative/
+       topics/
+         <topic_id>/
+           state.json
+           state.json.lock        # solo mientras hay un escritor
+     ```
+
+     La creación usa `narrative/topics/.<topic_id>.create.lock` y staging hermano, igual que el
+     primer concepto. Un tema es una sola autoridad auto-hasheada y un solo cerrojo: cabecera,
+     posts ajenos, semillas, borradores y publicaciones comparten sobre. No crear JSONL, índices,
+     outbox, caché, reloj implícito ni segundo archivo por tema. El sobre continúa con
+     `schema_version=1`; `content` tiene exactamente `topic`, `external_posts`, `seeds`, `drafts` y
+     `publications`. `revision == 1 + len(external_posts) + len(seeds) + len(drafts) +
+     len(publications)`; la cabecera es el evento 1 y cada alta real consume exactamente una
+     revisión. Todos los registros posteriores llevan `created_revision` o
+     `publication_revision`, únicos y reproducibles en `2..revision`.
+
+     Una instancia anterior sin `narrative/` carga como cero temas y no se reescribe. Si el árbol
+     existe, solo admite esas carpetas/archivos normales y locks transitorios conocidos; enlaces,
+     junctions, restos de staging, entrada extra, sobre editado o referencia irresoluble son
+     `INVALID_STATE` o `UNSAFE_DESTINATION` según el contrato actual. `LoadedInstance` añade al
+     final `topics: tuple[LoadedNarrativeTopic, ...] = ()`, sin alterar constructores posicionales
+     existentes. `_load_instance` carga primero corpus y personajes y después los temas, pasando
+     resolvers; así el codec de memoria no importa runtime ni crea un ciclo.
+
+     `instance update` debe tratar `narrative/` como mutable igual que `characters/`: incluir su
+     huella completa antes/después del prompt, rechazar locks de tema/creación, copiar rutas+bytes
+     sin cambios al staging, validar allí contra la ruta lógica final y comprobarlos otra vez tras
+     el swap. Toda mutación narrativa consulta el lock hermano de update antes del prompt, bajo su
+     lock y antes del replace. Un update v1/v2 sin `narrative/` conserva exactamente sus bytes y
+     salidas; con uno o más temas, el prompt de 5a inserta después de `Personajes preservados: K`
+     la línea exacta `Temas narrativos preservados: T`, y la huella que sustenta ese conteo se
+     vuelve a comprobar después de la barrera. La salida final de update no cambia. Un update con
+     temas no pierde ni mezcla eventos. Generalizar internamente la copia de árboles mutables si
+     reduce duplicación, pero conservar los demás mensajes y garantías 5a.
+
+     **Modelos inmutables y capas.** En `core/memory/narrative.py`, todo `frozen=True, slots=True`:
+
+     - `TopicHeader(topic_id, character_id, title, created_revision=1)`. Los dos IDs usan
+       `[a-z0-9]+(?:-[a-z0-9]+)*`; título es texto Unicode no vacío, sin NUL/controles ni espacios
+       extremos. El personaje debe existir al crear y cada vez que carga el tema.
+     - `PostRef(post_id, position, content_sha256)`. `position` es positivo; el hash es canónico.
+       La tupla de refs ordenada representa el contexto literal, no una lista de hechos.
+     - `ExternalPost(post_id, position, created_revision, author_label, content, utf8_size,
+       content_sha256, evidence, receipt, post_sha256)`. Solo representa `OTHER`; autor declarado,
+       locator y texto no autentican identidad ni consentimiento. La evidencia es un `SourceRef`
+       con `source_id="external-post:<topic_id>:<post_id>"`, hash del contenido, locator y
+       `observed_at` aportados, sin `ic_date` inventada.
+     - `HumanSeed(seed_id, version, created_revision, context, context_sha256, intent, tone, beats,
+       details, ooc_constraints, pending_outcomes, seed_sha256, evidence, receipt)`. Intención y
+       tono son textos no vacíos; las otras cinco colecciones son tuplas de textos no vacíos y
+       pueden estar vacías. La semilla son instrucciones/ideas humanas, nunca hechos IC. Captura
+       automáticamente todos los posts publicados existentes en ese instante: cero equivale a
+       iniciar tema; uno o más, a continuar. Su evidencia local usa
+       `source_id="human-seed:<topic_id>:<seed_id>:v<N>"` y liga todo el payload y contexto.
+     - `CharacterSheetRef(version, draft_sha256, composition_sha256,
+       staff_review_sha256)`. Al crear un borrador debe resolver a una ficha `current`, `ACTIVE` y
+       `APPROVED` por respuesta de staff, y su composición debe ser la efectiva vigente. Guardar
+       los cuatro valores permite validar luego el hecho histórico aunque el personaje evolucione.
+     - `NarrativeDraftRecord(draft_id, version, created_revision, seed_id, seed_version,
+       seed_sha256, context, context_sha256, target_position, character_revision,
+       composition_sha256, sheet, citations, publishable_text, ooc_notes, private_notes,
+       pending_outcomes, utf8_size, draft_sha256)`. Las citas son una tupla explícita, ordenada y
+       sin duplicados de `CorpusCandidateRef`; puede estar vacía para no forzar citas irrelevantes.
+       Cada referencia no vacía resuelve al candidato aprobado exacto. `publishable_text` es el
+       único bloque de copia; OOC, pensamiento privado y resultados que dependen de otros quedan
+       en campos diferentes y nunca se concatenan a él.
+     - `NarrativePublication(post_id, position, publication_revision, draft_id, draft_version,
+       draft_sha256, published_text, utf8_size, content_sha256, content_matches_draft, evidence,
+       receipt, publication_sha256)`. Conserva siempre el texto realmente publicado. Si la persona
+       editó el borrador, `content_matches_draft=false` y ambos hashes sobreviven; no se falsifica
+       que el borrador original exacto fue publicado.
+     - `NarrativePostView` unifica, solo para lectura, `ExternalPost` y
+       `NarrativePublication` en posiciones `1..K`; `NarrativeDraftView` deriva
+       `ACTIVE|STALE` comparando su contexto con los posts actuales y expone relación
+       `NONE|EXACT|EDITED` con una publicación. No persistir esas vistas ni un supuesto canon.
+       Resultados `TopicCreateResult`, `PostRecordResult`, `SeedImportResult`,
+       `NarrativeDraftCreateResult` y `PublicationConfirmResult` contienen estado recargado y
+       `created: bool`.
+
+     Validar texto libre como en 4d/4e: UTF-8, Unicode/CRLF/LF/no LF conservados carácter por
+     carácter, sin BOM/NUL ni controles salvo TAB/CR/LF. `author_label`, título y locators usan la
+     validación estricta sin controles. Fechas se aportan como ISO 8601 canónico con offset y se
+     convierten mediante `parse_observed_at`; no usar `datetime.now`. Todos los hashes de registro
+     son SHA-256 de JSON compacto canónico de todas sus claves persistidas salvo el propio hash.
+     `context_sha256` es el hash canónico de la lista completa de `PostRef`; el contexto vacío
+     también tiene hash. `content_sha256` siempre hashea los bytes UTF-8 exactos, no JSON.
+
+     Para un `NarrativePublication` exacto, la reproducción construye el `DraftVersion` equivalente
+     del borrador y aplica `confirm_publication(..., expected_version, evidence)`; debe resultar
+     `PUBLISHED` sin cambiar revisión ni ciclo de vida. Para una publicación editada no se aplica
+     esa transición al borrador original: la publicación final es el hecho confirmado y la vista
+     queda `EDITED`. No ampliar `PublicationStatus`, mutar `DraftVersion` ni llamar «publicado» al
+     texto que difiere. En ambos casos publicación no aprueba, canoniza ni confirma los
+     `pending_outcomes` del borrador.
+
+     **Entradas exactas.** `post record`, `seed import`, `draft create` y
+     `publication confirm` leen JSON estricto desde un archivo regular fuera del checkout y la
+     instancia, sin seguir links. Releen los bytes después de una barrera. Rechazan BOM, duplicados,
+     NaN/Infinity, claves extra/faltantes y tipos inexactos. Formas únicas:
+
+     ```json
+     {
+       "post_id": "respuesta-1",
+       "author_label": "otro participante",
+       "locator": "localizador aportado por la persona",
+       "observed_at": "2026-10-14T20:00:00+02:00",
+       "content": "Texto completo copiado"
+     }
+     ```
+
+     ```json
+     {
+       "seed_id": "turno-1",
+       "version": 1,
+       "intent": "Intención de la respuesta",
+       "tone": "Tono deseado",
+       "beats": ["Giro o momento"],
+       "details": ["Detalle que debe aparecer"],
+       "ooc_constraints": ["Límite fuera de personaje"],
+       "pending_outcomes": ["Resultado que no controla el personaje"]
+     }
+     ```
+
+     ```json
+     {
+       "draft_id": "turno-1",
+       "version": 1,
+       "seed_id": "turno-1",
+       "seed_version": 1,
+       "seed_sha256": "<hash mostrado por seed show>",
+       "context_sha256": "<hash mostrado por topic show>",
+       "composition_sha256": "<hash de character effective show>",
+       "sheet_version": 2,
+       "sheet_sha256": "<hash de character draft show>",
+       "citations": [{"candidate_id": "norma-aprobada", "version": 1}],
+       "publishable_text": "Post completo desarrollado",
+       "ooc_notes": ["Nota que no es hecho IC"],
+       "private_notes": ["Razonamiento que no se publica"],
+       "pending_outcomes": ["Consecuencia aún no confirmada"]
+     }
+     ```
+
+     ```json
+     {
+       "post_id": "post-propio-1",
+       "draft_sha256": "<hash mostrado por draft show>",
+       "locator": "localizador del post ya publicado",
+       "observed_at": "2026-10-14T20:15:00+02:00",
+       "published_text": "Texto final exacto tras la edición humana"
+     }
+     ```
+
+     El core deriva posición, revisiones, tamaños, hashes, recibos, evidencias, refs de personaje y
+     estado. No acepta por input autoría `SELF`, estado, publicación, hecho, canon, fecha IC, hash de
+     candidato, respuesta de staff ni path interno.
+
+     **Reproducción e invariantes.** `post_id` es único en el tema entre ajenos y propios; las
+     posiciones combinadas son contiguas y únicas. `post record` y una publicación nueva ocupan
+     siempre `K+1`; 7a no inserta, reordena ni borra historia. Versiones de un mismo seed/draft son
+     contiguas; retry exacto es no-op y una misma clave con otra semántica es `CONFLICT`. Una nueva
+     versión semánticamente idéntica a la anterior, ignorando versión/revisión/hashes, se rechaza.
+
+     Una semilla captura el contexto actual bajo lock. `draft create` exige que seed, hash y
+     contexto sigan siendo actuales, que `target_position=K+1`, que composición/ficha sean las
+     vigentes aprobadas y que cada cita resuelva de nuevo. Puede haber alternativas de borrador
+     sobre la misma semilla/contexto. Si aparece otro post, quedan `STALE` por vista, sin escritura.
+     `publication confirm` solo registra en 7a cuando el contexto del borrador sigue siendo el
+     historial actual y su posición objetivo sigue libre; esto evita reconstruir a posteriori un
+     orden distinto del foro. La persona debe registrar su publicación antes de incorporar la
+     respuesta siguiente. Una ficha/composición que cambie después de crear el borrador no borra su
+     procedencia; el prompt advierte si ya no es vigente, pero permite registrar el hecho externo
+     de que ese texto ya se publicó.
+
+     Al cargar, reproducir revisiones en orden y resolver personaje, seed, contexto, ficha,
+     composición y candidatos en el estado histórico guardado. Alterar cualquier texto, hash,
+     posición, revisión, recibo/evidencia o referencia da `INVALID_STATE`. Un post externo y una
+     publicación son fuentes literales; ni su texto ni una idea de semilla crean eventos de memoria
+     o hechos IC en 7a.
+
+     **Operaciones públicas exactas.** Añadir en `core/runtime/narrative.py`:
+
+     ```python
+     class PublicationPort(Protocol):
+         def publish(self, request: PublicationRequest) -> PublicationReceipt: ...
+
+     def create_topic(instance_root: Path, *, expected_core_root: Path, character_id: str,
+                      topic_id: str, title: str) -> TopicCreateResult: ...
+     def list_topics(instance: LoadedInstance, *,
+                     character_id: str | None = None) -> tuple[LoadedNarrativeTopic, ...]: ...
+     def get_topic(instance: LoadedInstance, *, topic_id: str) -> LoadedNarrativeTopic: ...
+     def record_external_post(instance_root: Path, *, expected_core_root: Path, topic_id: str,
+                              value: object, terminal: Terminal) -> PostRecordResult: ...
+     def import_human_seed(instance_root: Path, *, expected_core_root: Path, topic_id: str,
+                           value: object, terminal: Terminal) -> SeedImportResult: ...
+     def create_narrative_draft(instance_root: Path, *, expected_core_root: Path, topic_id: str,
+                                value: object) -> NarrativeDraftCreateResult: ...
+     def confirm_narrative_publication(instance_root: Path, *, expected_core_root: Path,
+                                       topic_id: str, draft_id: str, version: int,
+                                       value: object,
+                                       terminal: Terminal) -> PublicationConfirmResult: ...
+     ```
+
+     Añadir getters/listados puros `list_posts`, `get_post`, `list_seeds`, `get_seed`,
+     `list_narrative_drafts` y `get_narrative_draft`. `PublicationRequest` y
+     `PublicationReceipt` son DTO inmutables mínimos con contenido/hash, destino lógico y evidencia
+     devuelta; el `Protocol` no se instancia, inyecta ni invoca en 7a. Ningún adaptador lo implementa
+     y no hay comando `publish`. Su existencia fija el límite futuro sin dar capacidad de red.
+
+     `create_topic` y `create_narrative_draft` no son decisiones humanas: registran contenedor y
+     contenido del agente, respectivamente. `record_external_post` sí usa barrera A porque la
+     persona declara que copió texto/locator de un tercero; `import_human_seed`, porque declara que
+     esas ideas son su aportación y no una invención del agente; `confirm_narrative_publication`,
+     porque afirma un hecho externo y adopta el texto final exacto. Las tres barreras frenan el
+     camino automatizado, no autentican autor, tercero ni publicación. Consultas nunca piden nonce.
+
+     Todas las mutaciones hacen validación optimista, no-op antes del prompt cuando procede,
+     `_require_unlocked` y `require_no_update`; después de confirmar, releen input, instancia y
+     tema, toman lock con guard antes/al tomar/antes de replace y repiten invariantes. Cualquier
+     cambio concurrente es `CONFLICT`; cada éxito añade un solo evento. Frase distinta, EOF y
+     Ctrl+C no escriben; no capturar `KeyboardInterrupt`. Fallos de replace/liberación conservan las
+     garantías y mensajes de 4d/5a.
+
+     **Prompts exactos de barrera A.** Usar LF y bloques completos sin truncar. Arrays se renderizan
+     como JSON compacto con `ensure_ascii=False`; locators/labels, como JSON string. Si un bloque
+     libre no acaba en LF, añadir uno solo para separar el footer, sin cambiar el dato. Para post
+     ajeno, `phrase_prefix="REGISTRAR-POST-AJENO <topic_id> <post_id>"` y prompt previo exacto:
+
+     ```text
+     REGISTRO HUMANO DE POST AJENO
+     Foro: FORUM_ID
+     Personaje: CHARACTER_ID
+     Tema: TOPIC_ID
+     Post: POST_ID
+     Posición: P
+     Autor declarado: AUTHOR_JSON
+     Locator declarado: LOCATOR_JSON
+     Observada en: ISO_DATETIME
+     Contenido SHA-256: CONTENT_HASH
+     Contenido bytes UTF-8: SIZE
+     POST AJENO TRANSCRITO — texto exacto (hasta «Fin del post ajeno.»):
+     CONTENT
+     Fin del post ajeno.
+     Este registro conserva una fuente aportada por la persona; no autentica autoría o consentimiento y no convierte su contenido en hechos IC, canon ni resultados confirmados.
+     ```
+
+     Para semilla, `phrase_prefix="DECLARAR-SEMILLA <topic_id> <seed_id> v<N>"` y prompt previo:
+
+     ```text
+     DECLARACIÓN HUMANA DE SEMILLA NARRATIVA
+     Foro: FORUM_ID
+     Personaje: CHARACTER_ID
+     Tema: TOPIC_ID
+     Semilla: SEED_ID vN
+     Modo: INICIAR|CONTINUAR
+     Posts de contexto: K
+     Contexto SHA-256: CONTEXT_HASH
+     Intención: INTENT_JSON
+     Tono: TONE_JSON
+     Giros: BEATS_JSON_ARRAY
+     Detalles: DETAILS_JSON_ARRAY
+     Restricciones OOC: OOC_JSON_ARRAY
+     Resultados pendientes: PENDING_JSON_ARRAY
+     La persona declara que aporta estas ideas. Son instrucciones de desarrollo, no hechos IC; OOC y resultados pendientes permanecen separados.
+     ```
+
+     Para publicación, `phrase_prefix="CONFIRMAR-PUBLICACION <topic_id> <draft_id> v<N>"` y
+     prompt previo:
+
+     ```text
+     CONFIRMACIÓN HUMANA DE PUBLICACIÓN MANUAL
+     Foro: FORUM_ID
+     Personaje: CHARACTER_ID
+     Tema: TOPIC_ID
+     Post: POST_ID
+     Posición: P
+     Borrador: DRAFT_ID vN
+     Borrador SHA-256: DRAFT_HASH
+     Contexto SHA-256: CONTEXT_HASH
+     Composición/ficha vigentes ahora: SÍ|NO
+     Locator declarado: LOCATOR_JSON
+     Observada en: ISO_DATETIME
+     Borrador contenido SHA-256: DRAFT_CONTENT_HASH
+     Borrador bytes UTF-8: DRAFT_SIZE
+     Texto final SHA-256: FINAL_CONTENT_HASH
+     Texto final bytes UTF-8: FINAL_SIZE
+     Coincidencia exacta: SÍ|NO
+     BORRADOR — texto exacto (hasta «Fin del borrador.»):
+     DRAFT_CONTENT
+     Fin del borrador.
+     TEXTO FINAL PUBLICADO — texto exacto (hasta «Fin del texto final.»):
+     PUBLISHED_TEXT
+     Fin del texto final.
+     NO PUBLICAR — OOC: OOC_JSON_ARRAY
+     NO PUBLICAR — privado: PRIVATE_JSON_ARRAY
+     NO PUBLICAR — resultados pendientes: PENDING_JSON_ARRAY
+     Se registra el texto final como fuente publicada; no se publica nada ahora, no se aprueba el borrador si difiere y no se confirman resultados que dependan de otros participantes.
+     ```
+
+     `confirm_human_action` añade exactamente `Escribe exactamente: <PREFIX> NONCE\n> `, con un
+     espacio final y sin LF, un solo intento y comparación byte a byte. Los tests fijan los bytes
+     completos, incluidos arrays vacíos/múltiples y textos con/sin LF.
+
+     **CLI exacta.** Añadir un grupo raíz `narrative`:
+
+     ```text
+     narrative topic create --instance RUTA --character-id ID --topic-id ID --title TEXTO
+     narrative topic list --instance RUTA [--character-id ID]
+     narrative topic show --instance RUTA --topic-id ID
+     narrative post record --instance RUTA --topic-id ID --input ARCHIVO_JSON
+     narrative post list --instance RUTA --topic-id ID
+     narrative post show --instance RUTA --topic-id ID --post-id ID
+     narrative seed import --instance RUTA --topic-id ID --input ARCHIVO_JSON
+     narrative seed list --instance RUTA --topic-id ID
+     narrative seed show --instance RUTA --topic-id ID --seed-id ID --version N
+     narrative draft create --instance RUTA --topic-id ID --input ARCHIVO_JSON
+     narrative draft list --instance RUTA --topic-id ID
+     narrative draft show --instance RUTA --topic-id ID --draft-id ID --version N
+     narrative publication confirm --instance RUTA --topic-id ID --draft-id ID --version N --input ARCHIVO_JSON
+     ```
+
+     Todo lo mostrado es obligatorio salvo el filtro de `topic list`. `post record`, `seed import`
+     y `publication confirm` rechazan el flag global `--json` antes del prompt con, respectivamente,
+     `los posts ajenos transcritos no admiten --json: ejecuta el comando en tu terminal y responde a
+     la confirmación`, `las declaraciones humanas de semillas narrativas no admiten --json: ejecuta
+     el comando en tu terminal y responde a la confirmación` y `las confirmaciones de publicación
+     manual no admiten --json: ejecuta el comando en tu terminal y responde a la confirmación`;
+     el resto lo admite. No añadir aliases implícitos, selección de «último»,
+     `--yes`, `--force`, nonce por argumento, `publish`, `send`, `export`, outbox ni URL fetch.
+
+     Líneas resumen exactas:
+
+     ```text
+     TOPIC_ID | personaje=CHARACTER_ID | posts=K | semillas=S | borradores=D | publicaciones=P | contexto=HASH | revisión=R | título=JSON_STRING
+     pPOSITION | OTHER|SELF | POST_ID | sha256=HASH | bytes=SIZE | locator=JSON_STRING | observada=ISO
+     SEED_ID vN | INICIAR|CONTINUAR | sha256=HASH | contexto=HASH | posts=K | pendientes=P
+     DRAFT_ID vN | ACTIVE|STALE | publicación=NONE|EXACT|EDITED | posición=P | semilla=ID:vN:HASH | composición=HASH | ficha=vN:HASH | sha256=HASH | bytes=SIZE | citas=K | pendientes=P
+     ```
+
+     Create/record/import/confirm anteponen respectivamente `Tema creado|Tema ya existente:`,
+     `Post ajeno registrado|Post ajeno ya existente:`, `Semilla importada|Semilla ya existente:`,
+     `Borrador creado|Borrador ya existente:` y
+     `Publicación confirmada|Publicación ya confirmada:`, y terminan con
+     `Revisión del tema: R.`. List emite una línea por elemento o `No hay ... para «TOPIC_ID».`.
+     `topic show` imprime resumen y posts completos en posición; `post show` imprime evidencia y un
+     bloque literal; `seed show` separa intención/tono/listas; `draft show` imprime referencias,
+     después `POST PARA COPIA MANUAL (no acredita publicación, hasta «Fin del post.»):` /
+     `Fin del post.`, y después bloques rotulados `NO PUBLICAR` para OOC, privado y pendientes. Solo
+     el primer bloque es copiable.
+
+     JSON de éxito usa siempre `ok`, `action`, `instance`, `topic_id` y `state_revision`; añade
+     `created` en mutaciones, un objeto `topic|post|seed|draft|publication` en show/mutación y arrays
+     plurales en list. Los serializadores públicos devuelven exactamente los campos persistidos más
+     los estados derivados documentados, nunca recibo nonce, texto de otros elementos ni una clave
+     `facts|canon`. Mantener error `{"ok":false,"code","message"}`, `_write_exact` y códigos
+     0/2/3/4/5: parser -> 2; JSON/texto/fecha/hash/estado interno/no encontrado/TTY -> 3; identidad,
+     versión, contexto, ficha/composición, duplicado distinto, lock/carrera/ruta insegura -> 4;
+     disco -> 5.
+
+     **Tests exhaustivos.** `test_narrative_models.py` cubre IDs, tipos exactos, Unicode y
+     controles, fecha canónica, listas vacías/no vacías, hashes/tamaños, records/serializadores,
+     `SourceRef`, `HumanConfirmationReceipt`, DTO/Protocol de publicación y ausencia de implementación
+     en adaptadores. `test_narrative_state.py` cubre forma exacta del sobre, revisión/eventos,
+     creación perezosa, posiciones y versiones contiguas, mezcla ordenada OTHER/SELF, refs y
+     contexto vacío/no vacío, reproducción, vistas ACTIVE/STALE/NONE/EXACT/EDITED y manipulación de
+     cada campo, hash, evidencia, recibo o revisión.
+
+     `test_narrative_workflow.py` recorre los dos casos: tema vacío -> semilla INICIAR -> alternativas
+     -> publicación exacta/editada; y posts ajenos -> semilla CONTINUAR -> borrador -> publicación ->
+     siguiente respuesta. Cubrir ficha aprobada vigente frente a pendiente/rechazada/stale,
+     composición vieja, citas cero/múltiples/repetidas/no aprobadas/ausentes/`UNCERTAINTY`, cambio
+     posterior de personaje, final distinto, retry/mtime y conflictos. Probar input externo,
+     symlink/junction, locks/guard, cambio durante prompt, dos escritores, replace/liberación
+     fallidos y que nunca se pierde un evento.
+
+     `test_narrative_cli.py` fija parser, ayudas, texto y JSON byte a byte, bloques y resúmenes,
+     todas las formas inválidas, códigos y los tres prompts completos con nonce, TTY, redirects,
+     EOF, case, espacios y Ctrl+C. Verifica que OOC/privado/pendientes no aparecen dentro del bloque
+     copiable ni en `published_text` por composición automática; el core conserva aparte lo que se
+     le entrega y no pretende analizar semánticamente prosa libre. Verifica que no existen
+     `publish|send|export`, que `PublicationPort` no se llama y que ningún locator se abre.
+
+     Ampliar `test_instance_update.py` con temas antes/durante/después de la confirmación, locks de
+     tema/creación, bytes preservados a través de v1 -> v2 y otra ampliación, rollback y restos de
+     backup. Ampliar `test_vertical_slice.py` con una fixture neutra desde personaje/ficha aprobada
+     hasta publicación manual registrada, bajo el guard que prohíbe red, subprocess, navegador y
+     escritura fuera de temporales. Las suites 4/5a prueban que instancias sin narrativa, prompts,
+     salidas, plantillas y bytes previos no cambian.
+
+     **Criterios de aceptación.** Con una ficha aprobada vigente, la persona puede abrir un tema o
+     continuar posts ajenos mediante semillas declaradas, el agente puede registrar alternativas
+     completas con procedencia exacta y la persona puede copiar solo el texto publicable. Tras
+     publicar a mano, el tema conserva el texto final y evidencia; una edición queda `EDITED`, no
+     se atribuye al borrador original. Reiniciar reproduce el historial y permite el turno
+     siguiente. OOC, pensamiento y pendientes tienen campos/salidas separados y jamás se convierten
+     por el core en hechos o canon; el límite semántico queda declarado porque 7a no puede demostrar
+     que una frase libre esté bien clasificada. Ningún adaptador publica, ningún comando publica y
+     ninguna prueba usa red/modelo/SQLite/contenido temático.
+
+     Verificación exacta desde PowerShell:
+
+     ```powershell
+     py -3.11 -B -m unittest tests.test_narrative_models tests.test_narrative_state tests.test_narrative_workflow tests.test_narrative_cli -v
+     py -3.11 -B -m unittest tests.test_character_draft tests.test_staff_review_cli tests.test_instance tests.test_instance_update tests.test_vertical_slice -v
+     py -3.11 -B -m unittest tests.test_corpus_expansion tests.test_corpus_expansion_cli tests.test_review_models -v
+     py -3.11 -B -m unittest discover -s tests -v
+     git diff --check
+     git diff --exit-code 620aea1 -- core/runtime/templates tests/expected_instance_templates.py
+     git diff --name-only 620aea1 -- reference
+     rg -n "Nozomu|Naruto|Jcink|narutorol|account 59|275" core tests/test_narrative_models.py tests/test_narrative_state.py tests/test_narrative_workflow.py tests/test_narrative_cli.py
+     rg -n 'add_parser\("(publish|send|export)' core/runtime/cli.py
+     rg -n "PublicationPort" adapters
+     git status --short
+     ```
+
+     **Validación funcional manual.** Trabajar sobre una copia recuperable de la instancia real,
+     con inputs saneados fuera de checkout/instancia y sin abrir locators. Caso A: crear tema vacío,
+     importar una semilla real breve, registrar un borrador desarrollado, comprobar que el bloque
+     copiable excluye canales privados, simular publicación manual y confirmar un texto final con
+     una edición. Reiniciar y comprobar `EDITED`, hashes y contenido exacto. Caso B: crear otro tema,
+     registrar dos posts ajenos copiados, importar una semilla de continuidad, crear/confirmar el
+     post propio y después registrar la respuesta siguiente; reiniciar y comprobar orden/contexto.
+     Repetir cada mutación para verificar no-op y ejecutar una ampliación 5a sobre la copia para
+     comprobar preservación byte a byte de `narrative/`. La publicación real, el acceso al foro y el
+     uso de un modelo quedan fuera de esta validación del core y requieren acción/autorización
+     separada.
+
+7b. [ ] **Instrucciones de instancia v2 y migración (esbozo; detallar tras aprobar 7a).** Mantener
+     byte a byte `AGENTS.template.md`, `CLAUDE.template.md`, `instance-policy.template.md` y sus
+     golden v1. Crear plantillas paralelas v2 y un descriptor íntegro
+     `work/instructions.json` con versión/hashes, ortogonal a `instance.json` v1/v2 y al formato del
+     corpus. No reutilizar `schema_version` de instancia, que hoy distingue la cadena de snapshots.
+     Nuevas instrucciones deben documentar comandos reales 4d/4e/7a, flujo semilla -> desarrollo ->
+     revisión humana -> publicación manual -> registro, citas, separación de canales, barrera A y
+     prohibición de red/publicación/MP/Discord; ante una pregunta directa sobre automatización o
+     identidad, el agente pausa y avisa a la persona antes de redactar respuesta.
+
+     Añadir una operación humana separada `instance instructions update --instance RUTA`, no
+     sobrecargar `instance update --workspace`: ambas comparten la primitiva transaccional de
+     staging/swap/restore de 5a, pero autorizan cambios distintos. Prompt debe mostrar versión y
+     hashes viejo/nuevo; retry idéntico es no-op. Preservar byte a byte dossier, corpus,
+     `characters/` y `narrative/`. `instance update` debe preservar el descriptor e instrucciones
+     v2 si ya existen. Para no romper el golden histórico, `instance init` sin opción conserva v1;
+     se podrá añadir `--instructions-version 2` explícito y probar que el camino v1 sigue idéntico.
+     Criterio: una copia de la instancia real pasa de instrucciones v1 a v2 con barrera A, carga
+     íntegra y sabe operar 7a sin inventar comandos; rollback nunca deja políticas mezcladas.
+
+7c. [ ] **Memoria semántica y correcciones por anotación (esbozo; detallar después de validar
+     7a/7b).** Añadir detrás de un `MemoryRepository` un log inmutable por tema basado solo en
+     `PostRef` resolubles. Cada candidato declara capa `IC|OOC|PRIVATE`, estado epistemológico
+     `PENDING|CONFIRMED`, alcance y fuentes exactas. El core no extrae texto: el agente externo
+     aporta candidatos y una persona confirma solo los que deban consolidarse. Los resultados que
+     dependen de otros nacen `PENDING` y solo una fuente posterior permite otro evento que los
+     confirme; publicación propia nunca basta.
+
+     Una corrección no edita ni borra el evento: `MemoryAnnotation` referencia ID/hash anterior,
+     fuente y acción `CORRECT|RETRACT|CLARIFY`; las vistas efectivas reproducen la cadena y conservan
+     el original. Repositorios JSON provisionales viven bajo el tema y comparten su transacción o,
+     si se separan, deben definir un orden atómico antes de implementar; SQLite sigue reservado al
+     incremento 9. Las consultas de «hechos» devuelven exclusivamente `IC+CONFIRMED` no retraídos;
+     OOC, privado, incertidumbre y pendientes tienen endpoints/salidas distintas. Criterio: ninguna
+     ruta de copia narrativa ni memoria confirmada mezcla canales, toda afirmación resuelve a post
+     literal y las correcciones son auditables.
+
+     **Riesgos y decisiones cerradas de 7.** No queda una duda bloqueante para 7a. Se fija barrera A
+     para semilla, post ajeno y publicación; aunque añade fricción por turno, protege justo las tres
+     afirmaciones que el agente no debe poder fabricar. Tema y borrador no la llevan. Se fija texto
+     final obligatorio al confirmar publicación: locator+hash del borrador no bastan y una
+     divergencia se conserva, no se rechaza ni se oculta. Se fija operación separada para actualizar
+     instrucciones: un update de corpus no autoriza cambiar la política que gobierna al agente.
+
+     El riesgo residual principal es semántico: stdlib sin modelo no puede demostrar que el agente
+     no escribió como hecho un resultado pendiente dentro de prosa libre. 7a reduce daño con tipos,
+     salidas y avisos; 7c aporta consolidación segura, y la revisión humana sigue siendo necesaria.
+     Otro riesgo es privacidad/consentimiento al copiar posts ajenos: la recomendación es guardar el
+     texto completo solo en la instancia local porque hace posible continuidad y auditoría, no
+     incluirlo en repo, fixtures, logs o salidas agregadas, no tratar el locator como permiso y no
+     republicar citas extensas automáticamente. La persona operadora conserva la responsabilidad de
+     contar con base suficiente para ese uso; barrera A registra su transcripción, no el
+     consentimiento del autor. Si se exige almacenar solo extractos o redacción, hay que decidirlo
+     antes de 7a porque impediría hashes del post completo y cambiaría contexto, pruebas y
+     validación funcional; no se recomienda para el flujo solicitado.
 8. [ ] **Seguimiento y adaptador manual completo.** Añadir `core/runtime/tracking.py`, `ForumReader`
    y capturas locales al adaptador manual. Criterio: baseline, A→B→A y lecturas incompletas se
    comportan de forma conservadora; los borradores solo se exportan a un outbox local.
@@ -4331,8 +4877,14 @@ subincremento mínimo. No se cambia la política de instrucciones v1.
 - Resultado final de los tests: 523 OK en `py -3.11` y `py -3.14`, sin omitidos (suites 5a: 49).
   Plantillas, `tests/expected_instance_templates.py` y `reference/` sin cambios desde `1265600`;
   `rg` del legado y de subcomandos prohibidos vacíos.
-- Validación funcional: PENDIENTE (ampliación real con el material de raza del usuario: extend,
-  candidatos, cierre e `instance update` en TTY real).
+- Validación funcional (14-10-2026, uso real con el foro del usuario, fuera del repo): el usuario
+  cerró en TTY real dos ampliaciones (ronda 2: 48 candidatos del material de raza; ronda 3: 2
+  candidatos de una respuesta del staff resumida por él) y aplicó ambas con `instance update`.
+  Claude lo verificó: cadena `LEGACY_V1 → ADDITIVE_V2 → ADDITIVE_V2` (72 → 120 → 122 entradas),
+  instancia v2 íntegra, concepto y estado del personaje intactos, sin restos de staging/backup.
+  Después, con el núcleo de 4: propuesta v2 aprobada, ficha v2 (redactada por el agente y
+  editada por el usuario) aceptada por el staff y su respuesta registrada con
+  `character staff record` (APPROVED, `TTY_NONCE_V1`, texto idéntico al JSON).
 - Métricas por agente (solo telemetría verificable; ausente = NO DISPONIBLE):
   - Codex (`gpt-5.6-sol`, high), contadores de `~/.codex/sessions` (hilos exclusivos de 5a):
     - Análisis `01a13973-c83b-7d32-84fc-7810d00ea690` (1 encargo): entrada 2.427.111 (caché
@@ -4348,3 +4900,90 @@ subincremento mínimo. No se cambia la política de instrucciones v1.
   - Retrabajo: tres rondas de corrección (6 hallazgos, uno en dos pasos). Antes de las
     revisiones: normalización de CRLF tras el merge, tres expectativas de test propias
     (dos aserciones laxas y una simulación demasiado amplia) y heredocs fallidos sin efectos.
+
+### Incremento 7a — flujo narrativo mínimo y memoria literal de temas
+- Rama: `feature/incremento-7-memoria-narrativa` (base `620aea1`). Plan detallado por Codex (hilo
+  `01a13a7b-9114-7253-abf2-43119c763241`).
+- Decisiones del usuario (14-10-2026): se guarda el texto completo de los posts ajenos, solo en la
+  instancia local; se mantiene la barrera A en las tres operaciones del plan (post ajeno, semilla y
+  confirmación de publicación).
+- Implementado: `core/memory/narrative.py` (modelos, vistas, códec y serializadores públicos);
+  `core/runtime/narrative.py` (operaciones, consultas, `PublicationPort` y DTO sin uso);
+  `core/runtime/events.py` (mecánica común de guard, evento único y publicación de carpeta nueva,
+  ahora también usada por `character.py` sin cambio de comportamiento); `narrative/topics/<id>/`
+  en la carga de la instancia y en `instance update` (preservado byte a byte, cerrojos de tema y
+  de creación bloquean la actualización, línea `Temas narrativos preservados: T` solo si hay
+  temas); grupo `narrative` de la CLI con los 13 comandos.
+- Desviaciones y concreciones:
+  - Las operaciones públicas reciben `input_path: Path` en lugar de `value: object`, como
+    `record_staff_response` de 4e: el plan exige releer los bytes del input después de la barrera,
+    lo que requiere la ruta. `draft create` también la recibe por coherencia.
+  - `core.memory` exporta el modelo narrativo de forma perezosa (`__getattr__` de módulo): un
+    import inmediato deja `core.character.models` a medio inicializar cuando se importa primero
+    (`core.character.models` → `core.memory.provenance` → `core.memory` → `narrative` →
+    `core.character.models`). `core.runtime` mantiene los mismos objetos como conveniencia.
+  - La ayuda del grupo en la ayuda raíz es «temas, semillas y borradores (no publica nada)»: el
+    test de 4c prohíbe «post» y «publica » en la ayuda raíz.
+  - Reintentos: `observed_at` se compara por su texto ISO (mismo instante con otro offset es
+    `CONFLICT`), como en 4e.
+  - Una versión nueva de semilla con los mismos campos solo se rechaza si además el contexto es el
+    mismo; con contexto nuevo es una versión con sentido. Igual para borradores (semántica +
+    contexto).
+  - Formatos de salida no fijados por el plan: `topic show` imprime cada post con
+    `Post pN (exacto, hasta «Fin del post pN.»):`; `post show` añade `Autor declarado` (OTHER) o
+    `Borrador: ID vN | sha256=… | coincidencia exacta=SÍ|NO` (SELF), `Evidencia` y el bloque
+    literal; `seed show` y los canales `NO PUBLICAR` de `draft show` usan arrays JSON en una línea,
+    con el mismo formato que los prompts; `draft show` muestra contexto, ficha, citas y publicación
+    antes del bloque copiable. `publication confirm` imprime el post y la línea del borrador.
+  - `topic list --json` no lleva `topic_id` ni `state_revision` (no hay un tema único); los demás
+    JSON de éxito sí.
+  - Los recibos públicos son `{confirmation_sha256, method}`; el método se llama `TTY_NONCE_V1`,
+    pero ningún JSON contiene el código de un solo uso.
+- Pruebas (antes de la revisión): 579 OK en Python 3.11 y 3.14 (523 → 579). Nuevas: `test_narrative_models` (12),
+  `test_narrative_state` (6, incluida la manipulación de 45 campos/órdenes y de la revisión),
+  `test_narrative_workflow` (22), `test_narrative_cli` (11, con los tres prompts completos byte a
+  byte); `test_instance_update` +5 (`NarrativeUpdateTest`); `test_vertical_slice` ampliado con
+  tema, post ajeno, semilla, borrador, bloque copiable y publicación editada bajo los guards. Las
+  suites de 4/5a no cambian salvo esas ampliaciones.
+- Verificación del plan: `git diff --check` limpio; plantillas y `expected_instance_templates`
+  sin cambios desde `620aea1`; `reference/` sin cambios; sin coincidencias legacy en `core` ni en
+  los tests nuevos; sin `add_parser("publish|send|export")`; sin `PublicationPort` en `adapters`.
+- Fuera de 7a: `git status` muestra `.vscode/settings.json`, `adapters/*` y
+  `docs/analisis/incremento-*-revision.md` como modificados solo por fin de línea (sin diferencias
+  con `--ignore-cr-at-eol`); no se incluyen en el commit.
+- Retrabajo antes de la revisión: un contador de test reiniciado por vuelta (el «escritor
+  concurrente» era un reintento idempotente), el `forum_id` de la fixture, «nonce» presente en el
+  nombre del método, `README.md` inexistente en el checkout, un miembro inexistente de
+  `DraftLifecycle` y un heredoc que rompió `\n` (sin efectos).
+- Revisión de Codex (hilo `01a13aad-9e48-7d52-8808-85a34e85883a`): CAMBIOS REQUERIDOS, cuatro
+  hallazgos corregidos juntos.
+  - REV7A-01: bajo el cerrojo, `_append` compara además la instancia recargada completa con la
+    mostrada antes de la barrera (personaje, corpus, expediente u otro tema → `CONFLICT`).
+  - REV7A-02: `CharacterState.at_revision(n)` reconstruye el personaje tras el evento `n`; la carga
+    exige en esa revisión ficha vigente, ACTIVE, aprobada, composición efectiva y los cuatro
+    hashes (con caché por personaje y revisión).
+  - REV7A-03: `seed_semantics`/`draft_semantics` en `core.memory.narrative`; la reproducción
+    rechaza una versión igual a la anterior en el mismo contexto y el runtime usa los mismos
+    comparadores.
+  - REV7A-04: fachada perezosa de `core.memory` (ver arriba).
+  - Pruebas añadidas: cambios de personaje y de otro tema durante los tres prompts, vigencia SÍ→NO
+    durante la publicación, lectura sin cambios que sigue escribiendo un evento, `instance update`
+    aplicado durante un prompt, falsificaciones autoconsistentes de `character_revision`, versiones
+    repetidas en el códec y órdenes de import en procesos limpios. Suite: 588 OK en 3.11 y 3.14.
+- Verificación de Codex en el mismo hilo: APROBADO — 7a COMPLETO; REV7A-01..04 resueltos, sin
+  regresiones observadas. Archivado en `docs/analisis/incremento-7a-revision.md`.
+- Cierre: revisión de código completada; pruebas automatizadas 588 OK en 3.11 y 3.14; validación
+  funcional pendiente (solo la persona): prompts con TTY real y los casos A/B del plan sobre una
+  copia de la instancia real.
+- Métricas (telemetría verificable; acumulados de cada hilo, sin sumar caché ni razonamiento dos
+  veces):
+  - Codex análisis (`gpt-5.6-sol`, hilo `01a13a7b-…`, 2 turnos, 1 turno abortado por el usuario
+    al rechazar un encargo): entrada 3.563.759 (caché 3.418.240), salida 36.006 (razonamiento
+    19.210), escritura de caché 0.
+  - Codex revisión + verificación (`gpt-5.6-sol`, hilo `01a13aad-…`, 2 turnos, 0 errores):
+    entrada 7.007.981 (caché 6.784.768), salida 31.784 (razonamiento 16.480), escritura de caché 0.
+  - Claude (`claude-opus-5-5`, sesión `076da56b-…`, desde «podemos hacer una mezcla de la 1 y la
+    2» hasta antes del commit; incluye decisiones de alcance; 98 respuestas de API deduplicadas
+    por id): entrada 196, salida 176.725, caché leída 34.764.606, caché escrita 362.041.
+  - Coste o cuota NO DISPONIBLE. Retrabajo: una ronda de corrección (4 hallazgos) y una
+    verificación.

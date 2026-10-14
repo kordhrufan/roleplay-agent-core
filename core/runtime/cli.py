@@ -30,6 +30,19 @@ from core.character.models import (
     proposal_record,
     staff_response_record,
 )
+from core.memory.narrative import (
+    ExternalPost,
+    HumanSeed,
+    LoadedNarrativeTopic,
+    NarrativeDraftView,
+    NarrativeError,
+    NarrativePostView,
+    narrative_draft_summary,
+    post_summary,
+    publication_summary,
+    seed_summary,
+    topic_summary,
+)
 from core.review.models import ReviewStatus
 from core.runtime.assimilation import (
     AssimilationCandidate,
@@ -74,6 +87,21 @@ from core.runtime.instance import (
     load_instance,
     update_instance,
 )
+from core.runtime.narrative import (
+    confirm_narrative_publication,
+    create_narrative_draft,
+    create_topic,
+    get_narrative_draft,
+    get_post,
+    get_seed,
+    get_topic,
+    import_human_seed,
+    list_narrative_drafts,
+    list_posts,
+    list_seeds,
+    list_topics,
+    record_external_post,
+)
 from core.runtime.persistence import PersistenceError, load_strict_json
 from core.runtime.workspace import (
     CORPUS_STATE,
@@ -111,7 +139,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ManualAdapterError as exc:
         return _fail(args, "INVALID_STATE", exc.reason)
     except (WorkspaceError, AssimilationError, PersistenceError, InstanceError,
-            CharacterError) as exc:
+            CharacterError, NarrativeError) as exc:
         return _fail(args, exc.code, exc.reason)
 
 
@@ -332,6 +360,110 @@ def _build_parser() -> argparse.ArgumentParser:
     staff_record.add_argument("--input", required=True, type=Path,
                               help="JSON con draft_sha256, locator, observed_at y response")
     staff_record.set_defaults(handler=_staff_record, action_name="character.staff.record")
+
+    narrative = commands.add_parser(
+        "narrative", help="temas, semillas y borradores (no publica nada)")
+    narrative_groups = narrative.add_subparsers(dest="narrative_group", required=True,
+                                                metavar="grupo")
+    topic = narrative_groups.add_parser("topic", help="temas de un personaje")
+    topic_actions = topic.add_subparsers(dest="topic_action", required=True, metavar="acción")
+    topic_create = topic_actions.add_parser("create", help="crea un tema vacío para un personaje")
+    _instance_argument(topic_create)
+    topic_create.add_argument("--character-id", required=True)
+    topic_create.add_argument("--topic-id", required=True)
+    topic_create.add_argument("--title", required=True)
+    topic_create.set_defaults(handler=_topic_create, action_name="narrative.topic.create")
+    topic_list = topic_actions.add_parser("list", help="lista los temas")
+    _instance_argument(topic_list)
+    topic_list.add_argument("--character-id")
+    topic_list.set_defaults(handler=_topic_list, action_name="narrative.topic.list")
+    topic_show = topic_actions.add_parser("show", help="muestra un tema y sus posts completos")
+    _instance_argument(topic_show)
+    topic_show.add_argument("--topic-id", required=True)
+    topic_show.set_defaults(handler=_topic_show, action_name="narrative.topic.show")
+
+    post = narrative_groups.add_parser("post", help="posts del tema (ajenos y propios)")
+    post_actions = post.add_subparsers(dest="post_action", required=True, metavar="acción")
+    post_record = post_actions.add_parser(
+        "record", help="registra un post ajeno que has copiado; pide teclear una frase con un "
+                       "código (no autentica al autor)")
+    _instance_argument(post_record)
+    post_record.add_argument("--topic-id", required=True)
+    post_record.add_argument("--input", required=True, type=Path,
+                             help="JSON con post_id, author_label, locator, observed_at y "
+                                  "content, fuera del checkout y de la instancia")
+    post_record.set_defaults(handler=_post_record, action_name="narrative.post.record")
+    post_list = post_actions.add_parser("list", help="lista los posts en orden")
+    _instance_argument(post_list)
+    post_list.add_argument("--topic-id", required=True)
+    post_list.set_defaults(handler=_post_list, action_name="narrative.post.list")
+    post_show = post_actions.add_parser("show", help="muestra un post completo")
+    _instance_argument(post_show)
+    post_show.add_argument("--topic-id", required=True)
+    post_show.add_argument("--post-id", required=True)
+    post_show.set_defaults(handler=_post_show, action_name="narrative.post.show")
+
+    seed = narrative_groups.add_parser("seed", help="ideas que aportas para el siguiente post")
+    seed_actions = seed.add_subparsers(dest="seed_action", required=True, metavar="acción")
+    seed_import = seed_actions.add_parser(
+        "import", help="declara tus ideas para el siguiente post; pide teclear una frase con un "
+                       "código")
+    _instance_argument(seed_import)
+    seed_import.add_argument("--topic-id", required=True)
+    seed_import.add_argument("--input", required=True, type=Path,
+                             help="JSON con seed_id, version, intent, tone, beats, details, "
+                                  "ooc_constraints y pending_outcomes")
+    seed_import.set_defaults(handler=_seed_import, action_name="narrative.seed.import")
+    seed_list = seed_actions.add_parser("list", help="lista las semillas")
+    _instance_argument(seed_list)
+    seed_list.add_argument("--topic-id", required=True)
+    seed_list.set_defaults(handler=_seed_list, action_name="narrative.seed.list")
+    seed_show = seed_actions.add_parser("show", help="muestra una versión de una semilla")
+    _instance_argument(seed_show)
+    seed_show.add_argument("--topic-id", required=True)
+    seed_show.add_argument("--seed-id", required=True)
+    seed_show.add_argument("--version", required=True, type=_positive_int)
+    seed_show.set_defaults(handler=_seed_show, action_name="narrative.seed.show")
+
+    ndraft = narrative_groups.add_parser("draft", help="posts completos desarrollados por el "
+                                                       "agente")
+    ndraft_actions = ndraft.add_subparsers(dest="draft_action", required=True, metavar="acción")
+    ndraft_create = ndraft_actions.add_parser(
+        "create", help="registra un post desarrollado desde una semilla; no publica nada")
+    _instance_argument(ndraft_create)
+    ndraft_create.add_argument("--topic-id", required=True)
+    ndraft_create.add_argument("--input", required=True, type=Path,
+                               help="JSON del borrador, fuera del checkout y de la instancia")
+    ndraft_create.set_defaults(handler=_narrative_draft_create,
+                               action_name="narrative.draft.create")
+    ndraft_list = ndraft_actions.add_parser("list", help="lista los borradores")
+    _instance_argument(ndraft_list)
+    ndraft_list.add_argument("--topic-id", required=True)
+    ndraft_list.set_defaults(handler=_narrative_draft_list, action_name="narrative.draft.list")
+    ndraft_show = ndraft_actions.add_parser(
+        "show", help="muestra un borrador para copiarlo a mano (no acredita publicación)")
+    _instance_argument(ndraft_show)
+    ndraft_show.add_argument("--topic-id", required=True)
+    ndraft_show.add_argument("--draft-id", required=True)
+    ndraft_show.add_argument("--version", required=True, type=_positive_int)
+    ndraft_show.set_defaults(handler=_narrative_draft_show, action_name="narrative.draft.show")
+
+    publication = narrative_groups.add_parser("publication",
+                                              help="publicaciones manuales confirmadas por ti")
+    publication_actions = publication.add_subparsers(dest="publication_action", required=True,
+                                                     metavar="acción")
+    publication_confirm = publication_actions.add_parser(
+        "confirm", help="tras publicar a mano, registra el texto final exacto; pide teclear una "
+                        "frase con un código (no publica nada)")
+    _instance_argument(publication_confirm)
+    publication_confirm.add_argument("--topic-id", required=True)
+    publication_confirm.add_argument("--draft-id", required=True)
+    publication_confirm.add_argument("--version", required=True, type=_positive_int)
+    publication_confirm.add_argument("--input", required=True, type=Path,
+                                     help="JSON con post_id, draft_sha256, locator, observed_at "
+                                          "y published_text")
+    publication_confirm.set_defaults(handler=_publication_confirm,
+                                     action_name="narrative.publication.confirm")
     return parser
 
 
@@ -1174,6 +1306,282 @@ def _character_revision(instance: LoadedInstance, character_id: str) -> int:
 def _concept_line(character_id: str, concept: ConceptVersion) -> str:
     return (f"{character_id} v{concept.version} | {concept.authorship.value} | "
             f"sha256={concept.concept_sha256} | bytes={concept.utf8_size}")
+
+
+# --- narrative --------------------------------------------------------------------------------
+
+
+def _topic_create(args: argparse.Namespace) -> int:
+    result = create_topic(args.instance, expected_core_root=_checkout(),
+                          character_id=args.character_id, topic_id=args.topic_id,
+                          title=args.title)
+    if _narrative_mutation(args, result.topic, result.created,
+                           {"topic": topic_summary(result.topic.state)}):
+        return EXIT_OK
+    prefix = "Tema creado" if result.created else "Tema ya existente"
+    _line(f"{prefix}: {_topic_line(result.topic)}")
+    _line(f"Revisión del tema: {result.topic.state_revision}.")
+    return EXIT_OK
+
+
+def _topic_list(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    topics = list_topics(instance, character_id=args.character_id)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "instance": str(instance.instance_root),
+               "topics": [topic_summary(t.state) for t in topics]})
+        return EXIT_OK
+    if not topics:
+        _line("No hay temas en esta instancia." if args.character_id is None
+              else f"No hay temas para «{args.character_id}».")
+    for topic in topics:
+        _line(_topic_line(topic))
+    return EXIT_OK
+
+
+def _topic_show(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    topic = get_topic(instance, topic_id=args.topic_id)
+    posts = topic.state.replay.posts
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "instance": str(instance.instance_root),
+               "posts": [post_summary(p) for p in posts], "state_revision": topic.state_revision,
+               "topic": topic_summary(topic.state), "topic_id": args.topic_id})
+        return EXIT_OK
+    _line(_topic_line(topic))
+    if not posts:
+        _line(f"No hay posts para «{args.topic_id}».")
+    for post in posts:
+        _line(_post_line(post))
+        _exact_block(f"Post p{post.position} (exacto, hasta «Fin del post p{post.position}.»):",
+                     post.content, f"Fin del post p{post.position}.")
+    return EXIT_OK
+
+
+def _post_record(args: argparse.Namespace) -> int:
+    if args.json:
+        raise NarrativeError("INVALID_STATE", "los posts ajenos transcritos no admiten --json: "
+                                              "ejecuta el comando en tu terminal y responde a la "
+                                              "confirmación")
+    result = record_external_post(args.instance, expected_core_root=_checkout(),
+                                  topic_id=args.topic_id, input_path=args.input,
+                                  terminal=_SystemTerminal())
+    prefix = "Post ajeno registrado" if result.created else "Post ajeno ya existente"
+    _line(f"{prefix}: {_post_line(result.topic.state.post(result.post.post_id))}")
+    _line(f"Revisión del tema: {result.topic.state_revision}.")
+    return EXIT_OK
+
+
+def _post_list(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    posts = list_posts(instance, topic_id=args.topic_id)
+    if _narrative_list(args, instance, "posts", [post_summary(p) for p in posts]):
+        return EXIT_OK
+    if not posts:
+        _line(f"No hay posts para «{args.topic_id}».")
+    for post in posts:
+        _line(_post_line(post))
+    return EXIT_OK
+
+
+def _post_show(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    post = get_post(instance, topic_id=args.topic_id, post_id=args.post_id)
+    topic = get_topic(instance, topic_id=args.topic_id)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "instance": str(instance.instance_root),
+               "post": post_summary(post), "state_revision": topic.state_revision,
+               "topic_id": args.topic_id})
+        return EXIT_OK
+    source = post.source
+    _line(_post_line(post))
+    if isinstance(source, ExternalPost):
+        _line(f"Autor declarado: {json.dumps(source.author_label, ensure_ascii=False)}")
+    else:
+        _line(f"Borrador: {source.draft_id} v{source.draft_version} | "
+              f"sha256={source.draft_sha256} | "
+              f"coincidencia exacta={'SÍ' if source.content_matches_draft else 'NO'}")
+    _line(f"Evidencia: {source.evidence.source_id} | sha256={source.evidence.sha256}")
+    _exact_block("Texto (exacto, hasta «Fin del texto.»):", post.content, "Fin del texto.")
+    return EXIT_OK
+
+
+def _seed_import(args: argparse.Namespace) -> int:
+    if args.json:
+        raise NarrativeError("INVALID_STATE", "las declaraciones humanas de semillas narrativas "
+                                              "no admiten --json: ejecuta el comando en tu "
+                                              "terminal y responde a la confirmación")
+    result = import_human_seed(args.instance, expected_core_root=_checkout(),
+                               topic_id=args.topic_id, input_path=args.input,
+                               terminal=_SystemTerminal())
+    prefix = "Semilla importada" if result.created else "Semilla ya existente"
+    _line(f"{prefix}: {_seed_line(result.seed)}")
+    _line(f"Revisión del tema: {result.topic.state_revision}.")
+    return EXIT_OK
+
+
+def _seed_list(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    seeds = list_seeds(instance, topic_id=args.topic_id)
+    if _narrative_list(args, instance, "seeds", [seed_summary(s) for s in seeds]):
+        return EXIT_OK
+    if not seeds:
+        _line(f"No hay semillas para «{args.topic_id}».")
+    for seed in seeds:
+        _line(_seed_line(seed))
+    return EXIT_OK
+
+
+def _seed_show(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    seed = get_seed(instance, topic_id=args.topic_id, seed_id=args.seed_id,
+                    version=args.version)
+    topic = get_topic(instance, topic_id=args.topic_id)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "instance": str(instance.instance_root),
+               "seed": seed_summary(seed), "state_revision": topic.state_revision,
+               "topic_id": args.topic_id})
+        return EXIT_OK
+    _line(_seed_line(seed))
+    _line(f"Intención: {json.dumps(seed.intent, ensure_ascii=False)}")
+    _line(f"Tono: {json.dumps(seed.tone, ensure_ascii=False)}")
+    for label, items in (("Giros", seed.beats), ("Detalles", seed.details),
+                         ("Restricciones OOC", seed.ooc_constraints),
+                         ("Resultados pendientes", seed.pending_outcomes)):
+        _line(f"{label}: {json.dumps(list(items), ensure_ascii=False)}")
+    return EXIT_OK
+
+
+def _narrative_draft_create(args: argparse.Namespace) -> int:
+    result = create_narrative_draft(args.instance, expected_core_root=_checkout(),
+                                    topic_id=args.topic_id, input_path=args.input)
+    if _narrative_mutation(args, result.topic, result.created,
+                           {"draft": narrative_draft_summary(result.draft)}):
+        return EXIT_OK
+    prefix = "Borrador creado" if result.created else "Borrador ya existente"
+    _line(f"{prefix}: {_narrative_draft_line(result.draft)}")
+    _line(f"Revisión del tema: {result.topic.state_revision}.")
+    return EXIT_OK
+
+
+def _narrative_draft_list(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    views = list_narrative_drafts(instance, topic_id=args.topic_id)
+    if _narrative_list(args, instance, "drafts", [narrative_draft_summary(v) for v in views]):
+        return EXIT_OK
+    if not views:
+        _line(f"No hay borradores para «{args.topic_id}».")
+    for view in views:
+        _line(_narrative_draft_line(view))
+    return EXIT_OK
+
+
+def _narrative_draft_show(args: argparse.Namespace) -> int:
+    instance = _load_instance(args)
+    view = get_narrative_draft(instance, topic_id=args.topic_id, draft_id=args.draft_id,
+                               version=args.version)
+    topic = get_topic(instance, topic_id=args.topic_id)
+    if args.json:
+        _emit({"ok": True, "action": args.action_name, "draft": narrative_draft_summary(view),
+               "instance": str(instance.instance_root), "state_revision": topic.state_revision,
+               "topic_id": args.topic_id})
+        return EXIT_OK
+    record = view.record
+    _line(_narrative_draft_line(view))
+    _line(f"Contexto: sha256={record.context_sha256} | posts={len(record.context)}")
+    _line(f"Ficha: v{record.sheet.version} | sha256={record.sheet.draft_sha256} | "
+          f"staff={record.sheet.staff_review_sha256} | "
+          f"revisión del personaje={record.character_revision}")
+    if not record.citations:
+        _line("Citas: ninguna.")
+    for citation in record.citations:
+        _line(f"Cita: {citation.candidate_id} v{citation.version} | "
+              f"sha256={citation.candidate_sha256}")
+    published = view.published
+    if published is None:
+        _line("Publicación: ninguna.")
+    else:
+        _line(f"Publicación: {view.publication.value} | p{published.position} | "
+              f"{published.post_id} | sha256={published.content_sha256}")
+    _exact_block("POST PARA COPIA MANUAL (no acredita publicación, hasta «Fin del post.»):",
+                 record.publishable_text, "Fin del post.")
+    _line(f"NO PUBLICAR — OOC: {json.dumps(list(record.ooc_notes), ensure_ascii=False)}")
+    _line(f"NO PUBLICAR — privado: {json.dumps(list(record.private_notes), ensure_ascii=False)}")
+    _line("NO PUBLICAR — resultados pendientes: "
+          f"{json.dumps(list(record.pending_outcomes), ensure_ascii=False)}")
+    return EXIT_OK
+
+
+def _publication_confirm(args: argparse.Namespace) -> int:
+    if args.json:
+        raise NarrativeError("INVALID_STATE", "las confirmaciones de publicación manual no "
+                                              "admiten --json: ejecuta el comando en tu terminal "
+                                              "y responde a la confirmación")
+    result = confirm_narrative_publication(args.instance, expected_core_root=_checkout(),
+                                           topic_id=args.topic_id, draft_id=args.draft_id,
+                                           version=args.version, input_path=args.input,
+                                           terminal=_SystemTerminal())
+    prefix = "Publicación confirmada" if result.created else "Publicación ya confirmada"
+    state = result.topic.state
+    _line(f"{prefix}: {_post_line(state.post(result.publication.post_id))}")
+    _line(_narrative_draft_line(state.draft_view(args.draft_id, args.version)))
+    _line(f"Revisión del tema: {result.topic.state_revision}.")
+    return EXIT_OK
+
+
+def _narrative_mutation(args: argparse.Namespace, topic: LoadedNarrativeTopic, created: bool,
+                        payload: dict[str, object]) -> bool:
+    if not args.json:
+        return False
+    _emit({"ok": True, "action": args.action_name, "created": created,
+           "instance": str(Path(topic.topic_root).parent.parent.parent),
+           "state_revision": topic.state_revision, "topic_id": topic.state.topic_id, **payload})
+    return True
+
+
+def _narrative_list(args: argparse.Namespace, instance: LoadedInstance, key: str,
+                    items: list) -> bool:
+    if not args.json:
+        return False
+    topic = get_topic(instance, topic_id=args.topic_id)
+    _emit({"ok": True, "action": args.action_name, "instance": str(instance.instance_root),
+           key: items, "state_revision": topic.state_revision, "topic_id": args.topic_id})
+    return True
+
+
+def _topic_line(topic: LoadedNarrativeTopic) -> str:
+    state = topic.state
+    return (f"{state.topic_id} | personaje={state.header.character_id} | "
+            f"posts={len(state.replay.posts)} | semillas={len(state.seeds)} | "
+            f"borradores={len(state.drafts)} | publicaciones={len(state.publications)} | "
+            f"contexto={topic_summary(state)['context_sha256']} | "
+            f"revisión={topic.state_revision} | "
+            f"título={json.dumps(state.header.title, ensure_ascii=False)}")
+
+
+def _post_line(post: NarrativePostView) -> str:
+    source = post.source
+    return (f"p{post.position} | {post.author.value} | {post.post_id} | "
+            f"sha256={source.content_sha256} | bytes={source.utf8_size} | "
+            f"locator={json.dumps(source.evidence.locator, ensure_ascii=False)} | "
+            f"observada={source.evidence.observed_at.isoformat()}")
+
+
+def _seed_line(seed: HumanSeed) -> str:
+    return (f"{seed.seed_id} v{seed.version} | {seed.mode.value} | sha256={seed.seed_sha256} | "
+            f"contexto={seed.context_sha256} | posts={len(seed.context)} | "
+            f"pendientes={len(seed.pending_outcomes)}")
+
+
+def _narrative_draft_line(view: NarrativeDraftView) -> str:
+    record = view.record
+    return (f"{record.draft_id} v{record.version} | {view.lifecycle.value} | "
+            f"publicación={view.publication.value} | posición={record.target_position} | "
+            f"semilla={record.seed_id}:v{record.seed_version}:{record.seed_sha256} | "
+            f"composición={record.composition_sha256} | "
+            f"ficha=v{record.sheet.version}:{record.sheet.draft_sha256} | "
+            f"sha256={record.draft_sha256} | bytes={record.utf8_size} | "
+            f"citas={len(record.citations)} | pendientes={len(record.pending_outcomes)}")
 
 
 # --- output -----------------------------------------------------------------------------------

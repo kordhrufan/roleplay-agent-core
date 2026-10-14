@@ -630,6 +630,25 @@ class CharacterState:
         return (len(self.concepts) + len(self.proposals) + len(self.proposal_decisions)
                 + len(self.drafts) + len(self.staff_responses))
 
+    def at_revision(self, revision: int) -> CharacterState:
+        """The state as it was right after event `revision` (1..current), replayed again.
+
+        Concepts carry no revision: they fill, in order, the revisions no other event takes, so
+        keeping the explicit events up to `revision` determines how many concepts existed."""
+        if type(revision) is not int or not 1 <= revision <= self.revision:
+            _invalid(f"la revisión {revision} no existe en el historial del personaje")
+        if revision == self.revision:
+            return self
+        proposals = tuple(p for p in self.proposals if p.created_revision <= revision)
+        decisions = tuple(d for d in self.proposal_decisions if d.decision_revision <= revision)
+        drafts = tuple(d for d in self.drafts if d.created_revision <= revision)
+        responses = tuple(r for r in self.staff_responses if r.review_revision <= revision)
+        concepts = revision - len(proposals) - len(decisions) - len(drafts) - len(responses)
+        if concepts < 1:
+            _invalid(f"la revisión {revision} es anterior al primer concepto")
+        return CharacterState(self.character_id, self.concepts[:concepts], proposals, decisions,
+                              drafts, responses)
+
     def current_concept(self) -> ConceptVersion:
         return self.concepts[-1]
 

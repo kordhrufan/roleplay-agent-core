@@ -17,8 +17,6 @@ nothing here publishes: the sheet is printed only for manual copying.
 from __future__ import annotations
 
 import hashlib
-import os
-import secrets
 from dataclasses import replace
 from pathlib import Path
 
@@ -61,6 +59,7 @@ from core.runtime.assimilation import (
     _require_unlocked,
     confirm_human_action,
 )
+from core.runtime.events import append_event, folder_guard, publish_new_folder
 from core.runtime.instance import (
     CHARACTER_STATE,
     CHARACTERS_DIR,
@@ -72,21 +71,16 @@ from core.runtime.instance import (
 )
 from core.runtime.persistence import (
     PersistenceError,
-    atomic_write_bytes,
     encode_state,
     load_state,
     parse_strict_json,
 )
 from core.runtime.workspace import (
     WorkspaceError,
-    _ConcurrentDestination,
     _contains,
-    _destination_state,
     _identity,
-    _is_link,
     _linked_component,
     _publish,
-    _remove_staging,
 )
 
 _UTF8_BOM = b"\xef\xbb\xbf"
@@ -333,63 +327,13 @@ def _create_character(instance: LoadedInstance, character_id: str,
     """Publish `characters/<id>/` atomically with the first concept."""
     state = CharacterState(character_id, (concept,))
     data = encode_state(encode_character_content(state), revision=1)
-    folder = instance.instance_root / CHARACTERS_DIR
-    linked = _linked_component(folder)
-    if linked is not None:
-        raise CharacterError("UNSAFE_DESTINATION", f"{linked} es un enlace simbólico o una "
-                                                   "junction")
-    folder.mkdir(exist_ok=True)
-    if _is_link(folder) or not folder.is_dir():
-        raise CharacterError("UNSAFE_DESTINATION", f"{folder} no es una carpeta normal")
-    root = instance.instance_root
-    # characters/.<id>.create.lock: `instance update` refuses to start while it exists, and
-    # this publication refuses to go on while an update lock exists (checked under the lock).
-    with _corpus_lock(folder / f".{character_id}.create", f"la creación de «{character_id}»",
-                      guard=lambda: require_no_update(root)):
-        return _publish_character(instance, character_id, concept, state, data, folder)
-
-
-def _publish_character(instance: LoadedInstance, character_id: str, concept: ConceptVersion,
-                       state: CharacterState, data: bytes, folder: Path) -> ConceptImportResult:
-    target = folder / character_id
-    initial = _destination_state(target)
-    if initial is not None:
-        raise CharacterError("CONFLICT", f"{target} ya existe")
-    staging = folder / f".{character_id}.staging-{secrets.token_hex(8)}"
-    staging.mkdir()
-    concurrent = None
-    try:
-        with open(staging / CHARACTER_STATE, "xb") as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        _check_staged(staging, instance.config.forum_id, state)
-        require_no_update(instance.instance_root)
-        try:
-            _publish(staging, target, initial)
-        except _ConcurrentDestination as race:
-            concurrent = race
-    except BaseException as exc:
-        leftover = _remove_staging(staging)
-        if leftover is None or not isinstance(exc, (CharacterError, WorkspaceError, OSError)):
-            raise
-        code = exc.code if isinstance(exc, (CharacterError, WorkspaceError)) else "IO"
-        reason = exc.reason if isinstance(exc, (CharacterError, WorkspaceError)) else str(exc)
-        raise CharacterError(code, f"{reason}; además no se pudo borrar {leftover}: bórrala a "
-                                   "mano") from exc
-    if concurrent is not None:
-        leftover = _remove_staging(staging)
-        winner = target / CHARACTER_STATE
-        identical = winner.is_file() and not _is_link(winner) and winner.read_bytes() == data
-        if leftover is not None:
-            raise CharacterError("IO", f"otro proceso creó a la vez el personaje en {target}, pero "
-                                       f"no se pudo borrar {leftover}: bórrala a mano"
-                                 ) from concurrent.error
-        if not identical:
-            raise CharacterError("CONFLICT", f"otro proceso creó a la vez «{character_id}» con otro "
-                                             "contenido; no se ha tocado")
-        return ConceptImportResult(_reload(instance, character_id), concept, False)
-    return ConceptImportResult(_reload(instance, character_id), concept, True)
+    created = publish_new_folder(
+        instance.instance_root / CHARACTERS_DIR, character_id, CHARACTER_STATE, data,
+        instance_root=instance.instance_root, noun="el personaje", label=f"«{character_id}»",
+        error=CharacterError,
+        check_staged=lambda staging: _check_staged(staging, instance.config.forum_id, state),
+        lock=_corpus_lock, publish=_publish)
+    return ConceptImportResult(_reload(instance, character_id), concept, created)
 
 
 def _append_concept(instance: LoadedInstance, existing: LoadedCharacter,
@@ -403,35 +347,9 @@ def _append_concept(instance: LoadedInstance, existing: LoadedCharacter,
 
 
 def _path_guard(character_root: Path):
-    """A check that the character folder is still the same plain folder, with no link on the way,
-    and that no `instance update` is replacing the instance's static files.
-
-    It runs before taking the lock, right after taking it and right before writing; the remaining
-    window between the last check and the atomic replace cannot be closed without handle-relative
-    file APIs, which the standard library does not offer on Windows.
-    """
-    identity = _folder_identity(character_root)
-    instance_root = character_root.parent.parent
-
-    def guard() -> None:
-        require_no_update(instance_root)
-        linked = _linked_component(character_root / CHARACTER_STATE)
-        if linked is not None:
-            raise CharacterError("UNSAFE_DESTINATION", f"{linked} es un enlace simbólico o una "
-                                                       "junction; no se ha escrito nada")
-        if _folder_identity(character_root) != identity:
-            raise CharacterError("CONFLICT", f"{character_root} fue sustituida mientras se "
-                                             "guardaba; no se ha escrito nada")
-
-    return guard
-
-
-def _folder_identity(folder: Path) -> tuple[int, int]:
-    try:
-        info = os.lstat(folder)
-    except OSError as exc:
-        raise CharacterError("CONFLICT", f"{folder} ya no está disponible") from exc
-    return (info.st_dev, info.st_ino)
+    """See `events.folder_guard`: same folder, no link, no `instance update` in progress."""
+    return folder_guard(character_root, CHARACTER_STATE, character_root.parent.parent,
+                        CharacterError)
 
 
 def _check_staged(staging: Path, forum_id: str, expected: CharacterState) -> None:
@@ -611,10 +529,8 @@ def _record_proposal_decision(instance_root: Path, core_root: Path, character_id
 def _write_event(instance: LoadedInstance, character: LoadedCharacter, build) -> LoadedCharacter:
     """Append one event under the character lock; any change since `character` is a CONFLICT."""
     character_id = character.state.character_id
-    state_path = character.character_root / CHARACTER_STATE
-    guard = _path_guard(character.character_root)
-    guard()
-    with _corpus_lock(state_path, "este personaje", guard=guard):
+
+    def prepare() -> bytes:
         again = load_instance(instance.instance_root, expected_core_root=instance.config.core_root)
         current = find_character(again, character_id)
         if (current is None or current.state_revision != character.state_revision
@@ -624,9 +540,11 @@ def _write_event(instance: LoadedInstance, character: LoadedCharacter, build) ->
         new_state = build(again, current)
         if new_state.revision != current.state_revision + 1:
             raise CharacterError("INVALID_STATE", "un cambio debe añadir exactamente un evento")
-        data = encode_state(encode_character_content(new_state), revision=new_state.revision)
-        guard()
-        atomic_write_bytes(state_path, data)
+        return encode_state(encode_character_content(new_state), revision=new_state.revision)
+
+    append_event(character.character_root / CHARACTER_STATE, subject="este personaje",
+                 guard=_path_guard(character.character_root), prepare=prepare,
+                 lock=_corpus_lock)
     return _reload(instance, character_id)
 
 

@@ -1,0 +1,16 @@
+{
+  "draft_id": "turno-1",
+  "version": 1,
+  "seed_id": "turno-1",
+  "seed_version": 1,
+  "seed_sha256": "__SEED_SHA256__",
+  "context_sha256": "__CONTEXT_SHA256__",
+  "composition_sha256": "__COMPOSITION_SHA256__",
+  "sheet_version": 2,
+  "sheet_sha256": "__SHEET_SHA256__",
+  "citations": [{"candidate_id": "normas", "version": 1}],
+  "publishable_text": "La cartógrafa se acerca despacio al muelle y saluda con respeto. «Conozco bien la costa norte; si quieres, te ayudo con ese mapa.»\n",
+  "ooc_notes": ["Dejo abierta la respuesta de la otra participante."],
+  "private_notes": ["Mantener el tono cordial de la semilla."],
+  "pending_outcomes": ["Si acepta la ayuda"]
+}

@@ -32,6 +32,14 @@ from core.runtime.instance import (
     update_lock_path,
 )
 from core.runtime import cli
+from core.memory.narrative import NarrativeError, context_sha256
+from core.runtime.narrative import (
+    confirm_narrative_publication,
+    create_narrative_draft,
+    create_topic,
+    import_human_seed,
+    record_external_post,
+)
 from core.runtime.persistence import load_state
 from tests.instance_support import ROOT
 from tests.test_assimilation_decisions import FakeTerminal
@@ -594,6 +602,164 @@ class FailureTest(UpdateCase):
         self.assertIn("el cambio se guardó", ctx.exception.reason)
         update_lock_path(self.instance).unlink()
         self.assertEqual(self.loaded_instance().config.schema_version, 2)
+
+
+class NarrativeUpdateTest(UpdateCase):
+    """7a: narrative/ is preserved byte for byte like characters/."""
+
+    def setUp(self):
+        super().setUp()
+        create_topic(self.instance, expected_core_root=ROOT, character_id="aria",
+                     topic_id="escena", title="Escena")
+        self.post("respuesta-1")
+        seed = self.root / "semilla.json"
+        seed.write_bytes(json.dumps({
+            "seed_id": "turno-1", "version": 1, "intent": "Responder", "tone": "Sereno",
+            "beats": [], "details": [], "ooc_constraints": [], "pending_outcomes": []}).encode())
+        import_human_seed(self.instance, expected_core_root=ROOT, topic_id="escena",
+                          input_path=seed, terminal=FakeTerminal())
+        loaded = self.loaded_instance()
+        topic = loaded.topics[0].state
+        character = loaded.characters[0].state
+        sheet = character.draft_view(1).record
+        draft = self.root / "borrador.json"
+        draft.write_bytes(json.dumps({
+            "draft_id": "turno-1", "version": 1, "seed_id": "turno-1", "seed_version": 1,
+            "seed_sha256": topic.seed("turno-1", 1).seed_sha256,
+            "context_sha256": context_sha256(topic.replay.context),
+            "composition_sha256": sheet.composition_sha256, "sheet_version": 1,
+            "sheet_sha256": sheet.draft_sha256,
+            "citations": [{"candidate_id": "normas", "version": 3}],
+            "publishable_text": "Post propio\n", "ooc_notes": [], "private_notes": [],
+            "pending_outcomes": []}).encode())
+        record = create_narrative_draft(self.instance, expected_core_root=ROOT,
+                                        topic_id="escena", input_path=draft).draft.record
+        publication = self.root / "publicacion.json"
+        publication.write_bytes(json.dumps({
+            "post_id": "propio-1", "draft_sha256": record.draft_sha256,
+            "locator": "https://foro.example/t/9#p2", "observed_at": "2026-10-14T21:00:00+02:00",
+            "published_text": "Post propio editado\n"}).encode())
+        confirm_narrative_publication(self.instance, expected_core_root=ROOT, topic_id="escena",
+                                      draft_id="turno-1", version=1, input_path=publication,
+                                      terminal=FakeTerminal())
+
+    def post(self, post_id, terminal=None):
+        path = self.root / f"{post_id}.json"
+        path.write_bytes(json.dumps({
+            "post_id": post_id, "author_label": "otra persona",
+            "locator": f"https://foro.example/t/9#{post_id}",
+            "observed_at": "2026-10-14T20:00:00+02:00", "content": f"Texto de {post_id}\n"
+        }).encode())
+        return record_external_post(self.instance, expected_core_root=ROOT, topic_id="escena",
+                                    input_path=path, terminal=terminal or FakeTerminal())
+
+    def narrative(self):
+        folder = self.instance / "narrative"
+        return {p.relative_to(folder).as_posix(): p.read_bytes()
+                for p in sorted(folder.rglob("*")) if p.is_file()}
+
+    def statics(self):
+        return {path: data for path, data in super().statics().items()
+                if not path.startswith("narrative/")}
+
+    def topics(self):
+        return [(t.topic_root, t.state_revision, t.state) for t in self.loaded_instance().topics]
+
+    def test_topics_survive_v1_to_v2_and_a_further_round(self):
+        narrative, topics = self.narrative(), self.topics()
+        self.assertEqual(topics[0][1], 5)
+        self.closed_round()
+        terminal = FakeTerminal()
+        self.assertTrue(self.update(terminal).updated)
+        self.assertIn("Personajes preservados: 1\nTemas narrativos preservados: 1\n"
+                      "Esta acción reemplaza solo los archivos estáticos", terminal.output)
+        self.assertEqual((self.narrative(), self.topics()), (narrative, topics))
+        third = successor_dossier(self.root, "exp3", version="2026-10-20", edit=lambda t, d: t.replace(
+            "Las del sur, del fuego.\n~~~~\n",
+            'Las del sur, del fuego.\n~~~~\n\n### Fuente\nMetadatos: id="mares" | versión="1" | '
+            'autoridad="Staff" | alcance="foro"\n~~~~ texto\nEl mar no tiene fondo.\n~~~~\n'))
+        self.workspace = self.root / "ampliacion-3"
+        value = new_candidate("mar", quote="El mar no tiene fondo.")
+        value["citations"][0]["source_id"] = "mares"
+        self.extend(dossier_dir=third)
+        self.add(value)
+        self.decide("mar")
+        self.close()
+        self.assertTrue(self.update().updated)
+        self.assertEqual((self.narrative(), self.topics()), (narrative, topics))
+        self.assertEqual(self.siblings(), [])
+        # The topic goes on after the updates.
+        self.assertEqual(self.post("respuesta-2").post.position, 3)
+
+    def test_without_topics_the_prompt_has_no_topic_line(self):
+        shutil.rmtree(self.instance / "narrative")
+        self.closed_round()
+        terminal = FakeTerminal()
+        self.update(terminal)
+        self.assertNotIn("Temas narrativos", terminal.output)
+
+    def test_topic_locks_block_the_update(self):
+        self.closed_round()
+        topics = self.instance / "narrative" / "topics"
+        for lock in (topics / "escena" / "state.json.lock", topics / ".nuevo.create.lock"):
+            with self.subTest(lock=lock.name):
+                lock.write_bytes(b"")
+                terminal = FakeTerminal()
+                with self.assertRaises(InstanceError) as ctx:
+                    self.update(terminal)
+                self.assertEqual((ctx.exception.code, terminal.output), ("CONFLICT", ""))
+                self.assertIn("un tema se está modificando", ctx.exception.reason)
+                lock.unlink()
+        self.assertEqual(self.loaded_instance().config.schema_version, 1)
+        update_lock_path(self.instance).write_bytes(b"")
+        with self.assertRaises(NarrativeError) as ctx:
+            self.post("bloqueado")
+        self.assertEqual(ctx.exception.code, "CONFLICT")
+        update_lock_path(self.instance).unlink()
+        self.assertTrue(self.update().updated)
+
+    def test_a_topic_change_during_the_prompt_is_a_conflict(self):
+        self.closed_round()
+        statics = self.statics()
+        with self.assertRaises(InstanceError) as ctx:
+            self.update(FakeTerminal(on_read=lambda: self.post("carrera")))
+        self.assertEqual(ctx.exception.code, "CONFLICT")
+        self.assertEqual(self.statics(), statics)
+        self.assertEqual(self.loaded_instance().config.schema_version, 1)
+        self.assertEqual(self.siblings(), [])
+
+    def test_an_update_applied_during_a_narrative_prompt_is_a_conflict(self):
+        """REV7A-01: the update changes only statics; the narrative write must still stop."""
+        self.closed_round()
+        narrative = self.narrative()
+        with self.assertRaises(NarrativeError) as ctx:
+            self.post("durante", terminal=FakeTerminal(on_read=lambda: self.update()))
+        self.assertEqual(ctx.exception.code, "CONFLICT")
+        self.assertEqual(self.loaded_instance().config.schema_version, 2)
+        self.assertEqual(self.narrative(), narrative)
+        self.assertEqual(self.post("despues").post.position, 3)
+
+    def test_rollback_and_kept_backup_preserve_narrative(self):
+        self.closed_round()
+        narrative = self.narrative()
+        replace = FailureTest.flaky_replace(self, lambda s, d: "update-staging" in s.name)
+        with mock.patch.object(instance_module.os, "replace", replace):
+            with self.assertRaises(InstanceError):
+                self.update()
+        self.assertEqual(self.narrative(), narrative)
+        self.assertEqual(self.siblings(), [])
+        replace = FailureTest.flaky_replace(self, lambda s, d: "update-staging" in s.name
+                                            or "update-backup" in s.name)
+        with mock.patch.object(instance_module.os, "replace", replace):
+            with self.assertRaises(InstanceError):
+                self.update()
+        backup = next(p for p in self.root.iterdir() if "update-backup" in p.name)
+        staging = next(p for p in self.root.iterdir() if "update-staging" in p.name)
+        backup.rename(self.instance)
+        shutil.rmtree(staging)
+        self.assertEqual(self.narrative(), narrative)
+        self.assertTrue(self.update().updated)
+        self.assertEqual(self.narrative(), narrative)
 
 
 class UpdateCliTest(UpdateCase):

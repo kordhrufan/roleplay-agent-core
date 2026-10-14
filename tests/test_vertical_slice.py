@@ -1,6 +1,7 @@
-"""Vertical slice of increment 4: dossier → workspace → candidates → decisions and closure →
-instance → human concept → proposals → effective composition → sheet → transcribed staff
-response.
+"""Vertical slice of increments 4 and 7a: dossier → workspace → candidates → decisions and
+closure → instance → human concept → proposals → effective composition → sheet → transcribed
+staff response → topic → transcribed post → human seed → developed draft → manual publication
+confirmed afterwards.
 
 Agent steps run through the CLI in a fresh process each time (a restart between phases). Human
 steps (barrier A) go through the API with a fake terminal, because a real TTY cannot be scripted;
@@ -29,6 +30,11 @@ from core.runtime.character import (
     import_concept,
     record_proposal_decision,
     record_staff_response,
+)
+from core.runtime.narrative import (
+    confirm_narrative_publication,
+    import_human_seed,
+    record_external_post,
 )
 from tests.expected_instance_templates import EXPECTED_AGENTS, EXPECTED_CLAUDE, EXPECTED_POLICY
 from tests.instance_support import close, decide
@@ -264,6 +270,49 @@ class VerticalSliceTest(unittest.TestCase):
             lambda: self.record_staff(response)).created)
         self.assertEqual(self.effective(), restarted)
 
+        # 7a: a topic with someone else's post, a seed, a developed draft and its publication.
+        topic = self.narrative("topic", "create", "--character-id", "ejemplo", "--title",
+                               "En el muelle")
+        self.assertEqual((topic["created"], topic["state_revision"]), (True, 1))
+        self.assertFalse(self.assert_repeat_changes_nothing(lambda: self.narrative(
+            "topic", "create", "--character-id", "ejemplo", "--title", "En el muelle"))["created"])
+        self.record_post()
+        self.assertFalse(self.assert_repeat_changes_nothing(self.record_post).created)
+        seed = self.import_seed().seed
+        self.assertEqual(seed.mode.value, "CONTINUAR")
+        self.assertFalse(self.assert_repeat_changes_nothing(self.import_seed).created)
+        shown = self.narrative("seed", "show", "--seed-id", "turno-1", "--version", "1")["seed"]
+        context = self.narrative("topic", "show")["topic"]["context_sha256"]
+        draft_input = self.fill("borrador-narrativo.json", SEED_SHA256=shown["seed_sha256"],
+                                CONTEXT_SHA256=context,
+                                COMPOSITION_SHA256=restarted["composition_sha256"],
+                                SHEET_SHA256=v2["draft_sha256"])
+        draft = self.narrative("draft", "create", "--input", str(draft_input))["draft"]
+        self.assertEqual((draft["lifecycle"], draft["publication"], draft["target_position"],
+                          draft["sheet"]["version"]), ("ACTIVE", "NONE", 2, 2))
+        self.assertFalse(self.assert_repeat_changes_nothing(lambda: self.narrative(
+            "draft", "create", "--input", str(draft_input)))["created"])
+        copy = self.run_child("narrative", "draft", "show", "--instance", str(self.instance),
+                              "--topic-id", "muelle", "--draft-id", "turno-1", "--version", "1")
+        self.assertEqual(copy.returncode, 0)
+        block = copy.stdout.decode("utf-8").split("«Fin del post.»):\n")[1].split(
+            "Fin del post.\n")[0]
+        self.assertEqual(block, draft["publishable_text"])
+        for private in (*draft["ooc_notes"], *draft["private_notes"]):
+            self.assertNotIn(private, block)
+        publication = self.fill("publicacion.json", DRAFT_SHA256=draft["draft_sha256"])
+        self.confirm_publication(publication)
+        self.assertFalse(self.assert_repeat_changes_nothing(
+            lambda: self.confirm_publication(publication)).created)
+        posts = self.narrative("post", "list")["posts"]
+        self.assertEqual([(p["position"], p["author"], p["post_id"]) for p in posts],
+                         [(1, "OTHER", "respuesta-1"), (2, "SELF", "propio-1")])
+        drafts = self.narrative("draft", "list")["drafts"]
+        self.assertEqual([(d["lifecycle"], d["publication"]) for d in drafts],
+                         [("STALE", "EDITED")])
+        self.assertEqual(self.narrative("topic", "show")["state_revision"], 5)
+        self.assertEqual(self.effective(), restarted)
+
         # Final state: whole history visible, nothing published, statics untouched.
         drafts = self.character("draft", "list")["drafts"]
         self.assertEqual([(d["version"], d["lifecycle"], d["current"], d["review_status"],
@@ -279,12 +328,33 @@ class VerticalSliceTest(unittest.TestCase):
             self.assertEqual(final[name], data, msg=name)
         self.assertEqual(sorted(n for n in final if n.startswith("instancia/")
                                 and n not in statics),
-                         ["instancia/characters/ejemplo/state.json"])
+                         ["instancia/characters/ejemplo/state.json",
+                          "instancia/narrative/topics/muelle/state.json"])
         self.assert_instructions_are_v1()
         for name, data in final.items():
             self.assertIsNone(LEGACY.search(data.decode("utf-8", "replace")), msg=name)
 
+    def narrative(self, group: str, action: str, *argv: str) -> dict:
+        topic = () if (group, action) == ("topic", "list") else ("--topic-id", "muelle")
+        return self.cli("narrative", group, action, "--instance", str(self.instance), *topic,
+                        *argv)
+
     # --- human steps --------------------------------------------------------------------------
+
+    def record_post(self):
+        return self.human(lambda: record_external_post(
+            self.instance, expected_core_root=ROOT, topic_id="muelle",
+            input_path=self.inputs / "post-ajeno.json", terminal=FakeTerminal()))
+
+    def import_seed(self):
+        return self.human(lambda: import_human_seed(
+            self.instance, expected_core_root=ROOT, topic_id="muelle",
+            input_path=self.inputs / "semilla.json", terminal=FakeTerminal()))
+
+    def confirm_publication(self, path: Path):
+        return self.human(lambda: confirm_narrative_publication(
+            self.instance, expected_core_root=ROOT, topic_id="muelle", draft_id="turno-1",
+            version=1, input_path=path, terminal=FakeTerminal()))
 
     def import_concept(self, version: int):
         return self.human(lambda: import_concept(

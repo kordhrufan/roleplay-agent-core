@@ -17,14 +17,21 @@ import string
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from core.memory.narrative import (
+    CharacterSheetRef,
+    LoadedNarrativeTopic,
+    NarrativeError,
+    decode_topic_state,
+)
 from core.character.models import (
     CandidateResolver,
     CharacterError,
+    CharacterState,
     LoadedCharacter,
     check_character_id,
     decode_character_state,
 )
-from core.review.models import ReviewStatus
+from core.review.models import DraftLifecycle, ReviewStatus
 from core.runtime.assimilation import (
     AssimilationCandidate,
     AssimilationClosure,
@@ -89,6 +96,10 @@ CHARACTERS_DIR = "characters"
 CHARACTER_STATE = "state.json"
 CHARACTER_LOCK = "state.json.lock"
 CREATE_LOCK_SUFFIX = ".create.lock"  # characters/.<id>.create.lock while a first concept publishes
+NARRATIVE_DIR = "narrative"
+TOPICS_DIR = "topics"
+TOPIC_STATE = "state.json"
+TOPIC_LOCK = "state.json.lock"
 
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
 INSTANCE_TEMPLATE = _TEMPLATES / "instance.template.json"
@@ -101,7 +112,7 @@ COMMON_END = "<!-- END ROLEPLAY-AGENT-CORE:COMMON -->"
 _CODES = frozenset({"INVALID_STATE", "CONFLICT", "UNSAFE_DESTINATION", "IO"})
 _ROOT_FILES = frozenset({AGENTS_FILE, CLAUDE_FILE, INSTANCE_FILE})
 _ROOT_DIRS = frozenset({"dossier", "corpus", "work"})  # static, covered by integrity
-_MUTABLE_ROOT_DIRS = frozenset({CHARACTERS_DIR})  # self-hashed states, validated one by one
+_MUTABLE_ROOT_DIRS = frozenset({CHARACTERS_DIR, NARRATIVE_DIR})  # self-hashed, one by one
 _CONFIG_KEYS = frozenset({"core_root", "corpus", "display_name", "dossier", "dossier_version",
                           "forum_id", "instance_root", "kind", "packages", "schema_version",
                           "source_workspace"})
@@ -232,6 +243,7 @@ class LoadedInstance:
     closure: AssimilationClosure | CorpusSnapshot
     characters: tuple[LoadedCharacter, ...]
     corpus: ClosedCorpus | None = None
+    topics: tuple[LoadedNarrativeTopic, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -537,7 +549,7 @@ class _UpdatePlan:
     instance_files: dict[str, bytes]  # the whole instance tree, characters included
     workspace_files: dict[str, bytes]  # the whole expansion workspace tree
     static: dict[str, bytes]
-    characters: dict[str, bytes]
+    characters: dict[str, bytes]  # every byte of characters/ and narrative/, copied as is
     snapshot: CorpusSnapshot
     previous_version: str
     version: str
@@ -551,7 +563,7 @@ class _UpdatePlan:
         """What the prompt states: it must still be true when the change is applied."""
         return (self.snapshot.snapshot_sha256, self.snapshot.parent_snapshot_sha256,
                 self.previous_version, self.version, self.approved, self.rejected,
-                len(self.instance.characters))
+                len(self.instance.characters), len(self.instance.topics))
 
     @property
     def fingerprint(self) -> tuple:
@@ -611,8 +623,7 @@ def _plan_update(instance_root: Path, workspace_root: Path, core_root: Path) -> 
     static_paths = [INSTANCE_FILE, INSTANCE_INTEGRITY, AGENTS_FILE, CLAUDE_FILE, INSTANCE_CORPUS,
                     *(f.path for f in instance.config.dossier_files)]
     static = {path: instance_files[path] for path in static_paths}
-    characters = {path: data for path, data in instance_files.items()
-                  if path.startswith(f"{CHARACTERS_DIR}/") and path != f"{CHARACTERS_DIR}/"}
+    characters = _mutable_files(instance_files)
     snapshot = workspace.closure
     revision, merged = merge_closed_expansion(
         context.base, AssimilationState(workspace.candidates, workspace.decisions, None), snapshot)
@@ -690,6 +701,7 @@ def _update_prompt(plan: _UpdatePlan) -> str:
         f"Snapshot nuevo SHA-256: {plan.snapshot.snapshot_sha256}",
         f"Nuevos aprobados: {plan.approved}; nuevos rechazados: {plan.rejected}",
         f"Personajes preservados: {len(instance.characters)}",
+        *([f"Temas narrativos preservados: {len(instance.topics)}"] if instance.topics else []),
         "Esta acción reemplaza solo los archivos estáticos; no cambia revisiones ni contenido de "
         "characters/.",
     ]
@@ -697,13 +709,24 @@ def _update_prompt(plan: _UpdatePlan) -> str:
 
 
 def _characters_bytes(root: Path) -> dict[str, bytes]:
-    """characters/ by relative path (sorted traversal; links rejected)."""
-    folder = root / CHARACTERS_DIR
-    if not os.path.lexists(folder):
-        return {}
-    if _is_link(folder) or not folder.is_dir():
-        _invalid(f"{CHARACTERS_DIR} no es una carpeta normal")
-    return {f"{CHARACTERS_DIR}/{path}": data for path, data in sorted(_tree_bytes(folder).items())}
+    """characters/ and narrative/ by relative path (sorted traversal; links rejected)."""
+    files: dict[str, bytes] = {}
+    for name in sorted(_MUTABLE_ROOT_DIRS):
+        folder = root / name
+        if not os.path.lexists(folder):
+            continue
+        if _is_link(folder) or not folder.is_dir():
+            _invalid(f"{name} no es una carpeta normal")
+        files.update({f"{name}/{path}": data
+                      for path, data in sorted(_tree_bytes(folder).items())})
+    return files
+
+
+def _mutable_files(instance_files: dict[str, bytes]) -> dict[str, bytes]:
+    """The mutable trees inside a full instance read, without their bare root entries."""
+    return {path: data for path, data in instance_files.items()
+            if any(path.startswith(f"{name}/") and path != f"{name}/"
+                   for name in _MUTABLE_ROOT_DIRS)}
 
 
 def _reject_update_leftovers(root: Path) -> None:
@@ -719,13 +742,15 @@ def _reject_update_leftovers(root: Path) -> None:
 
 
 def _reject_character_locks(root: Path) -> None:
-    folder = root / CHARACTERS_DIR
-    if not os.path.lexists(folder):
-        return
-    for entry in folder.iterdir():
-        if _is_create_lock(entry) or (entry.is_dir() and os.path.lexists(entry / CHARACTER_LOCK)):
-            raise InstanceError("CONFLICT", f"un personaje se está modificando ({entry}); espera a "
-                                            "que termine")
+    """No character and no narrative topic may be in the middle of a write."""
+    for folder, lock, what in ((root / CHARACTERS_DIR, CHARACTER_LOCK, "un personaje"),
+                               (root / NARRATIVE_DIR / TOPICS_DIR, TOPIC_LOCK, "un tema")):
+        if not os.path.lexists(folder):
+            continue
+        for entry in folder.iterdir():
+            if _is_create_lock(entry) or (entry.is_dir() and os.path.lexists(entry / lock)):
+                raise InstanceError("CONFLICT", f"{what} se está modificando ({entry}); espera a "
+                                                "que termine")
 
 
 def _is_create_lock(entry: Path) -> bool:
@@ -807,11 +832,15 @@ def _swap_in(plan: _UpdatePlan, core_root: Path) -> None:
 def _check_preserved(plan: _UpdatePlan, loaded: LoadedInstance,
                      characters: dict[str, bytes]) -> None:
     if characters != plan.characters:
-        _invalid("characters/ no se copió byte a byte")
+        _invalid("characters/ o narrative/ no se copiaron byte a byte")
     before = [(c.character_root, c.state_revision, c.state) for c in plan.instance.characters]
     after = [(c.character_root, c.state_revision, c.state) for c in loaded.characters]
     if before != after:
         _invalid("los personajes no se conservan exactamente")
+    before = [(t.topic_root, t.state_revision, t.state) for t in plan.instance.topics]
+    after = [(t.topic_root, t.state_revision, t.state) for t in loaded.topics]
+    if before != after:
+        _invalid("los temas narrativos no se conservan exactamente")
     old = {e.candidate.key: e.candidate.candidate_sha256 for e in approved_corpus(plan.instance)}
     new = {e.candidate.key: e.candidate.candidate_sha256 for e in approved_corpus(loaded)}
     if any(new.get(key) != sha for key, sha in old.items()):
@@ -920,7 +949,90 @@ def _load_instance(physical: Path, logical_root: Path,
                                       version=version).candidate
 
     characters = _load_characters(physical, logical_root, config.forum_id, resolve)
-    return replace(provisional, characters=characters)
+    topics = _load_topics(physical, logical_root, config.forum_id, characters, resolve)
+    return replace(provisional, characters=characters, topics=topics)
+
+
+def _load_topics(physical: Path, logical_root: Path, forum_id: str,
+                 characters: tuple[LoadedCharacter, ...],
+                 resolve: CandidateResolver) -> tuple[LoadedNarrativeTopic, ...]:
+    """`narrative/topics/<id>/state.json` (+ an optional lock); created lazily (7a)."""
+    folder = physical / NARRATIVE_DIR
+    if not os.path.lexists(folder):
+        return ()
+    if _is_link(folder) or not folder.is_dir():
+        _invalid(f"{NARRATIVE_DIR} no es una carpeta normal")
+    entries = {child.name: child for child in folder.iterdir()}
+    if set(entries) - {TOPICS_DIR}:
+        _invalid(f"{NARRATIVE_DIR} solo admite la carpeta {TOPICS_DIR}")
+    topics_dir = entries.get(TOPICS_DIR)
+    if topics_dir is None:
+        return ()
+    if _is_link(topics_dir) or not topics_dir.is_dir():
+        _invalid(f"{NARRATIVE_DIR}/{TOPICS_DIR} no es una carpeta normal")
+    by_id = {c.state.character_id: c for c in characters}
+
+    historical: dict[tuple[str, int], CharacterState] = {}
+
+    def sheet_check(character_id: str, sheet: CharacterSheetRef, revision: int) -> None:
+        """At the character's `revision` the sheet was current, ACTIVE, APPROVED by the staff and
+        on the effective composition, with these four hashes; later changes are allowed."""
+        character = by_id.get(character_id)
+        if character is None:
+            raise NarrativeError("INVALID_STATE", f"no existe el personaje «{character_id}»")
+        if revision > character.state_revision:
+            raise NarrativeError("INVALID_STATE", "cita una revisión futura del personaje")
+        key = (character_id, revision)
+        if key not in historical:
+            try:
+                historical[key] = character.state.at_revision(revision)
+            except CharacterError as exc:
+                raise NarrativeError("INVALID_STATE", exc.reason) from exc
+        state = historical[key]
+        view = state.draft_view(sheet.version)
+        response = None if view is None else view.staff_response
+        if (view is None or not view.current
+                or view.effective.lifecycle is not DraftLifecycle.ACTIVE
+                or view.record.draft_sha256 != sheet.draft_sha256
+                or view.record.composition_sha256 != sheet.composition_sha256
+                or state.replay.effective.composition_sha256 != sheet.composition_sha256
+                or response is None or response.staff_review_sha256 != sheet.staff_review_sha256
+                or response.review_status is not ReviewStatus.APPROVED):
+            raise NarrativeError("INVALID_STATE", f"en la revisión {revision} del personaje la "
+                                                  f"ficha v{sheet.version} no era la vigente, "
+                                                  "activa y aprobada con esos hashes")
+
+    loaded = []
+    for entry in sorted(topics_dir.iterdir(), key=lambda p: p.name):
+        where = f"{NARRATIVE_DIR}/{TOPICS_DIR}/{entry.name}"
+        if _is_create_lock(entry):
+            continue  # a topic being created right now: transient, never state
+        if _is_link(entry) or not entry.is_dir():
+            _invalid(f"{where} no es la carpeta de un tema")
+        try:
+            check_character_id(entry.name)
+        except CharacterError:
+            _invalid(f"{where} no es un ID de tema válido (¿restos de una operación "
+                     "interrumpida?)")
+        children = {child.name: child for child in entry.iterdir()}
+        if TOPIC_STATE not in children or not set(children) <= {TOPIC_STATE, TOPIC_LOCK}:
+            _invalid(f"{where} debe contener solo {TOPIC_STATE} y, como mucho, su cerrojo")
+        for name, child in children.items():
+            if _is_link(child) or not child.is_file():
+                _invalid(f"{where}/{name} no es un archivo normal")
+        revision, content = load_state(entry / TOPIC_STATE)
+        try:
+            state = decode_topic_state(content, forum_id=forum_id, revision=revision,
+                                       candidate_resolver=resolve, sheet_check=sheet_check)
+        except NarrativeError as exc:
+            _invalid(f"{where}: {exc.reason}")
+        if state.topic_id != entry.name:
+            _invalid(f"{where} contiene el tema «{state.topic_id}»")
+        if state.header.character_id not in by_id:
+            _invalid(f"{where} es de un personaje que no existe")
+        loaded.append(LoadedNarrativeTopic(logical_root / NARRATIVE_DIR / TOPICS_DIR / entry.name,
+                                           revision, state))
+    return tuple(loaded)
 
 
 def _load_characters(physical: Path, logical_root: Path, forum_id: str,

@@ -1,0 +1,10 @@
+{
+  "seed_id": "turno-1",
+  "version": 1,
+  "intent": "Saludar y ofrecer ayuda con el mapa",
+  "tone": "Cordial",
+  "beats": ["Se acerca despacio"],
+  "details": ["Menciona la costa norte"],
+  "ooc_constraints": ["No decidir lo que hace la otra participante"],
+  "pending_outcomes": ["Si acepta la ayuda"]
+}
